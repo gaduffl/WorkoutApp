@@ -52,6 +52,8 @@ class _TodayScreenState extends State<TodayScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _ReadinessBadge(bucket: trace.recovery.bucket, score: trace.recovery.compositeScore),
+                    const SizedBox(height: 8),
                     Text(
                       plan?.sessionName ?? trace.restReason ?? 'Rest day',
                       style: Theme.of(context).textTheme.headlineSmall,
@@ -146,4 +148,42 @@ class _TodayScreenState extends State<TodayScreen> {
         'rir2' => '2',
         _ => '3+',
       };
+}
+
+/// §4.3's GREEN/YELLOW/RED bucket, made visible - not just a value buried
+/// in the trace.
+class _ReadinessBadge extends StatelessWidget {
+  final ReadinessBucket bucket;
+  final double score;
+
+  const _ReadinessBadge({required this.bucket, required this.score});
+
+  Color get _color => switch (bucket) {
+        ReadinessBucket.green => Colors.green,
+        ReadinessBucket.yellow => Colors.amber.shade800,
+        ReadinessBucket.red => Colors.red,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: _color, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(
+            '${bucket.name.toUpperCase()} · ${score.round()}',
+            style: TextStyle(color: _color, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
 }
