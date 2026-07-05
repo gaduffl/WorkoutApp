@@ -39,8 +39,13 @@ class SessionTemplateDef {
   List<(MovementPattern, bool)> slotsForTier(SessionTier tier) {
     if (isCardioOnly) return const [];
     if (tier == SessionTier.compressed) {
+      // §2.5: compressed tier is "first superset pair only, 2 hard sets
+      // each" - that applies to whichever exercises survive, even for a
+      // template with no compound-bucketed patterns at all (S5). Marking
+      // these `false` here would fall through to the *accessory* set count
+      // (0 at compressed tier), leaving the session with zero work sets.
       final source = compoundPatterns.isNotEmpty ? compoundPatterns : accessoryPatterns;
-      return source.take(2).map((p) => (p, compoundPatterns.isNotEmpty)).toList();
+      return source.take(2).map((p) => (p, true)).toList();
     }
     return [
       for (final p in compoundPatterns) (p, true),

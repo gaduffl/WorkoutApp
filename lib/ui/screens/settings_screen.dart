@@ -110,8 +110,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(height: 32),
             Text('Weekly floor', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Design spec default (§2.2): >= 2 strength, >= 1 intensity per rolling 7 days. '
+              'Change these only if you deliberately want a different minimum.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
             ListTile(
               title: const Text('Strength sessions / week'),
+              subtitle: Text(
+                (_settings.weeklyFloor[FloorCategory.strength] ?? 2) == 2 ? 'Spec default' : 'Spec default is 2',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               trailing: _stepper(
                 _settings.weeklyFloor[FloorCategory.strength] ?? 2,
                 (v) => setState(() => _settings = _settings.copyWith(
@@ -120,6 +130,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             ListTile(
               title: const Text('Intensity sessions / week'),
+              subtitle: Text(
+                (_settings.weeklyFloor[FloorCategory.intensity] ?? 1) == 1 ? 'Spec default' : 'Spec default is 1',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               trailing: _stepper(
                 _settings.weeklyFloor[FloorCategory.intensity] ?? 1,
                 (v) => setState(() => _settings = _settings.copyWith(
