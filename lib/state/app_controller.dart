@@ -186,7 +186,32 @@ class AppController extends ChangeNotifier {
     );
     await repo.saveCheckIn(checkin);
     if (recovery != null) await repo.saveRecoverySnapshot(recovery);
+    return _recomputeAndPersist(checkin: checkin, todaySnapshot: recovery);
+  }
 
+  /// §11 "swap session": re-runs today's decision with [sessionId] forced
+  /// as the chosen candidate instead of the natural winner. Reuses the
+  /// check-in/recovery already on file for today - only which session gets
+  /// recommended changes, not the underlying readiness inputs.
+  Future<DecisionTrace> swapToSession(SessionTypeId sessionId) async {
+    final current = todayTrace;
+    if (current == null) throw StateError('No check-in submitted today yet.');
+    final now = today();
+    final todaySnapshots =
+        (await repo.loadRecoverySnapshotsSince(now)).where((s) => _isSameDate(s.date, now)).toList();
+    return _recomputeAndPersist(
+      checkin: current.checkin,
+      todaySnapshot: todaySnapshots.isEmpty ? null : todaySnapshots.first,
+      forcedSessionId: sessionId,
+    );
+  }
+
+  Future<DecisionTrace> _recomputeAndPersist({
+    required CheckIn checkin,
+    required RecoverySnapshot? todaySnapshot,
+    SessionTypeId? forcedSessionId,
+  }) async {
+    final now = today();
     final historyStart = now.subtract(const Duration(days: 60));
     final recoveryHistory = await repo.loadRecoverySnapshotsSince(historyStart);
     final checkinHistory = await repo.loadCheckInsSince(historyStart);
@@ -194,7 +219,7 @@ class AppController extends ChangeNotifier {
 
     final input = DecisionEngineInput(
       checkin: checkin,
-      todaySnapshot: recovery,
+      todaySnapshot: todaySnapshot,
       recoveryHistory: recoveryHistory,
       checkinHistory: checkinHistory,
       sessionLogs: sessionLogs,
@@ -202,6 +227,7 @@ class AppController extends ChangeNotifier {
       queueState: queueState,
       settings: settings,
       today: now,
+      forcedSessionId: forcedSessionId,
     );
     final output = const DecisionEngine().decide(input);
 
@@ -212,6 +238,8 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     return output.trace;
   }
+
+  bool _isSameDate(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Discards today's check-in/recovery entry and recommendation so the
   /// user can redo the morning check-in (e.g. after a typo). If no session

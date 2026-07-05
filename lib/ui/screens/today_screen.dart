@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../ai/ai_explainer.dart';
 import '../../models/decision_trace.dart';
+import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 import 'checkin_screen.dart';
 import 'logger_screen.dart';
@@ -17,18 +18,56 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> {
+  late DecisionTrace _trace;
   late Future<String> _explanation;
+  SessionTypeId? _swapping;
 
   @override
   void initState() {
     super.initState();
+    _trace = widget.trace;
+    _loadExplanation();
+  }
+
+  void _loadExplanation() {
     final controller = context.read<AppController>();
-    _explanation = const AiExplainer().dailyExplanation(widget.trace, controller.settings);
+    _explanation = const AiExplainer().dailyExplanation(_trace, controller.settings);
+  }
+
+  Future<void> _swapTo(SessionTypeId sessionId) async {
+    setState(() => _swapping = sessionId);
+    final controller = context.read<AppController>();
+    try {
+      final newTrace = await controller.swapToSession(sessionId);
+      if (!mounted) return;
+      setState(() {
+        _trace = newTrace;
+        _swapping = null;
+        _loadExplanation();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _swapping = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not switch sessions: $e')));
+    }
+  }
+
+  /// A short, honest reason a candidate ranked where it did - drawn from
+  /// the same score terms the engine used (§5 Step 4), not invented.
+  String _candidateReason(ScoredCandidate c) {
+    final terms = c.scoreTerms;
+    if (terms.containsKey('floorForceStrength') || terms.containsKey('floorForceIntensity')) {
+      return 'Would catch up your weekly floor';
+    }
+    if (terms.containsKey('floorSoftBoost')) return 'Slightly behind on your weekly floor';
+    if (terms.containsKey('legHeavyDemoted')) return 'Deprioritized - legs were worked yesterday';
+    if (terms.containsKey('recencyBoost')) return "Covers a pattern you haven't trained in a while";
+    return 'Next up in your rotation';
   }
 
   @override
   Widget build(BuildContext context) {
-    final trace = widget.trace;
+    final trace = _trace;
     final plan = trace.plan;
 
     return Scaffold(
@@ -103,13 +142,27 @@ class _TodayScreenState extends State<TodayScreen> {
             if (trace.candidates.length > 1) ...[
               const SizedBox(height: 24),
               Text('Other options today', style: Theme.of(context).textTheme.titleMedium),
-              ...trace.candidates.skip(1).take(2).map(
-                    (c) => ListTile(
-                      dense: true,
-                      title: Text(c.sessionId.name.toUpperCase()),
-                      subtitle: Text('score ${c.score}'),
-                    ),
+              const SizedBox(height: 2),
+              Text(
+                "Switch if you'd rather do one of these - today's readiness, time, and pain "
+                'adjustments still apply to whichever you pick.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              ...trace.candidates.skip(1).take(2).map((c) {
+                final def = sessionTypes[c.sessionId]!;
+                final isSwapping = _swapping == c.sessionId;
+                return Card(
+                  child: ListTile(
+                    title: Text(def.name),
+                    subtitle: Text('${c.tier.name} tier · ${_candidateReason(c)}'),
+                    trailing: isSwapping
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.swap_horiz),
+                    onTap: _swapping != null ? null : () => _swapTo(c.sessionId),
                   ),
+                );
+              }),
             ],
           ],
         ),

@@ -32,6 +32,13 @@ class DecisionEngineInput {
   final UserSettings settings;
   final DateTime today;
 
+  /// §11's "swap session": when set, Step 5 picks this candidate instead
+  /// of the natural highest scorer (it must still be one of the ranked
+  /// candidates - the caller offers only real alternatives). Every other
+  /// step (readiness modulation, time compression, pain substitution,
+  /// load resolution) still runs normally against it.
+  final SessionTypeId? forcedSessionId;
+
   const DecisionEngineInput({
     required this.checkin,
     required this.todaySnapshot,
@@ -42,6 +49,7 @@ class DecisionEngineInput {
     required this.queueState,
     required this.settings,
     required this.today,
+    this.forcedSessionId,
   });
 }
 
@@ -259,7 +267,9 @@ class DecisionEngine {
         .map((s) => ScoredCandidate(sessionId: s.id, tier: s.tier, score: s.score, scoreTerms: s.terms))
         .toList();
 
-    var winner = scored.first;
+    var winner = input.forcedSessionId == null
+        ? scored.first
+        : scored.firstWhere((s) => s.id == input.forcedSessionId, orElse: () => scored.first);
     var volumeCutForLegHeavyEscape = false;
     if (winner.def.legHeavy && yesterdayLegHeavy) {
       final allFeasibleLegHeavy = scored.every((s) => s.def.legHeavy);
@@ -273,9 +283,10 @@ class DecisionEngine {
 
     fired.add(FiredRule(RuleKey.queueNext, params: {'session': winner.def.name}));
 
-    // §7.1: sharp hip pain forces a swap away from a leg-heavy winner.
+    // §7.1: sharp hip pain forces a swap away from a leg-heavy winner - but
+    // not when the user just explicitly chose this alternative themselves.
     var chosen = winner;
-    if (painEngine.hipSharpActive(checkin.pain) && chosen.def.legHeavy) {
+    if (input.forcedSessionId == null && painEngine.hipSharpActive(checkin.pain) && chosen.def.legHeavy) {
       final alt = scored.firstWhere((s) => !s.def.legHeavy, orElse: () => chosen);
       if (!identical(alt, chosen)) {
         chosen = alt;

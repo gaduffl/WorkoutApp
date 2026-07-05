@@ -69,6 +69,7 @@ void main() {
     QueueState queueState = const QueueState(),
     Map<String, ExerciseState>? exerciseStates,
     UserSettings settings = const UserSettings(),
+    SessionTypeId? forcedSessionId,
   }) {
     return DecisionEngineInput(
       checkin: CheckIn(date: today, timeMinutes: time, subjective: subjective, pain: pain, timestamp: today),
@@ -80,6 +81,7 @@ void main() {
       queueState: queueState,
       settings: settings,
       today: today,
+      forcedSessionId: forcedSessionId,
     );
   }
 
@@ -169,6 +171,39 @@ void main() {
     final s7 = order.indexOf(SessionTypeId.s7);
     expect(s5, lessThan(s7));
     expect(s7, lessThan(s6));
+  });
+
+  group('§11 swap session', () {
+    test('forcedSessionId overrides the natural winner but still runs modulation/pain steps', () {
+      final input = buildInput(
+        time: 35,
+        subjective: 3,
+        pain: [PainFlag(region: BodyRegion.lowerBack, severity: PainSeverity.sharp, flaggedDate: today)],
+        todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+        recoveryHistory: normalHrvHistory(),
+        queueState: const QueueState(pointer: SessionTypeId.s1), // natural winner would be S1
+        sessionLogs: floorSatisfiedLogs(),
+        forcedSessionId: SessionTypeId.s4, // user taps "switch to S4" instead
+      );
+      final output = decisionEngine.decide(input);
+
+      expect(output.trace.plan!.sessionId, SessionTypeId.s4);
+      // S4 also trains squat/hinge, so the sharp lower-back substitution
+      // must still have fired against the swapped-to plan.
+      expect(output.trace.firedRuleCodes, contains('PAIN_SUB_SQUAT_SHARP'));
+    });
+
+    test('an invalid forcedSessionId (not in the feasible set) falls back to the natural winner', () {
+      final input = buildInput(
+        time: 20, // candidates are only {S1, S5, S7} at 20 minutes
+        subjective: 3,
+        queueState: const QueueState(pointer: SessionTypeId.s1),
+        forcedSessionId: SessionTypeId.s4, // not feasible at 20 min
+      );
+      final output = decisionEngine.decide(input);
+      expect(output.trace.plan!.sessionId, isNot(SessionTypeId.s4));
+      expect(output.trace.plan!.sessionId, SessionTypeId.s1); // natural winner
+    });
   });
 
   group('§13 floor deficit==1 aging-out horizon', () {
