@@ -1,0 +1,18 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your *release* keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+# Debug-only key (fixed public password, never used for release signing) -
+# committed on purpose so every build shares one signature and installs as
+# an update instead of a fresh, differently-signed conflicting package.
+!app/debug.keystore
+**/*.jks
