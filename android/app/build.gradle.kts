@@ -30,6 +30,19 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Pinned so every build - local or CI - signs with the same key.
+        // Ephemeral CI runners have no ~/.android/debug.keystore, so without
+        // this each run generates a fresh random one and the resulting APK
+        // can never be installed as an *update* over a previous build.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
