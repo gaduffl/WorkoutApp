@@ -276,4 +276,108 @@ void main() {
       expect(e.sets, 1);
     }
   });
+
+  test('§5 Step 6: RED technique session is a swap — no queue credit, pointer unchanged', () {
+    final input = buildInput(
+      time: 35,
+      subjective: 1, // forces RED
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+    );
+    final output = decisionEngine.decide(input);
+
+    expect(output.trace.firedRuleCodes, contains('RED_SWAP_TECHNIQUE'));
+    expect(output.trace.plan!.grantsQueueCredit, isFalse);
+    expect(output.trace.queue.pointerAfterIfCompleted, SessionTypeId.s1);
+  });
+
+  test('§6.5: an active deload actually changes the prescription (60% load, half sets, RIR>=4)', () {
+    final states = baseStates();
+    states['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 90,
+      status: ExerciseStatus.deload,
+      deloadSessionsRemaining: 2,
+      preDeloadLoad: 90,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+    );
+    final input = buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    );
+    final output = decisionEngine.decide(input);
+
+    expect(output.trace.firedRuleCodes, contains('DELOAD_ACTIVE_SQUAT'));
+    final squat = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.squat);
+    // 90 x 0.6 = 54 -> rounds down to 48 on the matched 2-DB set (squat state
+    // load 90 sits on the DB-squat step in these fixtures' default ladder idx 0
+    // = goblet (single-DB): 54 -> 50). Assert the reduction happened and RIR.
+    expect(squat.loadTotal, lessThan(90 * 0.61));
+    expect(squat.sets, 1); // full-tier compounds 3 -> deload halves -> 1
+    expect(squat.rirTarget.name, 'rir3plus');
+    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge);
+    expect(hinge.sets, 3); // deload is per-pattern, not session-wide
+  });
+
+  test('§7.2: a sharp freeze keeps substituting on later days without re-tapping the body map', () {
+    final states = baseStates();
+    states['hinge'] = ExerciseState(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      currentLoad: 90,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+      painFrozen: true,
+      painSeverity: PainSeverity.sharp,
+      painRegion: BodyRegion.lowerBack,
+      painFlaggedDate: today.subtract(const Duration(days: 1)),
+      sessionsScheduledWhileFlagged: 0,
+      prePainLoad: 90,
+    );
+    final input = buildInput(
+      time: 35,
+      subjective: 3,
+      pain: const [], // user did NOT re-tap today
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    );
+    final output = decisionEngine.decide(input);
+
+    expect(output.trace.firedRuleCodes, contains('PAIN_SUB_HINGE_SHARP'));
+    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.substitutedFrom == 'hinge');
+    expect(hinge.trackKey, startsWith('sub:'));
+    // and the §7.2 scheduled counter still ticks
+    expect(output.patchedExerciseStates['hinge']!.sessionsScheduledWhileFlagged, 1);
+  });
+
+  test('§6.6: a detraining-adjusted load is marked to persist on completion', () {
+    final states = baseStates();
+    states['hinge'] = ExerciseState(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      currentLoad: 100,
+      lastTrainedDate: today.subtract(const Duration(days: 15)), // 10-20 days -> 90%
+    );
+    final input = buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    );
+    final output = decisionEngine.decide(input);
+
+    expect(output.trace.firedRuleCodes, contains('DETRAIN_ADJUST_HINGE'));
+    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge);
+    expect(hinge.loadTotal, 90); // 100 x 0.9 = 90, exact match (§2.6.4)
+    expect(hinge.persistLoadOnCompletion, isTrue);
+  });
 }

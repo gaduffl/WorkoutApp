@@ -120,8 +120,19 @@ class PainEngine {
     if (activeFlag == null) {
       if (next.painFrozen && next.painSeverity == PainSeverity.mild && sessionRanPainFree) {
         _clearFreeze(next);
+        return next;
       } else if (next.painFrozen && next.painSeverity == PainSeverity.sharp && next.painReentryTestPassed) {
         _clearFreeze(next);
+        return next;
+      }
+      // A freeze persists across days without re-tapping the body map
+      // (§7.2: the flag lives until it decays/clears, not per check-in) —
+      // the scheduled-while-flagged counter must keep ticking.
+      if (next.painFrozen && patternScheduledToday) {
+        next.sessionsScheduledWhileFlagged += 1;
+        if (next.painSeverity == PainSeverity.sharp && next.sessionsScheduledWhileFlagged >= 2) {
+          next.painReentryTestOffered = true;
+        }
       }
       return next;
     }
@@ -129,6 +140,7 @@ class PainEngine {
     if (!next.painFrozen) {
       next.painFrozen = true;
       next.painSeverity = activeFlag.severity;
+      next.painRegion = activeFlag.region;
       next.painFlaggedDate = activeFlag.flaggedDate;
       next.sessionsScheduledWhileFlagged = 0;
       next.prePainLoad = next.currentLoad;
@@ -136,7 +148,12 @@ class PainEngine {
       next.painReentryTestOffered = false;
       next.painReentryTestPassed = false;
     } else {
-      next.painSeverity = activeFlag.severity;
+      // Severity can only escalate while frozen (mild -> sharp); a sharp
+      // freeze never softens just because today's tap said mild.
+      if (activeFlag.severity == PainSeverity.sharp) {
+        next.painSeverity = PainSeverity.sharp;
+      }
+      next.painRegion ??= activeFlag.region;
     }
 
     if (patternScheduledToday) {
@@ -155,6 +172,7 @@ class PainEngine {
   void _clearFreeze(ExerciseState s) {
     s.painFrozen = false;
     s.painSeverity = null;
+    s.painRegion = null;
     s.painFlaggedDate = null;
     s.sessionsScheduledWhileFlagged = 0;
     s.painReentryTestOffered = false;
