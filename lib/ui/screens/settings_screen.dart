@@ -121,13 +121,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
             FilledButton(onPressed: _save, child: const Text('Save settings')),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: () => context.read<AppController>().triggerManualDeload(),
+              onPressed: () => _confirmManualDeload(context),
               child: const Text("I'm feeling beat up - deload everything"),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmManualDeload(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Deload everything?'),
+        content: const Text(
+          'This puts every trained movement pattern into a scheduled deload (§6.3/§6.5): '
+          'the next 2 sessions that touch each pattern run at 60% of your current load, '
+          'half the work sets, and RIR >= 4 (leave a lot in the tank). '
+          "It's shown in the app as a deload, not a setback.\n\n"
+          'After those 2 sessions, each pattern automatically returns to normal progression '
+          '(one small step back from where it was, so you ease back in rather than jumping '
+          'straight to your old working weight).\n\n'
+          "Use this when you're feeling generally beat up and want a planned lighter block, "
+          'not for a single sore muscle or joint - use the pain flag on the check-in for that instead.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Deload everything')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await context.read<AppController>().triggerManualDeload();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All patterns are now in a 2-session deload.')),
+      );
+    }
   }
 
   Widget _stepper(int value, void Function(int) onChanged) {

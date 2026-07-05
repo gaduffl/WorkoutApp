@@ -28,6 +28,11 @@ class AppController extends ChangeNotifier {
   DecisionTrace? todayTrace;
   bool loading = true;
 
+  /// Snapshot of [exerciseStates] taken right before the first check-in
+  /// submission of the day, so [resetToday] can undo the pain-lifecycle
+  /// bookkeeping a mistaken check-in already wrote (e.g. a typo'd RHR).
+  Map<String, ExerciseState>? _preCheckInSnapshot;
+
   AppController(this.repo);
 
   DateTime today() {
@@ -57,6 +62,7 @@ class AppController extends ChangeNotifier {
     RecoverySnapshot? recovery,
   }) async {
     final now = today();
+    _preCheckInSnapshot ??= Map.of(exerciseStates);
     final checkin = CheckIn(
       date: now,
       timeMinutes: timeMinutes,
@@ -91,6 +97,29 @@ class AppController extends ChangeNotifier {
     todayTrace = output.trace;
     notifyListeners();
     return output.trace;
+  }
+
+  /// Discards today's check-in/recovery entry and recommendation so the
+  /// user can redo the morning check-in (e.g. after a typo). If no session
+  /// has been logged yet today, this also undoes the pain-lifecycle
+  /// bookkeeping the mistaken check-in wrote. Once a session is logged,
+  /// that workout data is never touched - only the check-in is cleared.
+  Future<void> resetToday() async {
+    final now = today();
+    final loggedToday = (await repo.loadSessionLogsSince(now))
+        .any((l) => l.date.year == now.year && l.date.month == now.month && l.date.day == now.day);
+
+    if (!loggedToday && _preCheckInSnapshot != null) {
+      exerciseStates = _preCheckInSnapshot!;
+      await repo.saveExerciseStates(exerciseStates);
+    }
+    _preCheckInSnapshot = null;
+
+    await repo.deleteCheckIn(now);
+    await repo.deleteRecoverySnapshot(now);
+    await repo.deleteDecisionTrace(now);
+    todayTrace = null;
+    notifyListeners();
   }
 
   Future<void> completeSession(

@@ -60,6 +60,11 @@ class AppDatabase {
     return rows.map((r) => jsonDecode(r['json'] as String) as Map<String, dynamic>).toList();
   }
 
+  Future<void> delete(String table, String keyColumn, String key) async {
+    final db = await open();
+    await db.delete(table, where: '$keyColumn = ?', whereArgs: [key]);
+  }
+
   Future<List<Map<String, dynamic>>> getJsonSince(String table, String dateColumn, DateTime since) async {
     final db = await open();
     final rows = await db.query(

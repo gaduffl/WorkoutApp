@@ -15,6 +15,8 @@ class Repository {
 
   Repository(this.db);
 
+  String _dateKey(DateTime d) => DateTime(d.year, d.month, d.day).toIso8601String();
+
   Future<UserSettings> loadSettings() async {
     final j = await db.getJson('meta', 'key', 'settings');
     if (j == null) return const UserSettings();
@@ -61,8 +63,11 @@ class Repository {
   }
 
   Future<void> saveCheckIn(CheckIn checkin) async {
-    await db.putJson('check_ins', 'date', DateTime(checkin.date.year, checkin.date.month, checkin.date.day).toIso8601String(),
-        checkInToJson(checkin));
+    await db.putJson('check_ins', 'date', _dateKey(checkin.date), checkInToJson(checkin));
+  }
+
+  Future<void> deleteCheckIn(DateTime date) async {
+    await db.delete('check_ins', 'date', _dateKey(date));
   }
 
   Future<List<RecoverySnapshot>> loadRecoverySnapshotsSince(DateTime since) async {
@@ -71,12 +76,11 @@ class Repository {
   }
 
   Future<void> saveRecoverySnapshot(RecoverySnapshot snapshot) async {
-    await db.putJson(
-      'recovery_snapshots',
-      'date',
-      DateTime(snapshot.date.year, snapshot.date.month, snapshot.date.day).toIso8601String(),
-      recoverySnapshotToJson(snapshot),
-    );
+    await db.putJson('recovery_snapshots', 'date', _dateKey(snapshot.date), recoverySnapshotToJson(snapshot));
+  }
+
+  Future<void> deleteRecoverySnapshot(DateTime date) async {
+    await db.delete('recovery_snapshots', 'date', _dateKey(date));
   }
 
   Future<List<SessionLog>> loadSessionLogsSince(DateTime since) async {
@@ -89,20 +93,15 @@ class Repository {
   }
 
   Future<void> saveDecisionTrace(DecisionTrace trace) async {
-    await db.putJson(
-      'decision_traces',
-      'date',
-      DateTime(trace.date.year, trace.date.month, trace.date.day).toIso8601String(),
-      decisionTraceToJson(trace),
-    );
+    await db.putJson('decision_traces', 'date', _dateKey(trace.date), decisionTraceToJson(trace));
+  }
+
+  Future<void> deleteDecisionTrace(DateTime date) async {
+    await db.delete('decision_traces', 'date', _dateKey(date));
   }
 
   Future<DecisionTrace?> loadDecisionTraceForDate(DateTime date) async {
-    final j = await db.getJson(
-      'decision_traces',
-      'date',
-      DateTime(date.year, date.month, date.day).toIso8601String(),
-    );
+    final j = await db.getJson('decision_traces', 'date', _dateKey(date));
     if (j == null) return null;
     return decisionTraceFromJson(j);
   }

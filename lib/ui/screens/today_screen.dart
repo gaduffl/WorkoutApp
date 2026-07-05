@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../ai/ai_explainer.dart';
 import '../../models/decision_trace.dart';
 import '../../state/app_controller.dart';
+import 'checkin_screen.dart';
 import 'logger_screen.dart';
 
 class TodayScreen extends StatefulWidget {
@@ -31,7 +32,16 @@ class _TodayScreenState extends State<TodayScreen> {
     final plan = trace.plan;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Today')),
+      appBar: AppBar(
+        title: const Text('Today'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.restart_alt),
+            tooltip: 'Redo check-in',
+            onPressed: () => _confirmResetToday(context),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -103,6 +113,31 @@ class _TodayScreenState extends State<TodayScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmResetToday(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Redo check-in?'),
+        content: const Text(
+          "This discards today's check-in and recommendation (readiness numbers, pain flags, "
+          'the plan you\'re looking at) so you can enter it again from scratch. '
+          "If you haven't logged any sets yet today, nothing else is affected. "
+          "If you've already logged part of a session, that workout data is kept either way - "
+          'only the check-in itself is reset.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Redo check-in')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    await context.read<AppController>().resetToday();
+    if (!context.mounted) return;
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const CheckInScreen()));
   }
 
   String _rirLabel(String name) => switch (name) {
