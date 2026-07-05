@@ -56,6 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       age: int.tryParse(_ageController.text) ?? _settings.age,
       hrMaxOverride: double.tryParse(_hrMaxController.text),
       anthropicApiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
+      aiExplanationsEnabled: _settings.aiExplanationsEnabled,
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
@@ -187,6 +188,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(height: 32),
             Text('AI layer (optional)', style: Theme.of(context).textTheme.titleMedium),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Use AI "why" text'),
+              subtitle: Text(
+                _settings.aiExplanationsEnabled
+                    ? "Off uses the app's fixed, deterministic explanation text instead (§9.1) - "
+                        'same rules, no API call.'
+                    : "Using the fixed, deterministic explanation text - the engine's rules never change, "
+                        'only how the reasoning is worded.',
+              ),
+              value: _settings.aiExplanationsEnabled,
+              onChanged: (v) => setState(() => _settings = _settings.copyWith(aiExplanationsEnabled: v)),
+            ),
             TextField(
               controller: _apiKeyController,
               decoration: const InputDecoration(labelText: 'Anthropic API key (for AI "why" text)'),

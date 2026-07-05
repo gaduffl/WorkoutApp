@@ -17,6 +17,11 @@ class UserSettings {
   final double? hrMaxOverride;
   final OuraConnection oura;
   final String? anthropicApiKey;
+
+  /// §9.1: when off, the app always uses the deterministic fallback
+  /// templates for the daily "why" text instead of calling the AI layer -
+  /// even if an Anthropic API key is configured.
+  final bool aiExplanationsEnabled;
   final String aiTone;
   final String wakeWindow; // e.g. "07:00"
   final int checkInCutoffHour; // §12 default 10
@@ -31,6 +36,7 @@ class UserSettings {
     this.hrMaxOverride,
     this.oura = const OuraConnection(),
     this.anthropicApiKey,
+    this.aiExplanationsEnabled = true,
     this.aiTone = 'direct, encouraging, no fluff',
     this.wakeWindow = '07:00',
     this.checkInCutoffHour = 10,
@@ -48,6 +54,7 @@ class UserSettings {
     double? hrMaxOverride,
     OuraConnection? oura,
     String? anthropicApiKey,
+    bool? aiExplanationsEnabled,
     String? aiTone,
     String? wakeWindow,
     int? checkInCutoffHour,
@@ -62,6 +69,7 @@ class UserSettings {
       hrMaxOverride: hrMaxOverride ?? this.hrMaxOverride,
       oura: oura ?? this.oura,
       anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
+      aiExplanationsEnabled: aiExplanationsEnabled ?? this.aiExplanationsEnabled,
       aiTone: aiTone ?? this.aiTone,
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,

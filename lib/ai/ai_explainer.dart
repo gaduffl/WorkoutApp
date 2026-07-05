@@ -98,6 +98,7 @@ class AiExplainer {
 
   Future<String> dailyExplanation(DecisionTrace trace, UserSettings settings) async {
     final fallback = _fallbackConcat(trace, settings.language) + _painAdvisory(trace);
+    if (!settings.aiExplanationsEnabled) return fallback;
     final apiKey = settings.anthropicApiKey;
     if (apiKey == null || apiKey.isEmpty) return fallback;
 
