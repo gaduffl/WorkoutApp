@@ -1,5 +1,6 @@
 import 'equipment.dart';
 import 'floor_category.dart';
+import 'oura_connection.dart';
 
 enum Units { lb, kg }
 
@@ -14,7 +15,7 @@ class UserSettings {
   final AppLanguage language;
   final int age;
   final double? hrMaxOverride;
-  final String? ouraToken;
+  final OuraConnection oura;
   final String? anthropicApiKey;
   final String aiTone;
   final String wakeWindow; // e.g. "07:00"
@@ -28,7 +29,7 @@ class UserSettings {
     this.language = AppLanguage.en,
     this.age = 35,
     this.hrMaxOverride,
-    this.ouraToken,
+    this.oura = const OuraConnection(),
     this.anthropicApiKey,
     this.aiTone = 'direct, encouraging, no fluff',
     this.wakeWindow = '07:00',
@@ -45,7 +46,7 @@ class UserSettings {
     AppLanguage? language,
     int? age,
     double? hrMaxOverride,
-    String? ouraToken,
+    OuraConnection? oura,
     String? anthropicApiKey,
     String? aiTone,
     String? wakeWindow,
@@ -59,7 +60,7 @@ class UserSettings {
       language: language ?? this.language,
       age: age ?? this.age,
       hrMaxOverride: hrMaxOverride ?? this.hrMaxOverride,
-      ouraToken: ouraToken ?? this.ouraToken,
+      oura: oura ?? this.oura,
       anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
       aiTone: aiTone ?? this.aiTone,
       wakeWindow: wakeWindow ?? this.wakeWindow,

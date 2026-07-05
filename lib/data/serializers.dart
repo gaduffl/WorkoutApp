@@ -4,6 +4,7 @@ import '../models/equipment.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/movement_pattern.dart';
+import '../models/oura_connection.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
 import '../models/recovery_snapshot.dart';
@@ -195,6 +196,22 @@ EquipmentConfig equipmentConfigFromJson(Map<String, dynamic> j) => EquipmentConf
       unevenPairModeEnabled: j['unevenPairModeEnabled'] as bool,
     );
 
+Map<String, dynamic> ouraConnectionToJson(OuraConnection o) => {
+      'clientId': o.clientId,
+      'clientSecret': o.clientSecret,
+      'accessToken': o.accessToken,
+      'refreshToken': o.refreshToken,
+      'accessTokenExpiresAt': o.accessTokenExpiresAt?.toIso8601String(),
+    };
+
+OuraConnection ouraConnectionFromJson(Map<String, dynamic> j) => OuraConnection(
+      clientId: j['clientId'] as String?,
+      clientSecret: j['clientSecret'] as String?,
+      accessToken: j['accessToken'] as String?,
+      refreshToken: j['refreshToken'] as String?,
+      accessTokenExpiresAt: j['accessTokenExpiresAt'] == null ? null : DateTime.parse(j['accessTokenExpiresAt'] as String),
+    );
+
 Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'equipment': equipmentConfigToJson(u.equipment),
       'weeklyFloor': u.weeklyFloor.map((k, v) => MapEntry(k.name, v)),
@@ -202,7 +219,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'language': u.language.name,
       'age': u.age,
       'hrMaxOverride': u.hrMaxOverride,
-      'ouraToken': u.ouraToken,
+      'oura': ouraConnectionToJson(u.oura),
       'anthropicApiKey': u.anthropicApiKey,
       'aiTone': u.aiTone,
       'wakeWindow': u.wakeWindow,
@@ -217,7 +234,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       language: AppLanguage.values.byName(j['language'] as String),
       age: j['age'] as int,
       hrMaxOverride: (j['hrMaxOverride'] as num?)?.toDouble(),
-      ouraToken: j['ouraToken'] as String?,
+      oura: j['oura'] == null ? const OuraConnection() : ouraConnectionFromJson(j['oura'] as Map<String, dynamic>),
       anthropicApiKey: j['anthropicApiKey'] as String?,
       aiTone: j['aiTone'] as String,
       wakeWindow: j['wakeWindow'] as String,

@@ -22,6 +22,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
   final _rhrController = TextEditingController();
   final _sleepController = TextEditingController();
   bool _submitting = false;
+  bool _ouraSyncing = false;
+  bool _ouraSyncFailed = false;
+  bool _ouraPrefilled = false;
 
   static const _regionLabels = {
     BodyRegion.lowerBack: 'Lower back',
@@ -33,6 +36,31 @@ class _CheckInScreenState extends State<CheckInScreen> {
     BodyRegion.wrist: 'Wrist',
     BodyRegion.hip: 'Hip',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _syncOura();
+  }
+
+  Future<void> _syncOura() async {
+    final controller = context.read<AppController>();
+    if (!controller.settings.oura.isConnected) return;
+    setState(() => _ouraSyncing = true);
+    final snapshot = await controller.fetchOuraRecovery(controller.today());
+    if (!mounted) return;
+    setState(() {
+      _ouraSyncing = false;
+      if (snapshot == null) {
+        _ouraSyncFailed = true;
+        return;
+      }
+      _ouraPrefilled = true;
+      if (snapshot.hrvRmssd != null) _hrvController.text = snapshot.hrvRmssd!.toStringAsFixed(0);
+      if (snapshot.restingHr != null) _rhrController.text = snapshot.restingHr!.toStringAsFixed(0);
+      if (snapshot.sleepScore != null) _sleepController.text = snapshot.sleepScore!.toString();
+    });
+  }
 
   @override
   void dispose() {
@@ -136,8 +164,24 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-              Text('Recovery (optional - pre-filled from Oura when connected)',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Recovery (optional)', style: Theme.of(context).textTheme.titleMedium),
+                  ),
+                  if (_ouraSyncing)
+                    const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ),
+              if (_ouraPrefilled)
+                Text('Pre-filled from Oura - edit any field if it looks off.',
+                    style: Theme.of(context).textTheme.bodySmall)
+              else if (_ouraSyncFailed)
+                Text('Oura data unavailable today - enter manually.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.error))
+              else
+                Text('Manual entry (connect Oura in Settings to pre-fill this)',
+                    style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 8),
               Row(
                 children: [

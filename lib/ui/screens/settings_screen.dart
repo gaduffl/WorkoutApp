@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/floor_category.dart';
+import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
 
@@ -16,8 +17,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late UserSettings _settings;
   late TextEditingController _ageController;
   late TextEditingController _hrMaxController;
-  late TextEditingController _ouraController;
+  late TextEditingController _ouraClientIdController;
+  late TextEditingController _ouraClientSecretController;
   late TextEditingController _apiKeyController;
+  bool _connecting = false;
 
   @override
   void initState() {
@@ -25,7 +28,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _settings = context.read<AppController>().settings;
     _ageController = TextEditingController(text: _settings.age.toString());
     _hrMaxController = TextEditingController(text: _settings.hrMaxOverride?.toStringAsFixed(0) ?? '');
-    _ouraController = TextEditingController(text: _settings.ouraToken ?? '');
+    _ouraClientIdController = TextEditingController(text: _settings.oura.clientId ?? '');
+    _ouraClientSecretController = TextEditingController(text: _settings.oura.clientSecret ?? '');
     _apiKeyController = TextEditingController(text: _settings.anthropicApiKey ?? '');
   }
 
@@ -33,24 +37,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _ageController.dispose();
     _hrMaxController.dispose();
-    _ouraController.dispose();
+    _ouraClientIdController.dispose();
+    _ouraClientSecretController.dispose();
     _apiKeyController.dispose();
     super.dispose();
   }
 
+  /// Bases the save on the controller's *current* settings (not the local
+  /// draft) so a background change - e.g. Oura tokens arriving from the
+  /// OAuth redirect while this screen was open - never gets clobbered by
+  /// an unrelated field edit here.
   Future<void> _save() async {
-    final newSettings = _settings.copyWith(
+    final controller = context.read<AppController>();
+    final newSettings = controller.settings.copyWith(
+      equipment: _settings.equipment,
+      weeklyFloor: _settings.weeklyFloor,
+      language: _settings.language,
       age: int.tryParse(_ageController.text) ?? _settings.age,
       hrMaxOverride: double.tryParse(_hrMaxController.text),
-      ouraToken: _ouraController.text.isEmpty ? null : _ouraController.text,
       anthropicApiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
     );
-    await context.read<AppController>().saveSettings(newSettings);
+    await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+  }
+
+  Future<void> _connectOura() async {
+    setState(() => _connecting = true);
+    final controller = context.read<AppController>();
+    final oura = controller.settings.oura.copyWith(
+      clientId: _ouraClientIdController.text.trim(),
+      clientSecret: _ouraClientSecretController.text.trim(),
+    );
+    await controller.saveSettings(controller.settings.copyWith(oura: oura));
+    final launched = await controller.startOuraConnect();
+    if (mounted) {
+      setState(() => _connecting = false);
+      if (!launched) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open the browser to connect to Oura.")),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final oura = context.watch<AppController>().settings.oura;
+    final ouraError = context.watch<AppController>().ouraError;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
@@ -110,8 +144,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onSelectionChanged: (s) => setState(() => _settings = _settings.copyWith(language: s.first)),
             ),
             const Divider(height: 32),
-            Text('Integrations (optional)', style: Theme.of(context).textTheme.titleMedium),
-            TextField(controller: _ouraController, decoration: const InputDecoration(labelText: 'Oura personal access token')),
+            Text('Oura', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Oura retired personal access tokens in Dec 2025 - connecting now uses OAuth2. '
+              'Register a free API Application at cloud.ouraring.com/oauth/applications with '
+              'redirect URI "morningcoach://oauth-callback", then paste its Client ID/Secret below.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            _OuraStatusChip(oura: oura),
+            if (ouraError != null) ...[
+              const SizedBox(height: 4),
+              Text(ouraError, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 8),
+            TextField(controller: _ouraClientIdController, decoration: const InputDecoration(labelText: 'Oura Client ID')),
+            TextField(
+              controller: _ouraClientSecretController,
+              decoration: const InputDecoration(labelText: 'Oura Client Secret'),
+              obscureText: true,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _connecting ? null : _connectOura,
+                    child: _connecting
+                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(oura.isConnected ? 'Reconnect Oura' : 'Connect Oura'),
+                  ),
+                ),
+                if (oura.isConnected) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () => context.read<AppController>().disconnectOura(),
+                    child: const Text('Disconnect'),
+                  ),
+                ],
+              ],
+            ),
+            const Divider(height: 32),
+            Text('AI layer (optional)', style: Theme.of(context).textTheme.titleMedium),
             TextField(
               controller: _apiKeyController,
               decoration: const InputDecoration(labelText: 'Anthropic API key (for AI "why" text)'),
@@ -169,6 +244,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text('$value'),
         IconButton(onPressed: () => onChanged((value + 1).clamp(0, 7)), icon: const Icon(Icons.add)),
       ],
+    );
+  }
+}
+
+class _OuraStatusChip extends StatelessWidget {
+  final OuraConnection oura;
+
+  const _OuraStatusChip({required this.oura});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = oura.isConnected
+        ? ('Connected', Colors.green)
+        : oura.isConfigured
+            ? ('Not connected', Colors.orange)
+            : ('Not configured', Colors.grey);
+    return Chip(
+      avatar: Icon(Icons.circle, size: 12, color: color),
+      label: Text(label),
     );
   }
 }

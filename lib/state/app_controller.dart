@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/repository.dart';
 import '../engine/decision_engine.dart';
 import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
+import '../integrations/oura_client.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/exercise_state.dart';
@@ -33,6 +39,15 @@ class AppController extends ChangeNotifier {
   /// bookkeeping a mistaken check-in already wrote (e.g. a typo'd RHR).
   Map<String, ExerciseState>? _preCheckInSnapshot;
 
+  static const _oura = OuraClient();
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _linkSub;
+  String? _oauthState;
+
+  /// Set after a failed connect/refresh attempt so the UI can surface it;
+  /// cleared on the next successful attempt.
+  String? ouraError;
+
   AppController(this.repo);
 
   DateTime today() {
@@ -47,6 +62,105 @@ class AppController extends ChangeNotifier {
     todayTrace = await repo.loadDecisionTraceForDate(today());
     loading = false;
     notifyListeners();
+
+    _linkSub = _appLinks.uriLinkStream.listen(_handleIncomingLink, onError: (_) {});
+    final initialLink = await _appLinks.getInitialLink();
+    if (initialLink != null) await _handleIncomingLink(initialLink);
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _handleIncomingLink(Uri uri) async {
+    if (uri.scheme != 'morningcoach' || uri.host != 'oauth-callback') return;
+    final code = uri.queryParameters['code'];
+    final state = uri.queryParameters['state'];
+    if (code == null || _oauthState == null || state != _oauthState) return;
+    _oauthState = null;
+    await _completeOuraConnection(code);
+  }
+
+  /// Opens the system browser to Oura's OAuth2 consent screen. The redirect
+  /// back to `morningcoach://oauth-callback` is caught by [_handleIncomingLink].
+  Future<bool> startOuraConnect() async {
+    final oura = settings.oura;
+    if (!oura.isConfigured) return false;
+    _oauthState = _randomState();
+    final url = _oura.buildAuthorizationUrl(clientId: oura.clientId!, state: _oauthState!);
+    return launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _completeOuraConnection(String code) async {
+    final oura = settings.oura;
+    if (!oura.isConfigured) return;
+    try {
+      final tokens = await _oura.exchangeCode(clientId: oura.clientId!, clientSecret: oura.clientSecret!, code: code);
+      ouraError = null;
+      settings = settings.copyWith(
+        oura: oura.copyWith(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          accessTokenExpiresAt: tokens.expiresAt,
+        ),
+      );
+      await repo.saveSettings(settings);
+    } catch (e) {
+      ouraError = 'Could not connect to Oura: $e';
+    }
+    notifyListeners();
+  }
+
+  Future<void> disconnectOura() async {
+    settings = settings.copyWith(oura: settings.oura.copyWith(clearTokens: true));
+    ouraError = null;
+    await repo.saveSettings(settings);
+    notifyListeners();
+  }
+
+  /// §10: pulls last night's HRV/RHR/sleep/readiness for [date], refreshing
+  /// the access token first if it's expired. Returns null (silent
+  /// fallback to manual entry) if not connected or the request fails.
+  Future<RecoverySnapshot?> fetchOuraRecovery(DateTime date) async {
+    var oura = settings.oura;
+    if (!oura.isConnected) return null;
+
+    if (oura.isExpired) {
+      if (oura.refreshToken == null || !oura.isConfigured) return null;
+      try {
+        final tokens = await _oura.refreshAccessToken(
+          clientId: oura.clientId!,
+          clientSecret: oura.clientSecret!,
+          refreshToken: oura.refreshToken!,
+        );
+        oura = oura.copyWith(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          accessTokenExpiresAt: tokens.expiresAt,
+        );
+        settings = settings.copyWith(oura: oura);
+        await repo.saveSettings(settings);
+        ouraError = null;
+        notifyListeners();
+      } catch (e) {
+        ouraError = 'Oura session expired and could not refresh: $e';
+        notifyListeners();
+        return null;
+      }
+    }
+
+    try {
+      return await _oura.fetchRecoveryForDate(accessToken: oura.accessToken!, date: date);
+    } catch (_) {
+      return null; // §10 failure behavior: silent fallback to manual entry.
+    }
+  }
+
+  String _randomState() {
+    final rand = Random.secure();
+    return List.generate(16, (_) => rand.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
   }
 
   Future<void> saveSettings(UserSettings newSettings) async {
