@@ -56,7 +56,8 @@ class ProgressionEngine {
   double _detrainPercent(int daysUntrained) {
     if (daysUntrained > 42) return 0.70;
     if (daysUntrained > 21) return 0.80;
-    return 0.90;
+    if (daysUntrained >= 10) return 0.90;
+    return 1.0; // §6.6 detraining only starts at a 10-day gap
   }
 
   /// §6.2: evaluate transitions once, at session completion, per exercise,

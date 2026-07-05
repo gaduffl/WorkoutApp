@@ -18,6 +18,11 @@ class PlannedExercise {
   final bool isWarmup;
   final String? instruction;
 
+  /// §6.6: detraining-adjusted loads become the new working load once the
+  /// session is actually completed (otherwise the ramp would snap back to
+  /// the pre-break load the very next day).
+  final bool persistLoadOnCompletion;
+
   const PlannedExercise({
     required this.trackKey,
     required this.pattern,
@@ -30,6 +35,7 @@ class PlannedExercise {
     this.substitutedFrom,
     this.isWarmup = false,
     this.instruction,
+    this.persistLoadOnCompletion = false,
   });
 }
 
@@ -40,12 +46,17 @@ class SessionPlan {
   final List<PlannedExercise> exercises;
   final int estimatedDurationMin;
 
+  /// §2.1/§5 Step 6: readiness swaps (RED technique session) leave the
+  /// original queue item pending — completing them grants no queue credit.
+  final bool grantsQueueCredit;
+
   const SessionPlan({
     required this.sessionId,
     required this.sessionName,
     required this.tier,
     required this.exercises,
     required this.estimatedDurationMin,
+    this.grantsQueueCredit = true,
   });
 
   int get plannedWorkSets =>

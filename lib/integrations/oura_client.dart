@@ -110,17 +110,33 @@ class OuraClient {
   }
 
   Future<int?> _fetchScore(String collection, String accessToken, String dateStr) async {
-    final data = await _fetchDocuments(collection, accessToken, dateStr);
+    final data = await _fetchDocuments(collection, accessToken, startDate: dateStr, endDate: dateStr);
     if (data == null || data.isEmpty) return null;
     return (data.last)['score'] as int?;
   }
 
   Future<_SleepDetail?> _fetchSleepDetail(String accessToken, String dateStr) async {
-    final data = await _fetchDocuments('sleep', accessToken, dateStr);
+    // KNOWN-BUG FIX (HRV/RHR never prefilled): unlike the daily_* routes,
+    // querying the sleep-periods route with start_date == end_date reliably
+    // misses last night's period (the period spans midnight and Oura's range
+    // filter on this route does not behave inclusively the way daily_* does).
+    // Query a [date-1, date+1] window instead and pick the period whose
+    // `day` is the target date.
+    final target = DateTime.parse(dateStr);
+    final data = await _fetchDocuments(
+      'sleep',
+      accessToken,
+      startDate: _isoDate(target.subtract(const Duration(days: 1))),
+      endDate: _isoDate(target.add(const Duration(days: 1))),
+    );
     if (data == null || data.isEmpty) return null;
-    // A day can have multiple sleep periods (naps); the longest one is the
-    // best proxy for "last night's" main sleep.
-    final main = data.reduce(
+    final forDay = data.where((d) => d['day'] == dateStr).toList();
+    final pool = forDay.isNotEmpty ? forDay : data;
+    // A day can have multiple sleep periods (naps): prefer the main
+    // long_sleep period, otherwise the longest one.
+    final longSleeps = pool.where((d) => d['type'] == 'long_sleep').toList();
+    final candidates = longSleeps.isNotEmpty ? longSleeps : pool;
+    final main = candidates.reduce(
       (a, b) => ((a['total_sleep_duration'] as num?) ?? 0).compareTo((b['total_sleep_duration'] as num?) ?? 0) >= 0 ? a : b,
     );
     final hrv = (main['average_hrv'] as num?)?.toDouble();
@@ -129,13 +145,85 @@ class OuraClient {
     return _SleepDetail(hrv, rhr);
   }
 
-  Future<List<Map<String, dynamic>>?> _fetchDocuments(String collection, String accessToken, String dateStr) async {
-    final uri = Uri.parse('$apiBase/$collection').replace(queryParameters: {'start_date': dateStr, 'end_date': dateStr});
-    final response = await http.get(uri, headers: {'Authorization': 'Bearer $accessToken'});
-    if (response.statusCode != 200) return null;
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final data = body['data'] as List?;
-    return data?.cast<Map<String, dynamic>>();
+  /// §10: ranged pull ("cache last 90 days locally for baseline math").
+  /// One paginated request per collection instead of 3 x N daily calls.
+  Future<List<RecoverySnapshot>> fetchRecoveryRange({
+    required String accessToken,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final startStr = _isoDate(start.subtract(const Duration(days: 1)));
+    final endStr = _isoDate(end.add(const Duration(days: 1)));
+    final sleepPeriods = await _fetchDocuments('sleep', accessToken, startDate: startStr, endDate: endStr) ?? const [];
+    final dailySleep = await _fetchDocuments('daily_sleep', accessToken, startDate: _isoDate(start), endDate: _isoDate(end)) ?? const [];
+    final dailyReadiness =
+        await _fetchDocuments('daily_readiness', accessToken, startDate: _isoDate(start), endDate: _isoDate(end)) ?? const [];
+
+    final byDay = <String, _MutableSnapshot>{};
+    _MutableSnapshot ensure(String day) => byDay.putIfAbsent(day, () => _MutableSnapshot(day));
+
+    for (final p in sleepPeriods) {
+      final day = p['day'] as String?;
+      if (day == null) continue;
+      final s = ensure(day);
+      final dur = (p['total_sleep_duration'] as num?) ?? 0;
+      final isLong = p['type'] == 'long_sleep';
+      if (s.bestDuration == null || isLong && !s.bestIsLong || (isLong == s.bestIsLong && dur > s.bestDuration!)) {
+        final hrv = (p['average_hrv'] as num?)?.toDouble();
+        final rhr = (p['lowest_heart_rate'] as num?)?.toDouble();
+        if (hrv != null || rhr != null) {
+          s.hrv = hrv ?? s.hrv;
+          s.rhr = rhr ?? s.rhr;
+          s.bestDuration = dur;
+          s.bestIsLong = isLong;
+        }
+      }
+    }
+    for (final d in dailySleep) {
+      final day = d['day'] as String?;
+      if (day != null) ensure(day).sleepScore = (d['score'] as num?)?.toInt();
+    }
+    for (final d in dailyReadiness) {
+      final day = d['day'] as String?;
+      if (day != null) ensure(day).readiness = (d['score'] as num?)?.toInt();
+    }
+
+    final out = <RecoverySnapshot>[];
+    for (final s in byDay.values) {
+      final date = DateTime.parse(s.day);
+      if (date.isBefore(start) || date.isAfter(end)) continue;
+      out.add(RecoverySnapshot(
+        date: DateTime(date.year, date.month, date.day),
+        hrvRmssd: s.hrv,
+        restingHr: s.rhr,
+        sleepScore: s.sleepScore,
+        ouraReadinessScore: s.readiness,
+        manualEntry: false,
+      ));
+    }
+    out.sort((a, b) => a.date.compareTo(b.date));
+    return out;
+  }
+
+  Future<List<Map<String, dynamic>>?> _fetchDocuments(
+    String collection,
+    String accessToken, {
+    required String startDate,
+    required String endDate,
+  }) async {
+    final all = <Map<String, dynamic>>[];
+    String? nextToken;
+    do {
+      final params = {'start_date': startDate, 'end_date': endDate, if (nextToken != null) 'next_token': nextToken};
+      final uri = Uri.parse('$apiBase/$collection').replace(queryParameters: params);
+      final response = await http.get(uri, headers: {'Authorization': 'Bearer $accessToken'});
+      if (response.statusCode != 200) return all.isEmpty ? null : all;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = body['data'] as List?;
+      if (data != null) all.addAll(data.cast<Map<String, dynamic>>());
+      nextToken = body['next_token'] as String?;
+    } while (nextToken != null);
+    return all;
   }
 
   String _isoDate(DateTime d) =>
@@ -147,4 +235,16 @@ class _SleepDetail {
   final double? lowestHr;
 
   const _SleepDetail(this.hrv, this.lowestHr);
+}
+
+class _MutableSnapshot {
+  final String day;
+  double? hrv;
+  double? rhr;
+  int? sleepScore;
+  int? readiness;
+  num? bestDuration;
+  bool bestIsLong = false;
+
+  _MutableSnapshot(this.day);
 }

@@ -22,6 +22,10 @@ class ExerciseState {
   // --- Pain freeze / re-entry (§6.2.4, §7.2) ---
   bool painFrozen;
   PainSeverity? painSeverity;
+
+  /// Region that caused the freeze — needed so the §7.1 substitution keeps
+  /// applying on later days when the user doesn't re-tap the body map.
+  BodyRegion? painRegion;
   DateTime? painFlaggedDate;
   int sessionsScheduledWhileFlagged;
   double? prePainLoad;
@@ -56,6 +60,7 @@ class ExerciseState {
     List<DateTime>? regressionDates,
     this.painFrozen = false,
     this.painSeverity,
+    this.painRegion,
     this.painFlaggedDate,
     this.sessionsScheduledWhileFlagged = 0,
     this.prePainLoad,
@@ -90,6 +95,7 @@ class ExerciseState {
         regressionDates: List.of(regressionDates),
         painFrozen: painFrozen,
         painSeverity: painSeverity,
+        painRegion: painRegion,
         painFlaggedDate: painFlaggedDate,
         sessionsScheduledWhileFlagged: sessionsScheduledWhileFlagged,
         prePainLoad: prePainLoad,
