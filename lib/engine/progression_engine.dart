@@ -42,6 +42,11 @@ class ProgressionEngine {
   }
 
   LadderStep ladderStepFor(ExerciseState state) {
+    // Named exercises (§7.1 substitutes, S5 accessories) carry their own
+    // dumbbell count — never fall back to the pattern ladder's step, which
+    // would compute increments on the wrong achievable-load set.
+    final named = substituteRegistry[state.trackKey];
+    if (named != null) return LadderStep(name: named.name, dumbbells: named.dumbbells);
     final ladder = ladders[state.pattern]!;
     final idx = state.ladderStepIndex.clamp(0, ladder.steps.length - 1);
     return ladder.steps[idx];
