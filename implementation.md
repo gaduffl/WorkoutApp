@@ -123,6 +123,14 @@ treat filename as canonical version).
     wrong achievable-load set (bridge curls previously used the hinge
     ladder's 2-DB steps).
 
+18. **§11.4 History charts, hand-rolled with CustomPaint** (no chart package —
+    keeps the dependency surface flat): rolling-7-day floor rings
+    (count/requirement, labeled, not color-alone), a 12-week calendar heat
+    whose cell shade is a single-hue alpha ramp of completed work sets,
+    per-pattern top-set sparklines (main-ladder tracks only; named accessories
+    excluded to keep the panel to the six spec patterns), and a 28-day HRV
+    sparkline. Theme-derived colors so light/dark both work.
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather
@@ -142,8 +150,7 @@ treat filename as canonical version).
   2×25) is achievable, ≤54, and >49, and §2.6.3 says uneven totals *join* the
   set. Round-down over the union yields 50. Tests assert 50; the spec example
   appears internally inconsistent.
-- **History screen is a plain list** — no calendar heat / progression charts /
-  floor ring yet (spec §11.4, Phase 2 scope).
+- ~~History screen is a plain list~~ — fixed 2026-07-06 (entry 18).
 - **Spec-internal tension**: a +15 recency boost can outrank S6's weekend base 60
   (50+15=65), contradicting §2.1's "S6 becomes top-ranked iff ALL hold". The
   numeric scoring (§5 Step 4, v1.1) is treated as authoritative.
