@@ -96,6 +96,21 @@ treat filename as canonical version).
     a strictly increasing versionCode (equal codes are legal but ambiguous;
     increasing codes make "did it update?" verifiable in Settings → App info).
 
+## Session 2026-07-06 (warm-up protocol + ATG block emission)
+
+15. **§2.5 warm-up protocol now emitted in plans**: 40/60/80 ramp (x8/x5/x3)
+    before the session's first compound, one 60% x 5 feeder before every later
+    loaded lift; `isWarmup` entries are excluded from the §8 completion
+    denominator and from progression evaluation, and the logger stamps their
+    sets `isWarmup`. Decisions: (a) substitutes get no warm-up — they onboard
+    deliberately light per §7.1; (b) bodyweight/backpack steps get none — no
+    meaningful percent-load; (c) a warm-up entry that rounds to >= the work
+    load is dropped (very light prescriptions need no ramp).
+16. **ATG block interpretation**: on S4 the block runs first and replaces the
+    *ramp* only — each lift keeps its 60% feeder. The spec says the block
+    "replaces general warm-up"; walking into 90 lb deadlifts with zero
+    exercise-specific prep read as unsafe, so feeders stay.
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather
@@ -109,9 +124,7 @@ treat filename as canonical version).
   excluded from candidacy; harmless (they only win when nothing else is feasible).
 - **S7 remains a primary candidate at slots ≥35 min** (spec limits it to <35);
   base 10 makes it effectively unreachable except in contrived states.
-- **§2.5 warm-up protocol (40/60/80 ramp + feeder sets) is not emitted** in plans;
-  §2.3/§2.5 ATG/knee-health block is defined (`hasKneeHealthBlock`) but never
-  rendered. Both queued as follow-up work, not silently dropped.
+- ~~§2.5 warm-up protocol / ATG block not emitted~~ — fixed 2026-07-06 (entries 15–16).
 - **S5 "Flex/Pump" trains push-vertical/pull-horizontal/core** instead of direct
   arm work (no curl/raise ladders exist). Follow-up: dedicated accessory ladders.
 - **§2.6.4's "54 → 49 (uneven)" rounding example is unsatisfiable**: 50 (matched
