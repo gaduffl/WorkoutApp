@@ -146,9 +146,36 @@ const floorPress = SubstituteExercise(
   dumbbells: 2,
 );
 
+// S5 "Flex/Pump" direct accessories (§2.1: arms, shoulders, core). Not spec
+// ladders — named single-DB exercises with their own state tracks, reusing
+// the substitute mechanism. Pattern choice drives the §7.1 pain mapping:
+// coreGrip ties curls to the elbow/wrist "remove direct arm work" rule,
+// pushVertical ties raises/triceps to the shoulder rules.
+const dbCurl = SubstituteExercise(
+  slug: 'db_curl',
+  name: 'DB curl',
+  pattern: MovementPattern.coreGrip,
+  dumbbells: 1,
+);
+
+const lateralRaise = SubstituteExercise(
+  slug: 'lateral_raise',
+  name: 'Lateral raise',
+  pattern: MovementPattern.pushVertical,
+  dumbbells: 1,
+);
+
+const overheadTriceps = SubstituteExercise(
+  slug: 'overhead_triceps',
+  name: 'Overhead triceps extension',
+  pattern: MovementPattern.pushVertical,
+  dumbbells: 1,
+);
+
 /// Keyed by [SubstituteExercise.trackKey] so plan assembly can resolve a
 /// substitute's real name/load setup instead of falling back to its
 /// underlying pattern's normal ladder (§7.1).
 final Map<String, SubstituteExercise> substituteRegistry = {
-  for (final s in [bridgeHamstringCurl, lightSingleLegRdl, floorPress]) s.trackKey: s,
+  for (final s in [bridgeHamstringCurl, lightSingleLegRdl, floorPress, dbCurl, lateralRaise, overheadTriceps])
+    s.trackKey: s,
 };

@@ -111,6 +111,18 @@ treat filename as canonical version).
     "replaces general warm-up"; walking into 90 lb deadlifts with zero
     exercise-specific prep read as unsafe, so feeders stay.
 
+17. **S5 direct arm work via the named-exercise registry, not new patterns.**
+    DB curl / lateral raise / overhead triceps are `SubstituteExercise`-style
+    named exercises with their own state tracks (single-DB achievable set,
+    8–15 rep range) rather than new `MovementPattern` enum values — the enum
+    drives serialization, pain mapping and recency logic, and arms don't need
+    any of that machinery. Pattern assignment is deliberate for §7.1: curls →
+    `coreGrip` (sharp elbow/wrist removes direct arm work), raises/triceps →
+    `pushVertical` (sharp shoulder removes overhead). `ladderStepFor` is now
+    registry-aware, which also fixes §7.1 substitutes incrementing on the
+    wrong achievable-load set (bridge curls previously used the hinge
+    ladder's 2-DB steps).
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather
@@ -125,8 +137,7 @@ treat filename as canonical version).
 - **S7 remains a primary candidate at slots ≥35 min** (spec limits it to <35);
   base 10 makes it effectively unreachable except in contrived states.
 - ~~§2.5 warm-up protocol / ATG block not emitted~~ — fixed 2026-07-06 (entries 15–16).
-- **S5 "Flex/Pump" trains push-vertical/pull-horizontal/core** instead of direct
-  arm work (no curl/raise ladders exist). Follow-up: dedicated accessory ladders.
+- ~~S5 trains push/pull proxies instead of arms~~ — fixed 2026-07-06 (entry 17).
 - **§2.6.4's "54 → 49 (uneven)" rounding example is unsatisfiable**: 50 (matched
   2×25) is achievable, ≤54, and >49, and §2.6.3 says uneven totals *join* the
   set. Round-down over the union yields 50. Tests assert 50; the spec example

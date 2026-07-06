@@ -1,3 +1,4 @@
+import '../models/ladders.dart';
 import '../models/movement_pattern.dart';
 import '../models/session_type.dart';
 
@@ -22,6 +23,10 @@ class SessionTemplateDef {
   final SessionTypeId id;
   final List<MovementPattern> compoundPatterns;
   final List<MovementPattern> accessoryPatterns;
+
+  /// Named accessory exercises (S5 arms/shoulders) that don't live on a
+  /// pattern ladder — each carries its own state track via the registry.
+  final List<SubstituteExercise> namedAccessories;
   final bool hasKneeHealthBlock;
   final bool hasOptionalRehitFinisher;
   final bool isCardioOnly;
@@ -30,27 +35,28 @@ class SessionTemplateDef {
     required this.id,
     this.compoundPatterns = const [],
     this.accessoryPatterns = const [],
+    this.namedAccessories = const [],
     this.hasKneeHealthBlock = false,
     this.hasOptionalRehitFinisher = false,
     this.isCardioOnly = false,
   });
 
-  /// (pattern, isCompound) slots surviving at [tier].
-  List<(MovementPattern, bool)> slotsForTier(SessionTier tier) {
+  /// (pattern, isCompound, namedExercise?) slots surviving at [tier].
+  List<(MovementPattern, bool, SubstituteExercise?)> slotsForTier(SessionTier tier) {
     if (isCardioOnly) return const [];
+    final compounds = [for (final p in compoundPatterns) (p, true, null as SubstituteExercise?)];
+    final named = [for (final n in namedAccessories) (n.pattern, false, n as SubstituteExercise?)];
+    final accessories = [for (final p in accessoryPatterns) (p, false, null as SubstituteExercise?)];
     if (tier == SessionTier.compressed) {
       // §2.5: compressed tier is "first superset pair only, 2 hard sets
       // each" - that applies to whichever exercises survive, even for a
       // template with no compound-bucketed patterns at all (S5). Marking
       // these `false` here would fall through to the *accessory* set count
       // (0 at compressed tier), leaving the session with zero work sets.
-      final source = compoundPatterns.isNotEmpty ? compoundPatterns : accessoryPatterns;
-      return source.take(2).map((p) => (p, true)).toList();
+      final source = compounds.isNotEmpty ? compounds : [...named, ...accessories];
+      return source.take(2).map((s) => (s.$1, true, s.$3)).toList();
     }
-    return [
-      for (final p in compoundPatterns) (p, true),
-      for (final p in accessoryPatterns) (p, false),
-    ];
+    return [...compounds, ...named, ...accessories];
   }
 
   int setsFor(bool isCompound, SessionTier tier) {
@@ -88,7 +94,10 @@ final Map<SessionTypeId, SessionTemplateDef> sessionTemplates = {
   ),
   SessionTypeId.s5: const SessionTemplateDef(
     id: SessionTypeId.s5,
-    accessoryPatterns: [MovementPattern.pushVertical, MovementPattern.pullHorizontal, MovementPattern.coreGrip],
+    // §2.1: "Flex / Pump (arms, shoulders, core)" - direct arm work plus
+    // the core/grip ladder, not the push/pull proxies used before.
+    namedAccessories: [dbCurl, lateralRaise, overheadTriceps],
+    accessoryPatterns: [MovementPattern.coreGrip],
   ),
   SessionTypeId.s6: const SessionTemplateDef(id: SessionTypeId.s6, isCardioOnly: true),
   SessionTypeId.s7: const SessionTemplateDef(id: SessionTypeId.s7, isCardioOnly: true),

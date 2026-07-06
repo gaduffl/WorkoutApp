@@ -374,12 +374,12 @@ class DecisionEngine {
         rampDone = true;
       }
       final slots = template.slotsForTier(tier);
-      for (final (pattern, isCompound) in slots) {
+      for (final (pattern, isCompound, namedExercise) in slots) {
         scheduledPatterns.add(pattern);
         final baseSets = template.setsFor(isCompound, tier);
         final cutSets = (baseSets * setMultiplier).floor().clamp(baseSets == 0 ? 0 : 1, baseSets);
 
-        final trackKey = pattern.name;
+        final trackKey = namedExercise?.trackKey ?? pattern.name;
         var state = patchedStates[trackKey] ?? ExerciseState(trackKey: trackKey, pattern: pattern);
 
         // Pain flag lifecycle for this pattern.
