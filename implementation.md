@@ -78,6 +78,24 @@ treat filename as canonical version).
     or radiating/numbness/tingling) removes the pattern from the plan outright
     until manually cleared; previously `isEscalated` was implemented but unused.
 
+## Session 2026-07-05, later (merge-order rescue + APK update fix)
+
+13. **PR #2's fixes were stranded off `main`.** PR #1 (flutter branch → main) was
+    merged from `2cef43f`, *before* PR #2 landed on the flutter branch — so main
+    never received the spec-review fixes. This branch re-merges
+    `origin/claude/flutter-android-app-0bih6p` (which contains the PR #2 merge)
+    into a main-based branch rather than cherry-picking, preserving history.
+
+14. **"App not updating on the phone" diagnosis**: the pinned keystore
+    (`android/app/debug.keystore`, PKCS12, alias `androiddebugkey`, verified with
+    keytool) and the Gradle signing config are both correct. The installed APK
+    predates the pinning commit and is signed with an ephemeral CI key — Android
+    never accepts an update across signatures, so a **one-time uninstall +
+    reinstall** is required; every later artifact updates cleanly. Additionally
+    CI now passes `--build-number=${{ github.run_number }}` so each artifact has
+    a strictly increasing versionCode (equal codes are legal but ambiguous;
+    increasing codes make "did it update?" verifiable in Settings → App info).
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather
