@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../engine/session_templates.dart';
 import '../../models/plan.dart';
+import '../../models/session_type.dart';
 import '../../models/set_log.dart';
 import '../../state/app_controller.dart';
 
@@ -83,10 +85,32 @@ class _LoggerScreenState extends State<LoggerScreen> {
 
   Future<void> _finish({bool wrapUp = false}) async {
     final controller = context.read<AppController>();
+
+    // §2.1: S2's intensity credit exists only if the optional REHIT finisher
+    // was actually completed — ask when the template offers one.
+    var rehitDone = false;
+    final offersFinisher = sessionTemplates[widget.plan.sessionId]?.hasOptionalRehitFinisher ?? false;
+    if (!wrapUp && offersFinisher && widget.plan.tier == SessionTier.extended && mounted) {
+      rehitDone = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('REHIT finisher'),
+              content: const Text('Did you do the 8-min REHIT finisher? (That is what earns the intensity credit.)'),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Skipped')),
+                FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Done')),
+              ],
+            ),
+          ) ??
+          false;
+    }
+    if (!mounted) return;
+
     await controller.completeSession(
       widget.plan,
       _logged,
       durationMinutes: (_stopwatch.elapsed.inMinutes).clamp(1, 999),
+      rehitFinisherCompleted: rehitDone,
     );
     if (!mounted) return;
     Navigator.of(context).popUntil((r) => r.isFirst);

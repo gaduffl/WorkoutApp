@@ -281,7 +281,13 @@ class DecisionEngine {
       }
     }
 
-    fired.add(FiredRule(RuleKey.queueNext, params: {'session': winner.def.name}));
+    // QUEUE_NEXT only when the plan really is "next in queue" — a forced or
+    // weekend-rule pick is explained by its own rule key instead.
+    if (winner.id == input.queueState.pointer &&
+        strengthPressure.level != FloorPressureLevel.hard &&
+        intensityPressure.level != FloorPressureLevel.hard) {
+      fired.add(FiredRule(RuleKey.queueNext, params: {'session': winner.def.name}));
+    }
 
     // §7.1: sharp hip pain forces a swap away from a leg-heavy winner - but
     // not when the user just explicitly chose this alternative themselves.
@@ -301,6 +307,7 @@ class DecisionEngine {
     double loadMultiplier = 1.0;
     Rir rirFloor = Rir.rir2;
     var progressionEligible = recovery.bucket == ReadinessBucket.green;
+    var redTechnique = false;
 
     if (checkin.timeMinutes != 60 && chosen.tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin == 60) {
       fired.add(const FiredRule(RuleKey.timeCompress60_35));
@@ -334,6 +341,7 @@ class DecisionEngine {
         loadMultiplier = 0.6;
         rirFloor = Rir.rir3plus;
         progressionEligible = false;
+        redTechnique = true; // §5 Step 6: a swap — the queue item stays pending
         fired.add(const FiredRule(RuleKey.redSwapTechnique));
       }
     }
@@ -358,28 +366,48 @@ class DecisionEngine {
         var state = patchedStates[trackKey] ?? ExerciseState(trackKey: trackKey, pattern: pattern);
 
         // Pain flag lifecycle for this pattern.
-        final flag = _flagFor(checkin.pain, pattern);
+        final todayFlag = _flagFor(checkin.pain, pattern);
         state = painEngine.advanceFlagState(
           state,
-          activeFlag: flag,
+          activeFlag: todayFlag,
           patternScheduledToday: true,
           sessionRanPainFree: false,
         );
         patchedStates[trackKey] = state;
 
+        // Effective flag = today's tap OR the persisted freeze from a prior
+        // day (§7.2: flags decay by rule, not by the user re-tapping the map).
+        var flag = todayFlag;
+        if (flag == null && state.painFrozen && state.painRegion != null) {
+          flag = PainFlag(
+            region: state.painRegion!,
+            severity: state.painSeverity ?? PainSeverity.sharp,
+            flaggedDate: state.painFlaggedDate ?? today,
+          );
+        }
+        final reentryPending = state.painReentryTestOffered && !state.painReentryTestPassed;
+
+        // §7.2 escalation: persistent sharp flag / radiating symptoms — the
+        // pattern stays off the plan until the flag is cleared manually.
+        if (flag != null && painEngine.isEscalated(flag, today)) {
+          fired.add(FiredRule(RuleKey.painFreeze, pattern: pattern.name));
+          fired.add(FiredRule(RuleKey.painSubSharp, pattern: pattern.name));
+          continue;
+        }
+
         PainAction action = const PainAction(PainActionKind.none);
-        if (flag != null) {
+        if (flag != null && !reentryPending) {
           action = painEngine.resolve(flag.region, flag.severity, pattern);
-          fired.add(FiredRule(
-            flag.severity == PainSeverity.mild ? RuleKey.painSubMild : RuleKey.painSubSharp,
-            pattern: pattern.name,
-          ));
+          if (action.kind != PainActionKind.none) {
+            fired.add(FiredRule(
+              flag.severity == PainSeverity.mild ? RuleKey.painSubMild : RuleKey.painSubSharp,
+              pattern: pattern.name,
+            ));
+          }
         }
         if (state.painFrozen) {
           fired.add(FiredRule(RuleKey.painFreeze, pattern: pattern.name));
-          if (state.painReentryTestOffered && !state.painReentryTestPassed) {
-            fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
-          }
+          // reentry-test rule fires via resolveTodaysPrescription below
         }
 
         if (action.kind == PainActionKind.removePattern) {
@@ -388,6 +416,10 @@ class DecisionEngine {
 
         String? substitutedFrom;
         ExerciseState prescriptionState;
+        int exerciseSets = cutSets.toInt();
+        var exerciseLoadMultiplier = loadMultiplier;
+        var exerciseRir = rirFloor;
+        var persistLoad = false;
         if (action.kind == PainActionKind.substituteNamed && action.substitute != null) {
           final sub = action.substitute!;
           final subState = patchedStates[sub.trackKey] ?? ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
@@ -398,11 +430,21 @@ class DecisionEngine {
         } else {
           final resolution = progressionEngine.resolveTodaysPrescription(state, today, input.settings.equipment);
           prescriptionState = resolution.state;
-          if (resolution.detrainFired) fired.add(FiredRule(RuleKey.detrainAdjust, pattern: pattern.name));
+          if (resolution.detrainFired) {
+            fired.add(FiredRule(RuleKey.detrainAdjust, pattern: pattern.name));
+            // §6.6: the ramp load becomes the working load once actually trained
+            persistLoad = loadMultiplier == 1.0;
+          }
           if (resolution.painReentryTestFired) {
             fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
           }
-          if (resolution.deloadActive) fired.add(FiredRule(RuleKey.deloadActive, pattern: pattern.name));
+          if (resolution.deloadActive) {
+            // §6.5 deload parameters: 60% load, 50% of sets, RIR >= 4.
+            exerciseLoadMultiplier *= 0.6;
+            exerciseSets = exerciseSets == 0 ? 0 : (exerciseSets * 0.5).floor().clamp(1, exerciseSets).toInt();
+            exerciseRir = Rir.rir3plus;
+            fired.add(FiredRule(RuleKey.deloadActive, pattern: pattern.name));
+          }
 
           if (action.kind == PainActionKind.reduceLoadOne) {
             prescriptionState = _reduceLoadOne(prescriptionState, input.settings.equipment);
@@ -413,12 +455,13 @@ class DecisionEngine {
 
         exercises.add(_buildPlannedExercise(
           prescriptionState,
-          sets: cutSets,
-          rirFloor: rirFloor,
-          loadMultiplier: loadMultiplier,
+          sets: exerciseSets,
+          rirFloor: exerciseRir,
+          loadMultiplier: exerciseLoadMultiplier,
           equipmentConfig: input.settings.equipment,
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
+          persistLoadOnCompletion: persistLoad,
         ));
 
         if (prescriptionState.ladderStepIndex != state.ladderStepIndex && action.kind == PainActionKind.none) {
@@ -432,15 +475,15 @@ class DecisionEngine {
     }
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
+    final queueCreditType = redTechnique ? null : _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
     final plan = SessionPlan(
       sessionId: effectiveSessionId,
       sessionName: planSessionDef.name,
       tier: tier,
       exercises: exercises,
       estimatedDurationMin: checkin.timeMinutes,
+      grantsQueueCredit: queueCreditType != null,
     );
-
-    final queueCreditType = _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
 
     return DecisionEngineOutput(
       DecisionTrace(
@@ -460,8 +503,9 @@ class DecisionEngine {
     );
   }
 
-  /// Only a same-type completion grants queue credit; RED/YELLOW swaps and
-  /// the S3->S7 time substitution never do (§2.1).
+  /// Only a same-type completion grants queue credit; RED/YELLOW swaps
+  /// (incl. the RED technique session, handled by the caller) and the
+  /// S3->S7 time substitution never do (§2.1, §5 Step 6).
   SessionTypeId? _queueCreditType(SessionTypeId chosenId, SessionTypeId effectiveId, ReadinessBucket bucket) {
     if (chosenId != effectiveId) return null;
     return chosenId;
@@ -546,6 +590,7 @@ class DecisionEngine {
     required EquipmentConfig equipmentConfig,
     String? substitutedFrom,
     required bool progressionEligible,
+    bool persistLoadOnCompletion = false,
   }) {
     final substitute = substituteRegistry[state.trackKey];
     final step = substitute != null
@@ -580,6 +625,7 @@ class DecisionEngine {
       loadDisplay: loadDisplay,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
+      persistLoadOnCompletion: persistLoadOnCompletion,
     );
   }
 

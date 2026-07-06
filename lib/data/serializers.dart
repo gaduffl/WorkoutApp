@@ -29,6 +29,7 @@ Map<String, dynamic> exerciseStateToJson(ExerciseState s) => {
       'regressionDates': s.regressionDates.map((d) => d.toIso8601String()).toList(),
       'painFrozen': s.painFrozen,
       'painSeverity': s.painSeverity?.name,
+      'painRegion': s.painRegion?.name,
       'painFlaggedDate': s.painFlaggedDate?.toIso8601String(),
       'sessionsScheduledWhileFlagged': s.sessionsScheduledWhileFlagged,
       'prePainLoad': s.prePainLoad,
@@ -53,6 +54,7 @@ ExerciseState exerciseStateFromJson(Map<String, dynamic> j) => ExerciseState(
       regressionDates: (j['regressionDates'] as List).map((e) => DateTime.parse(e as String)).toList(),
       painFrozen: j['painFrozen'] as bool,
       painSeverity: j['painSeverity'] == null ? null : PainSeverity.values.byName(j['painSeverity'] as String),
+      painRegion: j['painRegion'] == null ? null : BodyRegion.values.byName(j['painRegion'] as String),
       painFlaggedDate: j['painFlaggedDate'] == null ? null : DateTime.parse(j['painFlaggedDate'] as String),
       sessionsScheduledWhileFlagged: j['sessionsScheduledWhileFlagged'] as int,
       prePainLoad: (j['prePainLoad'] as num?)?.toDouble(),
@@ -268,6 +270,7 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'substitutedFrom': e.substitutedFrom,
       'isWarmup': e.isWarmup,
       'instruction': e.instruction,
+      'persistLoadOnCompletion': e.persistLoadOnCompletion,
     };
 
 PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExercise(
@@ -282,6 +285,7 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       substitutedFrom: j['substitutedFrom'] as String?,
       isWarmup: j['isWarmup'] as bool? ?? false,
       instruction: j['instruction'] as String?,
+      persistLoadOnCompletion: j['persistLoadOnCompletion'] as bool? ?? false,
     );
 
 Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
@@ -290,6 +294,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
       'tier': p.tier.name,
       'exercises': p.exercises.map(plannedExerciseToJson).toList(),
       'estimatedDurationMin': p.estimatedDurationMin,
+      'grantsQueueCredit': p.grantsQueueCredit,
     };
 
 SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
@@ -298,6 +303,7 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
       tier: SessionTier.values.byName(j['tier'] as String),
       exercises: (j['exercises'] as List).map((e) => plannedExerciseFromJson(e as Map<String, dynamic>)).toList(),
       estimatedDurationMin: j['estimatedDurationMin'] as int,
+      grantsQueueCredit: j['grantsQueueCredit'] as bool? ?? true,
     );
 
 Map<String, dynamic> decisionTraceToJson(DecisionTrace t) => {

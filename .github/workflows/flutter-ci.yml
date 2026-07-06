@@ -28,7 +28,11 @@ jobs:
           flutter-version: '3.35.5'
           channel: 'stable'
       - run: flutter pub get
-      - run: flutter build apk --debug
+      # Monotonic versionCode per CI run: Android treats equal codes as a
+      # reinstall and lower ones as a downgrade; a strictly increasing code
+      # makes every artifact installable as an update over the previous one
+      # (signature continuity comes from the pinned android/app/debug.keystore).
+      - run: flutter build apk --debug --build-number=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
