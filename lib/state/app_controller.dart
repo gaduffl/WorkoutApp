@@ -351,9 +351,18 @@ class AppController extends ChangeNotifier {
       exerciseStates[e.trackKey] = next;
     }
 
+    // §12 travel mode: bodyweight variants keep the pattern "trained"
+    // (so §6.6 detraining doesn't misfire on return) but never advance
+    // the load-based state machine.
+    final travelKeys = plan.exercises.where((e) => e.isTravel).map((e) => e.trackKey).toSet();
+
     for (final entry in byTrack.entries) {
       final state = exerciseStates[entry.key];
       if (state == null) continue;
+      if (travelKeys.contains(entry.key)) {
+        exerciseStates[entry.key] = state.clone()..lastTrainedDate = now;
+        continue;
+      }
       exerciseStates[entry.key] = progression.evaluateSession(
         state,
         entry.value,

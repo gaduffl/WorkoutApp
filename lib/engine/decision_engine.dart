@@ -470,7 +470,7 @@ class DecisionEngine {
           }
         }
 
-        final planned = _buildPlannedExercise(
+        var planned = _buildPlannedExercise(
           prescriptionState,
           sets: exerciseSets,
           rirFloor: exerciseRir,
@@ -480,6 +480,26 @@ class DecisionEngine {
           progressionEligible: progressionEligible,
           persistLoadOnCompletion: persistLoad,
         );
+
+        // §12 travel / no-equipment mode: ladders resolve to bodyweight
+        // steps; DB-only named accessories drop out entirely.
+        if (input.settings.travelMode) {
+          if (namedExercise != null) continue;
+          final travel = travelSteps[pattern];
+          if (travel != null) {
+            planned = PlannedExercise(
+              trackKey: trackKey,
+              pattern: pattern,
+              name: travel.name,
+              sets: planned.sets,
+              repRange: (8, 15), // bodyweight: progress by reps/ROM
+              rirTarget: planned.rirTarget,
+              substitutedFrom: substitutedFrom,
+              instruction: 'Travel mode - bodyweight variant, add reps/ROM',
+              isTravel: true,
+            );
+          }
+        }
 
         // §2.5 warm-up protocol: full ramp (40%x8 / 60%x5 / 80%x3) before the
         // session's first compound, one 60%x5 feeder before every later

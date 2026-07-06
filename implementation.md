@@ -131,6 +131,14 @@ treat filename as canonical version).
     excluded to keep the panel to the six spec patterns), and a 28-day HRV
     sparkline. Theme-derived colors so light/dark both work.
 
+19. **§12 travel mode: bodyweight resolution without state churn.** A settings
+    toggle maps each pattern to a fixed bodyweight variant (split squat, SL-RDL,
+    push-up, pike push-up, pull-up, table row, plank) at 8–15 reps. DB-only arm
+    accessories drop out of S5 entirely. Completed travel sessions count toward
+    queue + floor and stamp `lastTrained` (so §6.6 detraining doesn't misfire on
+    return) but never advance the load-based state machine — bodyweight rep
+    counts say nothing about dumbbell loads.
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather

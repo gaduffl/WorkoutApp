@@ -227,6 +227,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'aiTone': u.aiTone,
       'wakeWindow': u.wakeWindow,
       'checkInCutoffHour': u.checkInCutoffHour,
+      'travelMode': u.travelMode,
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -243,6 +244,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       aiTone: j['aiTone'] as String,
       wakeWindow: j['wakeWindow'] as String,
       checkInCutoffHour: j['checkInCutoffHour'] as int,
+      travelMode: j['travelMode'] as bool? ?? false,
     );
 
 Map<String, dynamic> firedRuleToJson(FiredRule r) => {
@@ -271,6 +273,7 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'isWarmup': e.isWarmup,
       'instruction': e.instruction,
       'persistLoadOnCompletion': e.persistLoadOnCompletion,
+      'isTravel': e.isTravel,
     };
 
 PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExercise(
@@ -286,6 +289,7 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       isWarmup: j['isWarmup'] as bool? ?? false,
       instruction: j['instruction'] as String?,
       persistLoadOnCompletion: j['persistLoadOnCompletion'] as bool? ?? false,
+      isTravel: j['isTravel'] as bool? ?? false,
     );
 
 Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {

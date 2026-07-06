@@ -26,6 +26,9 @@ class UserSettings {
   final String wakeWindow; // e.g. "07:00"
   final int checkInCutoffHour; // §12 default 10
 
+  /// §12 travel / no-equipment mode: ladders resolve to bodyweight steps.
+  final bool travelMode;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -40,6 +43,7 @@ class UserSettings {
     this.aiTone = 'direct, encouraging, no fluff',
     this.wakeWindow = '07:00',
     this.checkInCutoffHour = 10,
+    this.travelMode = false,
   });
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
@@ -58,6 +62,7 @@ class UserSettings {
     String? aiTone,
     String? wakeWindow,
     int? checkInCutoffHour,
+    bool? travelMode,
   }) {
     return UserSettings(
       equipment: equipment ?? this.equipment,
@@ -73,6 +78,7 @@ class UserSettings {
       aiTone: aiTone ?? this.aiTone,
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
+      travelMode: travelMode ?? this.travelMode,
     );
   }
 }

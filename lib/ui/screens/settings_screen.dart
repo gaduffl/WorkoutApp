@@ -57,6 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       hrMaxOverride: double.tryParse(_hrMaxController.text),
       anthropicApiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
+      travelMode: _settings.travelMode,
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
@@ -106,6 +107,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _settings.equipment.unevenPairModeEnabled,
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(equipment: _settings.equipment.copyWith(unevenPairModeEnabled: v));
+              }),
+            ),
+            SwitchListTile(
+              title: const Text('Travel mode (no equipment)'),
+              subtitle: const Text('Ladders resolve to bodyweight variants; load progression pauses, '
+                  'sessions still count toward queue and weekly floor (§12)'),
+              value: _settings.travelMode,
+              onChanged: (v) => setState(() {
+                _settings = _settings.copyWith(travelMode: v);
               }),
             ),
             const Divider(height: 32),
