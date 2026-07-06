@@ -57,4 +57,25 @@ extension MovementPatternX on MovementPattern {
 
   bool get isLegHeavy =>
       this == MovementPattern.squat || this == MovementPattern.hinge;
+
+  String get displayName {
+    switch (this) {
+      case MovementPattern.squat:
+        return 'Squat';
+      case MovementPattern.hinge:
+        return 'Hinge';
+      case MovementPattern.pushHorizontal:
+        return 'Push (horiz.)';
+      case MovementPattern.pushVertical:
+        return 'Push (vert.)';
+      case MovementPattern.pullVertical:
+        return 'Pull-up';
+      case MovementPattern.pullHorizontal:
+        return 'Row';
+      case MovementPattern.kneeHealth:
+        return 'Knee health';
+      case MovementPattern.coreGrip:
+        return 'Core / grip';
+    }
+  }
 }
