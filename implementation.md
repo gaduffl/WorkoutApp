@@ -139,6 +139,26 @@ treat filename as canonical version).
     return) but never advance the load-based state machine — bodyweight rep
     counts say nothing about dumbbell loads.
 
+## Session 2026-07-06, later (user-reported 35-min overflow + notifications)
+
+20. **User-reported bug: 60-min sessions offered "full tier" in a 35-min slot.**
+    `tierForTime` was global (35 -> full for every session), so S2/S4 swaps in a
+    35-min slot kept 4 compounds x3 AND the accessory block AND warm-ups (~45+
+    min). §5 Step 7's "60 -> 35" now actually drops the accessory block for
+    natively-60-minute sessions at full tier (superset pairs kept, 12 work sets
+    ~= 32 min with warm-ups); the swap card labels these "compressed to 35 min".
+
+21. **§3.1 + §12 notifications via flutter_local_notifications (opt-in).**
+    Daily wake-window nudge + cutoff-hour "no plan yet" reminder, both
+    inexact-scheduled (no exact-alarm permission needed) and rescheduled on app
+    open / settings change / check-in (a check-in pushes today's cutoff nudge to
+    tomorrow). tz.local is resolved by matching the device's UTC offset against
+    the tz database instead of adding a platform plugin - re-run on every
+    schedule call so DST self-corrects. All service methods swallow platform
+    errors: notifications are polish and must never break check-in or tests.
+    Android: POST_NOTIFICATIONS + BOOT_COMPLETED receivers, core-library
+    desugaring enabled (plugin requirement).
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather

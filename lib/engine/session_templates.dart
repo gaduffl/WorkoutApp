@@ -42,7 +42,11 @@ class SessionTemplateDef {
   });
 
   /// (pattern, isCompound, namedExercise?) slots surviving at [tier].
-  List<(MovementPattern, bool, SubstituteExercise?)> slotsForTier(SessionTier tier) {
+  ///
+  /// [dropAccessories] implements §5 Step 7's "60 → 35" compression for
+  /// natively-60-minute sessions (S2/S4) running in a 35-minute slot:
+  /// keep all primary superset pairs, drop the accessory block.
+  List<(MovementPattern, bool, SubstituteExercise?)> slotsForTier(SessionTier tier, {bool dropAccessories = false}) {
     if (isCardioOnly) return const [];
     final compounds = [for (final p in compoundPatterns) (p, true, null as SubstituteExercise?)];
     final named = [for (final n in namedAccessories) (n.pattern, false, n as SubstituteExercise?)];
@@ -56,6 +60,7 @@ class SessionTemplateDef {
       final source = compounds.isNotEmpty ? compounds : [...named, ...accessories];
       return source.take(2).map((s) => (s.$1, true, s.$3)).toList();
     }
+    if (dropAccessories && compounds.isNotEmpty) return compounds;
     return [...compounds, ...named, ...accessories];
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/floor_category.dart';
+import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
@@ -58,6 +59,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       anthropicApiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
       travelMode: _settings.travelMode,
+      notificationsEnabled: _settings.notificationsEnabled,
+      wakeWindow: _settings.wakeWindow,
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
@@ -117,6 +120,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(travelMode: v);
               }),
+            ),
+            const Divider(height: 32),
+            Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+            SwitchListTile(
+              title: const Text('Morning check-in reminders'),
+              subtitle: Text('"Ready to plan today?" at ${_settings.wakeWindow}, plus a nudge at '
+                  '${_settings.checkInCutoffHour}:00 if no check-in happened yet'),
+              value: _settings.notificationsEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final granted = await NotificationService.requestPermission();
+                  if (!granted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Notification permission was denied - reminders stay off.')),
+                    );
+                    return;
+                  }
+                }
+                setState(() => _settings = _settings.copyWith(notificationsEnabled: v));
+              },
+            ),
+            ListTile(
+              title: const Text('Wake window'),
+              subtitle: Text(_settings.wakeWindow),
+              trailing: const Icon(Icons.schedule),
+              onTap: () async {
+                final parts = _settings.wakeWindow.split(':');
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay(
+                    hour: int.tryParse(parts.first) ?? 7,
+                    minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+                  ),
+                );
+                if (picked != null) {
+                  setState(() => _settings = _settings.copyWith(
+                        wakeWindow:
+                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
+                      ));
+                }
+              },
             ),
             const Divider(height: 32),
             Text('Weekly floor', style: Theme.of(context).textTheme.titleMedium),

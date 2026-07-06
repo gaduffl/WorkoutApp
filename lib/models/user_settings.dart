@@ -29,6 +29,9 @@ class UserSettings {
   /// §12 travel / no-equipment mode: ladders resolve to bodyweight steps.
   final bool travelMode;
 
+  /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
+  final bool notificationsEnabled;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -44,6 +47,7 @@ class UserSettings {
     this.wakeWindow = '07:00',
     this.checkInCutoffHour = 10,
     this.travelMode = false,
+    this.notificationsEnabled = false,
   });
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
@@ -63,6 +67,7 @@ class UserSettings {
     String? wakeWindow,
     int? checkInCutoffHour,
     bool? travelMode,
+    bool? notificationsEnabled,
   }) {
     return UserSettings(
       equipment: equipment ?? this.equipment,
@@ -79,6 +84,7 @@ class UserSettings {
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     );
   }
 }
