@@ -146,6 +146,19 @@ const floorPress = SubstituteExercise(
   dumbbells: 2,
 );
 
+/// §12 travel / no-equipment mode: each pattern's bodyweight resolution.
+/// Progression is by reps/ROM only — engine state is not advanced while
+/// travelling, but lastTrained still updates so §6.6 doesn't misfire later.
+const Map<MovementPattern, LadderStep> travelSteps = {
+  MovementPattern.squat: LadderStep(name: 'Split squat (bodyweight)'),
+  MovementPattern.hinge: LadderStep(name: 'Single-leg RDL (bodyweight)'),
+  MovementPattern.pushHorizontal: LadderStep(name: 'Push-up'),
+  MovementPattern.pushVertical: LadderStep(name: 'Pike push-up'),
+  MovementPattern.pullVertical: LadderStep(name: 'Pull-up (bar or rings, where possible)'),
+  MovementPattern.pullHorizontal: LadderStep(name: 'Table / towel row'),
+  MovementPattern.coreGrip: LadderStep(name: 'Plank / hollow hold'),
+};
+
 // S5 "Flex/Pump" direct accessories (§2.1: arms, shoulders, core). Not spec
 // ladders — named single-DB exercises with their own state tracks, reusing
 // the substitute mechanism. Pattern choice drives the §7.1 pain mapping:

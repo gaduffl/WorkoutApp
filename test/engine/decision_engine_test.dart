@@ -404,6 +404,36 @@ void main() {
     expect(ex[squatIdx - 1].name, contains('60%'));
   });
 
+  test('§12 travel mode: ladders resolve to bodyweight, arm accessories drop out', () {
+    final s1 = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: const UserSettings(travelMode: true),
+    ));
+    final work = s1.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
+    expect(work.every((e) => e.loadTotal == null), isTrue);
+    expect(work.any((e) => e.name == 'Split squat (bodyweight)'), isTrue);
+    expect(work.any((e) => e.name == 'Single-leg RDL (bodyweight)'), isTrue);
+    expect(work.every((e) => e.isTravel), isTrue);
+    // no percent-load warm-ups without loads
+    expect(s1.trace.plan!.exercises.any((e) => e.isWarmup), isFalse);
+
+    final s5 = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s5),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: const UserSettings(travelMode: true),
+    ));
+    expect(s5.trace.plan!.exercises.any((e) => e.name == 'DB curl'), isFalse);
+  });
+
   test('§6.6: a detraining-adjusted load is marked to persist on completion', () {
     final states = baseStates();
     states['hinge'] = ExerciseState(

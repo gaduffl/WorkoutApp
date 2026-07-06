@@ -23,6 +23,10 @@ class PlannedExercise {
   /// the pre-break load the very next day).
   final bool persistLoadOnCompletion;
 
+  /// §12 travel mode: bodyweight variant — progression state is frozen for
+  /// the pattern (lastTrained still updates on completion).
+  final bool isTravel;
+
   const PlannedExercise({
     required this.trackKey,
     required this.pattern,
@@ -36,6 +40,7 @@ class PlannedExercise {
     this.isWarmup = false,
     this.instruction,
     this.persistLoadOnCompletion = false,
+    this.isTravel = false,
   });
 }
 
