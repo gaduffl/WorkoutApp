@@ -228,6 +228,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'wakeWindow': u.wakeWindow,
       'checkInCutoffHour': u.checkInCutoffHour,
       'travelMode': u.travelMode,
+      'notificationsEnabled': u.notificationsEnabled,
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -245,6 +246,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       wakeWindow: j['wakeWindow'] as String,
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
+      notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
     );
 
 Map<String, dynamic> firedRuleToJson(FiredRule r) => {

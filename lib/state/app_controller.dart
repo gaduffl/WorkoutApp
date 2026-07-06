@@ -11,6 +11,7 @@ import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
 import '../integrations/oura_client.dart';
+import '../notifications/notification_service.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/exercise_state.dart';
@@ -60,6 +61,7 @@ class AppController extends ChangeNotifier {
     queueState = await repo.loadQueueState();
     exerciseStates = await repo.loadExerciseStates();
     todayTrace = await repo.loadDecisionTraceForDate(today());
+    unawaited(syncNotifications());
     loading = false;
     notifyListeners();
 
@@ -204,7 +206,19 @@ class AppController extends ChangeNotifier {
   Future<void> saveSettings(UserSettings newSettings) async {
     settings = newSettings;
     await repo.saveSettings(settings);
+    unawaited(syncNotifications());
     notifyListeners();
+  }
+
+  /// §3.1 + §12: (re)schedule the wake-window nudge and cutoff reminder.
+  /// Best-effort - never blocks or throws.
+  Future<void> syncNotifications() {
+    return NotificationService.sync(
+      enabled: settings.notificationsEnabled,
+      wakeWindow: settings.wakeWindow,
+      cutoffHour: settings.checkInCutoffHour,
+      checkedInToday: todayTrace != null,
+    );
   }
 
   Future<DecisionTrace> submitCheckIn({
@@ -273,6 +287,7 @@ class AppController extends ChangeNotifier {
     await repo.saveExerciseStates(exerciseStates);
     await repo.saveDecisionTrace(output.trace);
     todayTrace = output.trace;
+    unawaited(syncNotifications()); // check-in done -> today's cutoff nudge moves to tomorrow
     notifyListeners();
     return output.trace;
   }

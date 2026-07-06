@@ -152,10 +152,15 @@ class _TodayScreenState extends State<TodayScreen> {
               ...trace.candidates.skip(1).take(2).map((c) {
                 final def = sessionTypes[c.sessionId]!;
                 final isSwapping = _swapping == c.sessionId;
+                // A natively-60-min session in a 35-min slot runs 60->35
+                // compressed (accessories dropped) - say so honestly.
+                final tierLabel = c.tier == SessionTier.full && def.fullDurationMin >= 60
+                    ? 'compressed to 35 min'
+                    : '${c.tier.name} tier';
                 return Card(
                   child: ListTile(
                     title: Text(def.name),
-                    subtitle: Text('${c.tier.name} tier · ${_candidateReason(c)}'),
+                    subtitle: Text('$tierLabel · ${_candidateReason(c)}'),
                     trailing: isSwapping
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.swap_horiz),

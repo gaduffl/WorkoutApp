@@ -404,6 +404,35 @@ void main() {
     expect(ex[squatIdx - 1].name, contains('60%'));
   });
 
+  test('§5 Step 7 "60->35": a 60-min session in a 35-min slot drops the accessory block', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s2),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    final work = output.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
+    // all four primary superset compounds survive, the core/grip accessory does not
+    expect(work.length, 4);
+    expect(work.every((e) => e.pattern != MovementPattern.coreGrip), isTrue);
+    expect(output.trace.plan!.plannedWorkSets, 12); // 4 x 3, fits the slot
+    // at a true 60-min slot the accessory comes back (extended tier)
+    final ext = decisionEngine.decide(buildInput(
+      time: 60,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s2),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    expect(
+      ext.trace.plan!.exercises.any((e) => !e.isWarmup && e.pattern == MovementPattern.coreGrip),
+      isTrue,
+    );
+  });
+
   test('§12 travel mode: ladders resolve to bodyweight, arm accessories drop out', () {
     final s1 = decisionEngine.decide(buildInput(
       time: 35,

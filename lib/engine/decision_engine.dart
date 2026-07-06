@@ -373,7 +373,12 @@ class DecisionEngine {
         ));
         rampDone = true;
       }
-      final slots = template.slotsForTier(tier);
+      // §5 Step 7 "60 -> 35": a natively-60-minute session (S2/S4) in a
+      // 35-minute slot keeps its superset pairs but drops the accessory
+      // block - otherwise the plan physically cannot fit the slot.
+      final compress60to35 =
+          tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin >= 60;
+      final slots = template.slotsForTier(tier, dropAccessories: compress60to35);
       for (final (pattern, isCompound, namedExercise) in slots) {
         scheduledPatterns.add(pattern);
         final baseSets = template.setsFor(isCompound, tier);
