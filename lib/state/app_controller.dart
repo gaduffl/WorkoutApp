@@ -123,7 +123,24 @@ class AppController extends ChangeNotifier {
   /// §10: pulls last night's HRV/RHR/sleep/readiness for [date], refreshing
   /// the access token first if it's expired. Returns null (silent
   /// fallback to manual entry) if not connected or the request fails.
+  /// Also opportunistically backfills the trailing 90-day snapshot cache
+  /// once per day so the §4.1 baselines have data to work with.
   Future<RecoverySnapshot?> fetchOuraRecovery(DateTime date) async {
+    final token = await _validOuraAccessToken();
+    if (token == null) return null;
+
+    // Fire-and-forget: baseline math needs history (§10 "cache last 90
+    // days"), but the morning check-in must not wait on it.
+    unawaited(_backfillOuraHistory(token, date));
+
+    try {
+      return await _oura.fetchRecoveryForDate(accessToken: token, date: date);
+    } catch (_) {
+      return null; // §10 failure behavior: silent fallback to manual entry.
+    }
+  }
+
+  Future<String?> _validOuraAccessToken() async {
     var oura = settings.oura;
     if (!oura.isConnected) return null;
 
@@ -150,13 +167,34 @@ class AppController extends ChangeNotifier {
         return null;
       }
     }
+    return oura.accessToken;
+  }
 
+  DateTime? _lastOuraBackfillDate;
+
+  /// Pulls the trailing 90 days of HRV/RHR/sleep into the local snapshot
+  /// cache (skipping days the user entered manually). At most once per day.
+  Future<void> _backfillOuraHistory(String accessToken, DateTime asOf) async {
+    if (_lastOuraBackfillDate != null && _isSameDate(_lastOuraBackfillDate!, asOf)) return;
+    _lastOuraBackfillDate = asOf;
     try {
-      return await _oura.fetchRecoveryForDate(accessToken: oura.accessToken!, date: date);
+      final start = asOf.subtract(const Duration(days: 90));
+      final fetched = await _oura.fetchRecoveryRange(accessToken: accessToken, start: start, end: asOf);
+      final existing = await repo.loadRecoverySnapshotsSince(start);
+      final manualDays = existing.where((s) => s.manualEntry).map((s) => _dayKey(s.date)).toSet();
+      final cachedDays = existing.map((s) => _dayKey(s.date)).toSet();
+      for (final snap in fetched) {
+        final key = _dayKey(snap.date);
+        if (manualDays.contains(key)) continue; // manual entry wins (§3.3)
+        if (cachedDays.contains(key) && _isSameDate(snap.date, asOf)) continue; // today flows through check-in
+        await repo.saveRecoverySnapshot(snap);
+      }
     } catch (_) {
-      return null; // §10 failure behavior: silent fallback to manual entry.
+      _lastOuraBackfillDate = null; // retry on the next open
     }
   }
+
+  String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
   String _randomState() {
     final rand = Random.secure();
@@ -279,6 +317,40 @@ class AppController extends ChangeNotifier {
       byTrack.putIfAbsent(s.trackKey, () => []).add(s);
     }
 
+    // Pain-flag lifecycle at completion (§7.2): a pain-free session decays a
+    // mild flag; a pain-free graded re-entry test passes and resumes the
+    // pattern per §6.6 precedence. Runs BEFORE progression evaluation so the
+    // resume still sees the real untrained gap (evaluateSession stamps
+    // lastTrainedDate = today).
+    for (final entry in byTrack.entries) {
+      final state = exerciseStates[entry.key];
+      if (state == null || !state.painFrozen) continue;
+      final ranPainFree = entry.value.every((s) => !s.painFlag);
+      if (state.painReentryTestOffered && !state.painReentryTestPassed) {
+        if (ranPainFree) {
+          exerciseStates[entry.key] =
+              progression.resolvePostReentryResume(state, now, settings.equipment);
+        }
+        continue;
+      }
+      exerciseStates[entry.key] = painEngine.advanceFlagState(
+        state,
+        activeFlag: null,
+        patternScheduledToday: false,
+        sessionRanPainFree: ranPainFree,
+      );
+    }
+
+    // §6.6: a completed detraining re-entry session makes the ramp load the
+    // new working load — otherwise tomorrow snaps back to the pre-break load.
+    for (final e in plan.exercises) {
+      if (!e.persistLoadOnCompletion || e.loadTotal == null) continue;
+      final state = exerciseStates[e.trackKey];
+      if (state == null || !byTrack.containsKey(e.trackKey)) continue;
+      final next = state.clone()..currentLoad = e.loadTotal!;
+      exerciseStates[e.trackKey] = next;
+    }
+
     for (final entry in byTrack.entries) {
       final state = exerciseStates[entry.key];
       if (state == null) continue;
@@ -315,7 +387,7 @@ class AppController extends ChangeNotifier {
     );
     await repo.saveSessionLog(log);
 
-    if (log.countsTowardQueueAndFloor) {
+    if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
       queueState = const QueueEngine().advance(queueState, plan.sessionId);
       await repo.saveQueueState(queueState);
     }
