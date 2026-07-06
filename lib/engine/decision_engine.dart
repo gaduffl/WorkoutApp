@@ -356,6 +356,23 @@ class DecisionEngine {
     final exercises = <PlannedExercise>[];
 
     if (template != null && !template.isCardioOnly) {
+      // §2.5: when the ATG/knee-health block is present it runs first and
+      // replaces the general warm-up (the 40/60/80 ramp); every lift still
+      // gets its 60% feeder set below.
+      var rampDone = false;
+      if (template.hasKneeHealthBlock) {
+        exercises.add(const PlannedExercise(
+          trackKey: 'atg_block',
+          pattern: MovementPattern.kneeHealth,
+          name: 'ATG block: backward treadmill 3-4 min, tibialis raises, slant-board calf raises',
+          sets: 1,
+          repRange: (15, 25),
+          rirTarget: Rir.rir3plus,
+          isWarmup: true,
+          instruction: 'Runs first - replaces the general warm-up (§2.5)',
+        ));
+        rampDone = true;
+      }
       final slots = template.slotsForTier(tier);
       for (final (pattern, isCompound) in slots) {
         scheduledPatterns.add(pattern);
@@ -453,7 +470,7 @@ class DecisionEngine {
           }
         }
 
-        exercises.add(_buildPlannedExercise(
+        final planned = _buildPlannedExercise(
           prescriptionState,
           sets: exerciseSets,
           rirFloor: exerciseRir,
@@ -462,7 +479,29 @@ class DecisionEngine {
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
           persistLoadOnCompletion: persistLoad,
-        ));
+        );
+
+        // §2.5 warm-up protocol: full ramp (40%x8 / 60%x5 / 80%x3) before the
+        // session's first compound, one 60%x5 feeder before every later
+        // loaded lift. Substitutes onboard deliberately light (§7.1) and
+        // bodyweight/backpack steps have no percent-load, so both skip it.
+        if (planned.loadTotal != null && action.kind != PainActionKind.substituteNamed) {
+          final step = progressionEngine.ladderStepFor(prescriptionState);
+          if (step.dumbbells > 0 && !step.backpackLoaded) {
+            if (!rampDone && isCompound) {
+              rampDone = true;
+              exercises.addAll([
+                _warmupEntry(planned, step, 0.40, 8, input.settings.equipment),
+                _warmupEntry(planned, step, 0.60, 5, input.settings.equipment),
+                _warmupEntry(planned, step, 0.80, 3, input.settings.equipment),
+              ].whereType<PlannedExercise>());
+            } else {
+              final feeder = _warmupEntry(planned, step, 0.60, 5, input.settings.equipment);
+              if (feeder != null) exercises.add(feeder);
+            }
+          }
+        }
+        exercises.add(planned);
 
         if (prescriptionState.ladderStepIndex != state.ladderStepIndex && action.kind == PainActionKind.none) {
           fired.add(FiredRule(RuleKey.capLadderJump, pattern: pattern.name));
@@ -580,6 +619,38 @@ class DecisionEngine {
     final next = state.clone();
     if (next.ladderStepIndex > 0) next.ladderStepIndex -= 1;
     return _reduceLoadOne(next, cfg);
+  }
+
+  /// One §2.5 warm-up entry at [pct] of the work load, rounded down to the
+  /// exercise's achievable set. Returns null when rounding lands at or above
+  /// the work load itself (very light prescriptions need no warm-up).
+  PlannedExercise? _warmupEntry(
+    PlannedExercise work,
+    LadderStep step,
+    double pct,
+    int reps,
+    EquipmentConfig cfg,
+  ) {
+    final achievable = step.dumbbells == 1
+        ? equipmentEngine.singleDbAchievableTotals(cfg)
+        : equipmentEngine.twoDbAchievableTotals(cfg, allowUneven: !step.unilateral);
+    final load = equipmentEngine.roundDownToAchievable(work.loadTotal! * pct, achievable);
+    if (load >= work.loadTotal!) return null;
+    final resolved = step.dumbbells == 1
+        ? equipmentEngine.resolveSingleDb(load, cfg)
+        : equipmentEngine.resolveTwoDb(load, cfg, allowUneven: !step.unilateral);
+    return PlannedExercise(
+      trackKey: work.trackKey,
+      pattern: work.pattern,
+      name: '${work.name} - warm-up ${(pct * 100).round()}%',
+      sets: 1,
+      repRange: (reps, reps),
+      loadTotal: load,
+      loadDisplay: equipmentEngine.describeLoad(resolved, cfg),
+      rirTarget: Rir.rir3plus,
+      isWarmup: true,
+      instruction: 'Rest <= 60 s',
+    );
   }
 
   PlannedExercise _buildPlannedExercise(

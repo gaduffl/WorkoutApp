@@ -38,6 +38,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   void initState() {
     super.initState();
     _weight = _exercise.loadTotal ?? 0;
+    _reps = _exercise.repRange.$1;
   }
 
   @override
@@ -69,16 +70,18 @@ class _LoggerScreenState extends State<LoggerScreen> {
         reps: _reps,
         rir: _rir,
         painFlag: _painFlag,
+        isWarmup: _exercise.isWarmup,
         timestamp: DateTime.now(),
       ));
       _painFlag = false;
       if (_setNumber < _exercise.sets) {
         _setNumber += 1;
-        _startRest();
+        if (!_exercise.isWarmup) _startRest(); // warm-up rest is <= 60 s, self-paced
       } else if (_exerciseIndex < widget.plan.exercises.length - 1) {
         _exerciseIndex += 1;
         _setNumber = 1;
         _weight = _exercise.loadTotal ?? 0;
+        _reps = _exercise.repRange.$1;
       }
     });
   }

@@ -314,14 +314,14 @@ void main() {
     final output = decisionEngine.decide(input);
 
     expect(output.trace.firedRuleCodes, contains('DELOAD_ACTIVE_SQUAT'));
-    final squat = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.squat);
+    final squat = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
     // 90 x 0.6 = 54 -> rounds down to 48 on the matched 2-DB set (squat state
     // load 90 sits on the DB-squat step in these fixtures' default ladder idx 0
     // = goblet (single-DB): 54 -> 50). Assert the reduction happened and RIR.
     expect(squat.loadTotal, lessThan(90 * 0.61));
     expect(squat.sets, 1); // full-tier compounds 3 -> deload halves -> 1
     expect(squat.rirTarget.name, 'rir3plus');
-    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge);
+    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge && !e.isWarmup);
     expect(hinge.sets, 3); // deload is per-pattern, not session-wide
   });
 
@@ -356,6 +356,54 @@ void main() {
     expect(output.patchedExerciseStates['hinge']!.sessionsScheduledWhileFlagged, 1);
   });
 
+  test('§2.5 warm-up protocol: 40/60/80 ramp before the first compound, feeders after', () {
+    final input = buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+    );
+    final output = decisionEngine.decide(input);
+    final ex = output.trace.plan!.exercises;
+
+    // squat (goblet, single-DB, 24 lb): ramp rounds down on the single-DB set
+    expect(ex[0].isWarmup, isTrue);
+    expect(ex[0].loadTotal, 9); // 40% of 24 = 9.6 -> 9
+    expect(ex[1].loadTotal, 12); // 60% = 14.4 -> 12
+    expect(ex[2].loadTotal, 18); // 80% = 19.2 -> 18
+    expect(ex[3].pattern, MovementPattern.squat);
+    expect(ex[3].isWarmup, isFalse);
+    // hinge (2-DB, 90 lb): one 60% feeder -> 54 rounds down to 50 matched
+    expect(ex[4].isWarmup, isTrue);
+    expect(ex[4].loadTotal, 50);
+    expect(ex[5].pattern, MovementPattern.hinge);
+    // warm-ups never count toward the §8 completion denominator
+    expect(output.trace.plan!.plannedWorkSets, 6);
+  });
+
+  test('§2.5: the ATG block replaces the ramp on S4 (feeders only)', () {
+    final input = buildInput(
+      time: 60,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s4),
+      sessionLogs: floorSatisfiedLogs(),
+    );
+    final output = decisionEngine.decide(input);
+    final ex = output.trace.plan!.exercises;
+
+    expect(ex.first.trackKey, 'atg_block');
+    expect(ex.first.isWarmup, isTrue);
+    expect(ex.any((e) => e.name.contains('40%')), isFalse); // no ramp
+    // the first compound still gets its 60% feeder
+    final squatIdx = ex.indexWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
+    expect(ex[squatIdx - 1].isWarmup, isTrue);
+    expect(ex[squatIdx - 1].name, contains('60%'));
+  });
+
   test('§6.6: a detraining-adjusted load is marked to persist on completion', () {
     final states = baseStates();
     states['hinge'] = ExerciseState(
@@ -376,7 +424,7 @@ void main() {
     final output = decisionEngine.decide(input);
 
     expect(output.trace.firedRuleCodes, contains('DETRAIN_ADJUST_HINGE'));
-    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge);
+    final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge && !e.isWarmup);
     expect(hinge.loadTotal, 90); // 100 x 0.9 = 90, exact match (§2.6.4)
     expect(hinge.persistLoadOnCompletion, isTrue);
   });
