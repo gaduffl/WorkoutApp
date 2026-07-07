@@ -253,3 +253,11 @@ treat filename as canonical version).
 31. **Auto-backup** (opt-in) fires best-effort after each completed session;
     all OneDrive failures surface via `oneDriveError` and never block training
     flow. Access token refreshes 1 min early via the stored refresh token.
+
+32. **OneDrive redirect switched to the MSAL scheme.** The custom
+    `morningcoach://onedrive-callback` was rejected by Entra ("invalid
+    redirect_uri") because the "Mobile and desktop applications" platform only
+    accepts the MSAL-format redirect, not arbitrary custom schemes. Changed to
+    `msal29d50c5e-…://auth` (registerable via that platform's one-click
+    checkbox); AndroidManifest intent-filter and the link handler updated to
+    the new scheme/host.

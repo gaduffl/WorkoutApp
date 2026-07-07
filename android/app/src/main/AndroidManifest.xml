@@ -35,12 +35,14 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="morningcoach" android:host="oauth-callback"/>
             </intent-filter>
-            <!-- OneDrive OAuth2 (PKCE) redirect -->
+            <!-- OneDrive OAuth2 (PKCE) redirect — MSAL-format scheme
+                 msal<clientId>://auth, registered on the Entra "Mobile and
+                 desktop applications" platform. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="morningcoach" android:host="onedrive-callback"/>
+                <data android:scheme="msal29d50c5e-c912-4a00-8de0-99c0f8e8c44d" android:host="auth"/>
             </intent-filter>
         </activity>
         <!-- flutter_local_notifications: deliver scheduled notifications and

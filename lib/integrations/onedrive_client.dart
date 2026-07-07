@@ -40,7 +40,15 @@ class OneDriveClient {
   const OneDriveClient();
 
   static const clientId = '29d50c5e-c912-4a00-8de0-99c0f8e8c44d';
-  static const redirectUri = 'morningcoach://onedrive-callback';
+
+  /// MSAL-format redirect for a public client. The Entra "Mobile and desktop
+  /// applications" platform registers this with a one-click checkbox
+  /// (`msal{clientId}://auth`); arbitrary custom schemes are not accepted
+  /// there, which is why the earlier `morningcoach://onedrive-callback`
+  /// produced an "invalid redirect_uri" error.
+  static const redirectScheme = 'msal$clientId';
+  static const redirectHost = 'auth';
+  static const redirectUri = '$redirectScheme://$redirectHost';
   static const authorizationEndpoint = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
   static const tokenEndpoint = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
   static const graphBase = 'https://graph.microsoft.com/v1.0';

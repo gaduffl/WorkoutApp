@@ -22,7 +22,7 @@ void main() {
     expect(url.origin + url.path, OneDriveClient.authorizationEndpoint);
     expect(url.queryParameters['client_id'], OneDriveClient.clientId);
     expect(url.queryParameters['response_type'], 'code');
-    expect(url.queryParameters['redirect_uri'], 'morningcoach://onedrive-callback');
+    expect(url.queryParameters['redirect_uri'], 'msal29d50c5e-c912-4a00-8de0-99c0f8e8c44d://auth');
     expect(url.queryParameters['code_challenge'], 'challengeXYZ');
     expect(url.queryParameters['code_challenge_method'], 'S256');
     expect(url.queryParameters['state'], 'state123');
