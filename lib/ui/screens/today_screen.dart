@@ -120,13 +120,21 @@ class _TodayScreenState extends State<TodayScreen> {
             if (plan != null)
               ...plan.exercises.map((e) => Card(
                     child: ListTile(
+                      leading: e.supersetGroup != null
+                          ? CircleAvatar(
+                              radius: 14,
+                              child: Text(String.fromCharCode(65 + e.supersetGroup!),
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            )
+                          : (e.isWarmup ? const Icon(Icons.local_fire_department_outlined) : null),
                       title: Text(e.name),
                       subtitle: Text(
-                        '${e.sets} x ${e.repRange.$1}-${e.repRange.$2} reps'
+                        '${e.isWarmup ? 'warm-up' : '${e.sets} x ${e.repRange.$1}-${e.repRange.$2} reps'}'
                         '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}'
-                        '${e.substitutedFrom != null ? ' (sub for ${e.substitutedFrom})' : ''}',
+                        '${e.substitutedFrom != null ? ' (sub for ${e.substitutedFrom})' : ''}'
+                        '${e.supersetGroup != null ? ' · superset ${String.fromCharCode(65 + e.supersetGroup!)}' : ''}',
                       ),
-                      trailing: Text('RIR ${_rirLabel(e.rirTarget.name)}'),
+                      trailing: e.isWarmup ? null : Text('RIR ${_rirLabel(e.rirTarget.name)}'),
                     ),
                   )),
             const SizedBox(height: 24),

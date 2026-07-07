@@ -536,6 +536,19 @@ class DecisionEngine {
       if (template.hasOptionalRehitFinisher && tier == SessionTier.extended) {
         // Surfaced as an optional add-on in the UI; not a hard plan entry.
       }
+
+      // §2.5 superset pairing: templates order compounds as antagonist pairs
+      // (squat+hinge, push+pull). Pair consecutive compound WORK exercises
+      // into superset groups; accessories and any odd remainder run straight.
+      final compoundWork = <int>[];
+      for (var i = 0; i < exercises.length; i++) {
+        final e = exercises[i];
+        if (!e.isWarmup && e.pattern.patternClass == PatternClass.compound) compoundWork.add(i);
+      }
+      for (var g = 0; g + 1 < compoundWork.length; g += 2) {
+        exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(supersetGroup: g ~/ 2);
+        exercises[compoundWork[g + 1]] = exercises[compoundWork[g + 1]].copyWith(supersetGroup: g ~/ 2);
+      }
     }
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
@@ -672,6 +685,7 @@ class DecisionEngine {
       repRange: (reps, reps),
       loadTotal: load,
       loadDisplay: equipmentEngine.describeLoad(resolved, cfg),
+      loadSteps: achievable,
       rirTarget: Rir.rir3plus,
       isWarmup: true,
       instruction: 'Rest <= 60 s',
@@ -696,11 +710,13 @@ class DecisionEngine {
 
     double? loadTotal;
     String? loadDisplay;
+    List<double>? loadSteps;
     if (!step.backpackLoaded && step.dumbbells > 0) {
       loadTotal = state.currentLoad * loadMultiplier;
       final achievable = step.dumbbells == 1
           ? equipmentEngine.singleDbAchievableTotals(equipmentConfig)
           : equipmentEngine.twoDbAchievableTotals(equipmentConfig, allowUneven: !step.unilateral);
+      loadSteps = achievable;
       loadTotal = equipmentEngine.roundDownToAchievable(loadTotal, achievable);
       final resolved = step.dumbbells == 1
           ? equipmentEngine.resolveSingleDb(loadTotal, equipmentConfig)
@@ -719,6 +735,7 @@ class DecisionEngine {
       repRange: repRange,
       loadTotal: loadTotal,
       loadDisplay: loadDisplay,
+      loadSteps: loadSteps,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
       persistLoadOnCompletion: persistLoadOnCompletion,
