@@ -34,9 +34,16 @@ class HomeScreen extends StatelessWidget {
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (controller.sessionDoneToday)
+                    const Icon(Icons.check_circle, color: Colors.green, size: 48),
                   Text(
-                    controller.todayTrace == null ? 'No check-in yet today.' : "Today's plan is ready.",
+                    controller.todayTrace == null
+                        ? 'No check-in yet today.'
+                        : controller.sessionDoneToday
+                            ? "Today's session is done ✅"
+                            : "Today's plan is ready.",
                     style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
@@ -48,7 +55,11 @@ class HomeScreen extends StatelessWidget {
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckInScreen()));
                       }
                     },
-                    child: Text(controller.todayTrace == null ? 'Morning check-in' : "View today's plan"),
+                    child: Text(controller.todayTrace == null
+                        ? 'Morning check-in'
+                        : controller.sessionDoneToday
+                            ? "View today's summary"
+                            : "View today's plan"),
                   ),
                 ],
               ),

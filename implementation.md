@@ -183,6 +183,31 @@ treat filename as canonical version).
     (90 s compound / 60 s accessory). The body is also scrollable now, so
     small screens / large font scales don't overflow.
 
+## Session 2026-07-07 (more hands-on-testing fixes)
+
+25. **Rest timer resets when a set is logged early.** Logging always cancels
+    the running rest countdown first, then starts a fresh one only if the
+    just-logged set is followed by rest. Previously an early "Log set"
+    (superset partner or next straight set) left the old countdown running.
+
+26. **Logging the final set auto-finishes the workout.** `_logSet` detects the
+    last step and calls `_finish()` itself; the primary button reads
+    "Log set & finish" on the last set, and "Finish early" only appears before
+    then. Removed the separate always-on finish button.
+
+27. **Cardio sessions are loggable (and no longer crash the logger).** S3/S6/S7
+    are cardio-only, so their plan carries zero exercises — pushing the set
+    logger crashed on an empty step list. Today now shows "Mark {session} done"
+    for empty-exercise plans and records it via `logCardioSession` (empty set
+    list → completionRatio 1.0 → counts + credits; queue advances only for
+    cycle types). The §2.1/§12 second-session REHIT offer is now a real
+    "Log REHIT" button (credits intensity, never moves the pointer).
+
+28. **Home and Today reflect a completed day.** The controller tracks the
+    trailing 3 days of logs; `sessionDoneToday` drives a "Session complete"
+    card on Today (Start button + swap options hidden) and a green
+    "Today's session is done" state on Home.
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather

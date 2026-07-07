@@ -175,9 +175,10 @@ class _LoggerScreenState extends State<LoggerScreen> {
     });
   }
 
-  void _logSet() {
+  Future<void> _logSet() async {
     final step = _steps[_current];
     final ex = _ex[step.exIdx];
+    final wasLast = _current == _steps.length - 1;
     final log = SetLog(
       trackKey: ex.trackKey,
       pattern: ex.pattern,
@@ -192,14 +193,20 @@ class _LoggerScreenState extends State<LoggerScreen> {
     setState(() {
       _logged.add(log);
       _loggedKeys.add('${step.exIdx}:${step.setNumber}');
-      if (step.restAfter && !ex.isWarmup) {
+      // Logging ends the previous rest — always reset the timer, then start
+      // a fresh one only if this set is followed by rest.
+      _restTimer?.cancel();
+      _restSecondsLeft = 0;
+      if (!wasLast && step.restAfter && !ex.isWarmup) {
         _startRest(ex.pattern.patternClass == PatternClass.compound);
       }
-      if (_current < _steps.length - 1) {
+      if (!wasLast) {
         _current++;
         _syncSetInputs();
       }
     });
+    // Logging the final set finishes the workout automatically.
+    if (wasLast) await _finish();
   }
 
   Future<void> _finish({bool wrapUp = false}) async {
@@ -319,28 +326,25 @@ class _LoggerScreenState extends State<LoggerScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: isLast ? null : _logSet,
-                  child: const Text('Log set'),
+                  onPressed: _logSet,
+                  child: Text(isLast ? 'Log set & finish' : 'Log set'),
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => isLast ? _logSetThenFinish() : _finish(),
-                  child: Text(isLast ? 'Log set & finish' : 'Finish session'),
+              if (!isLast) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => _finish(),
+                    child: const Text('Finish early'),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _logSetThenFinish() async {
-    _logSet();
-    await _finish();
   }
 
   String? _supersetPartnerName(_Step step) {

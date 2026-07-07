@@ -35,6 +35,29 @@ class AppController extends ChangeNotifier {
   DecisionTrace? todayTrace;
   bool loading = true;
 
+  /// Sessions logged in the trailing 3 days, so the UI can reflect what's
+  /// already done today and whether a second-session REHIT is worth offering.
+  List<SessionLog> _recentLogs = [];
+
+  List<SessionLog> get _todaysLogs =>
+      _recentLogs.where((l) => _isSameDate(l.date, today())).toList();
+
+  /// Whether a counted session has been logged today (Home/Today "done" state).
+  bool get sessionDoneToday => _todaysLogs.any((l) => l.countsTowardQueueAndFloor);
+
+  bool _hasCategoryToday(FloorCategory c) =>
+      _todaysLogs.any((l) => l.countsAs.contains(c) && l.countsTowardQueueAndFloor);
+  bool get strengthDoneToday => _hasCategoryToday(FloorCategory.strength);
+
+  bool get _intensityIn48h => _recentLogs.any((l) =>
+      l.countsAs.contains(FloorCategory.intensity) &&
+      l.countsTowardQueueAndFloor &&
+      today().difference(l.date).inDays <= 2);
+
+  /// §2.1/§12: after a strength session, offer an 8-min REHIT to cover
+  /// intensity if none happened in the trailing 48 h.
+  bool get canOfferSecondRehit => strengthDoneToday && !_intensityIn48h;
+
   /// Snapshot of [exerciseStates] taken right before the first check-in
   /// submission of the day, so [resetToday] can undo the pain-lifecycle
   /// bookkeeping a mistaken check-in already wrote (e.g. a typo'd RHR).
@@ -61,6 +84,7 @@ class AppController extends ChangeNotifier {
     queueState = await repo.loadQueueState();
     exerciseStates = await repo.loadExerciseStates();
     todayTrace = await repo.loadDecisionTraceForDate(today());
+    _recentLogs = await repo.loadSessionLogsSince(today().subtract(const Duration(days: 3)));
     unawaited(syncNotifications());
     loading = false;
     notifyListeners();
@@ -410,12 +434,33 @@ class AppController extends ChangeNotifier {
       rehitFinisherCompleted: rehitFinisherCompleted,
     );
     await repo.saveSessionLog(log);
+    _recentLogs = [..._recentLogs, log];
 
     if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
       queueState = const QueueEngine().advance(queueState, plan.sessionId);
       await repo.saveQueueState(queueState);
     }
     notifyListeners();
+  }
+
+  /// Logs a cardio-only session (S3 4×4, S6 Zone 2, S7 REHIT) that has no
+  /// per-set logging — either the day's primary cardio pick or an added
+  /// second-session REHIT. Reuses [completeSession] with an empty set list
+  /// (plannedWorkSets == 0 → completionRatio 1.0 → counts & credits).
+  Future<void> logCardioSession(SessionTypeId id, {required int durationMinutes}) async {
+    final def = sessionTypes[id];
+    if (def == null) return;
+    final plan = SessionPlan(
+      sessionId: id,
+      sessionName: def.name,
+      tier: SessionTier.full,
+      exercises: const [],
+      estimatedDurationMin: durationMinutes,
+      // A second-session REHIT must not move the cycle pointer; S7 isn't a
+      // cycle type so advance() is already a no-op, but be explicit.
+      grantsQueueCredit: cycleOrder.contains(id),
+    );
+    await completeSession(plan, const [], durationMinutes: durationMinutes);
   }
 
   /// Marks a pain re-entry test (§7.2, 50% x 8) as passed pain-free, then
