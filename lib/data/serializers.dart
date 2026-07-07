@@ -4,6 +4,7 @@ import '../models/equipment.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/movement_pattern.dart';
+import '../models/onedrive_connection.dart';
 import '../models/oura_connection.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
@@ -214,6 +215,24 @@ OuraConnection ouraConnectionFromJson(Map<String, dynamic> j) => OuraConnection(
       accessTokenExpiresAt: j['accessTokenExpiresAt'] == null ? null : DateTime.parse(j['accessTokenExpiresAt'] as String),
     );
 
+Map<String, dynamic> oneDriveConnectionToJson(OneDriveConnection o) => {
+      'accessToken': o.accessToken,
+      'refreshToken': o.refreshToken,
+      'accessTokenExpiresAt': o.accessTokenExpiresAt?.toIso8601String(),
+      'account': o.account,
+      'lastBackupAt': o.lastBackupAt?.toIso8601String(),
+      'autoBackup': o.autoBackup,
+    };
+
+OneDriveConnection oneDriveConnectionFromJson(Map<String, dynamic> j) => OneDriveConnection(
+      accessToken: j['accessToken'] as String?,
+      refreshToken: j['refreshToken'] as String?,
+      accessTokenExpiresAt: j['accessTokenExpiresAt'] == null ? null : DateTime.parse(j['accessTokenExpiresAt'] as String),
+      account: j['account'] as String?,
+      lastBackupAt: j['lastBackupAt'] == null ? null : DateTime.parse(j['lastBackupAt'] as String),
+      autoBackup: j['autoBackup'] as bool? ?? false,
+    );
+
 Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'equipment': equipmentConfigToJson(u.equipment),
       'weeklyFloor': u.weeklyFloor.map((k, v) => MapEntry(k.name, v)),
@@ -222,6 +241,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'age': u.age,
       'hrMaxOverride': u.hrMaxOverride,
       'oura': ouraConnectionToJson(u.oura),
+      'oneDrive': oneDriveConnectionToJson(u.oneDrive),
       'anthropicApiKey': u.anthropicApiKey,
       'aiExplanationsEnabled': u.aiExplanationsEnabled,
       'aiTone': u.aiTone,
@@ -240,6 +260,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       age: j['age'] as int,
       hrMaxOverride: (j['hrMaxOverride'] as num?)?.toDouble(),
       oura: j['oura'] == null ? const OuraConnection() : ouraConnectionFromJson(j['oura'] as Map<String, dynamic>),
+      oneDrive: j['oneDrive'] == null ? const OneDriveConnection() : oneDriveConnectionFromJson(j['oneDrive'] as Map<String, dynamic>),
       anthropicApiKey: j['anthropicApiKey'] as String?,
       aiExplanationsEnabled: j['aiExplanationsEnabled'] as bool? ?? true,
       aiTone: j['aiTone'] as String,

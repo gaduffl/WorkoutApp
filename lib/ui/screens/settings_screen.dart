@@ -85,10 +85,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  bool _odBusy = false;
+
+  Future<void> _connectOneDrive() async {
+    setState(() => _odBusy = true);
+    final controller = context.read<AppController>();
+    final launched = await controller.startOneDriveConnect();
+    if (!mounted) return;
+    setState(() => _odBusy = false);
+    if (!launched) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Couldn't open the browser to connect to OneDrive.")));
+    }
+  }
+
+  Future<void> _backupNow() async {
+    setState(() => _odBusy = true);
+    final controller = context.read<AppController>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await controller.backupToOneDrive();
+      messenger.showSnackBar(const SnackBar(content: Text('Backed up to OneDrive ✓')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+    }
+    if (mounted) setState(() => _odBusy = false);
+  }
+
+  Future<void> _restoreNow() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from OneDrive?'),
+        content: const Text(
+          'This replaces ALL data on this device (sessions, progress, settings) with the '
+          'latest OneDrive backup. Your current data on this device is overwritten.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _odBusy = true);
+    final controller = context.read<AppController>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final ok = await controller.restoreFromOneDrive();
+      messenger.showSnackBar(SnackBar(content: Text(ok ? 'Restored from OneDrive ✓' : 'No backup found yet.')));
+      if (ok && mounted) setState(() => _settings = controller.settings);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    }
+    if (mounted) setState(() => _odBusy = false);
+  }
+
+  String _fmtTime(DateTime t) {
+    final l = t.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${l.year}-${two(l.month)}-${two(l.day)} ${two(l.hour)}:${two(l.minute)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final oura = context.watch<AppController>().settings.oura;
     final ouraError = context.watch<AppController>().ouraError;
+    final od = context.watch<AppController>().settings.oneDrive;
+    final odError = context.watch<AppController>().oneDriveError;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -255,6 +319,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ],
             ),
+            const Divider(height: 32),
+            Text('Backup & sync (OneDrive)', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Backs up all your data to a private folder in your OneDrive so you can '
+              'restore it on a new device. The app can only see its own folder.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(od.isConnected ? Icons.cloud_done : Icons.cloud_off,
+                    color: od.isConnected ? Colors.green : Colors.grey),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(od.isConnected
+                      ? 'Connected${od.account != null ? ' · ${od.account}' : ''}'
+                      : 'Not connected'),
+                ),
+              ],
+            ),
+            if (od.lastBackupAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Last backup: ${_fmtTime(od.lastBackupAt!)}',
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+            if (odError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(odError, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+              ),
+            const SizedBox(height: 8),
+            if (!od.isConnected)
+              FilledButton.icon(
+                icon: _odBusy
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.cloud),
+                onPressed: _odBusy ? null : _connectOneDrive,
+                label: const Text('Connect OneDrive'),
+              )
+            else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.backup),
+                      onPressed: _odBusy ? null : _backupNow,
+                      label: const Text('Back up now'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.restore),
+                      onPressed: _odBusy ? null : _restoreNow,
+                      label: const Text('Restore'),
+                    ),
+                  ),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto-backup after each session'),
+                value: od.autoBackup,
+                onChanged: _odBusy ? null : (v) => context.read<AppController>().setOneDriveAutoBackup(v),
+              ),
+              TextButton(
+                onPressed: _odBusy ? null : () => context.read<AppController>().disconnectOneDrive(),
+                child: const Text('Disconnect OneDrive'),
+              ),
+            ],
             const Divider(height: 32),
             Text('AI layer (optional)', style: Theme.of(context).textTheme.titleMedium),
             SwitchListTile(
