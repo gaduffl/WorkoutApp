@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:app_links/app_links.dart';
@@ -10,6 +11,7 @@ import '../engine/decision_engine.dart';
 import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
+import '../integrations/onedrive_client.dart';
 import '../integrations/oura_client.dart';
 import '../notifications/notification_service.dart';
 import '../models/check_in.dart';
@@ -80,11 +82,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    settings = await repo.loadSettings();
-    queueState = await repo.loadQueueState();
-    exerciseStates = await repo.loadExerciseStates();
-    todayTrace = await repo.loadDecisionTraceForDate(today());
-    _recentLogs = await repo.loadSessionLogsSince(today().subtract(const Duration(days: 3)));
+    await _reloadAll();
     unawaited(syncNotifications());
     loading = false;
     notifyListeners();
@@ -101,12 +99,20 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _handleIncomingLink(Uri uri) async {
-    if (uri.scheme != 'morningcoach' || uri.host != 'oauth-callback') return;
-    final code = uri.queryParameters['code'];
-    final state = uri.queryParameters['state'];
-    if (code == null || _oauthState == null || state != _oauthState) return;
-    _oauthState = null;
-    await _completeOuraConnection(code);
+    if (uri.scheme != 'morningcoach') return;
+    if (uri.host == 'oauth-callback') {
+      final code = uri.queryParameters['code'];
+      final state = uri.queryParameters['state'];
+      if (code == null || _oauthState == null || state != _oauthState) return;
+      _oauthState = null;
+      await _completeOuraConnection(code);
+    } else if (uri.host == 'onedrive-callback') {
+      final code = uri.queryParameters['code'];
+      final state = uri.queryParameters['state'];
+      if (code == null || _odState == null || state != _odState) return;
+      _odState = null;
+      await _completeOneDriveConnection(code);
+    }
   }
 
   /// Opens the system browser to Oura's OAuth2 consent screen. The redirect
@@ -137,6 +143,134 @@ class AppController extends ChangeNotifier {
       ouraError = 'Could not connect to Oura: $e';
     }
     notifyListeners();
+  }
+
+  // ---- OneDrive backup / sync ----
+
+  static const _onedrive = OneDriveClient();
+  PkcePair? _odPkce;
+  String? _odState;
+
+  /// Surfaced to the UI after a failed OneDrive operation; cleared on success.
+  String? oneDriveError;
+
+  /// Opens the browser to Microsoft's consent screen (PKCE, no secret). The
+  /// redirect to `morningcoach://onedrive-callback` is caught by [_handleIncomingLink].
+  Future<bool> startOneDriveConnect() async {
+    _odPkce = PkcePair.generate();
+    _odState = _randomState();
+    final url = _onedrive.buildAuthorizationUrl(state: _odState!, codeChallenge: _odPkce!.challenge);
+    return launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _completeOneDriveConnection(String code) async {
+    final verifier = _odPkce?.verifier;
+    _odPkce = null;
+    if (verifier == null) return;
+    try {
+      final tokens = await _onedrive.exchangeCode(code: code, codeVerifier: verifier);
+      final account = await _onedrive.fetchAccount(tokens.accessToken);
+      oneDriveError = null;
+      settings = settings.copyWith(
+        oneDrive: settings.oneDrive.copyWith(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          accessTokenExpiresAt: tokens.expiresAt,
+          account: account,
+        ),
+      );
+      await repo.saveSettings(settings);
+    } catch (e) {
+      oneDriveError = 'Could not connect to OneDrive: $e';
+    }
+    notifyListeners();
+  }
+
+  Future<void> disconnectOneDrive() async {
+    settings = settings.copyWith(oneDrive: settings.oneDrive.copyWith(clearTokens: true));
+    oneDriveError = null;
+    await repo.saveSettings(settings);
+    notifyListeners();
+  }
+
+  Future<void> setOneDriveAutoBackup(bool on) async {
+    settings = settings.copyWith(oneDrive: settings.oneDrive.copyWith(autoBackup: on));
+    await repo.saveSettings(settings);
+    notifyListeners();
+  }
+
+  /// Refreshes the OneDrive access token if expired. Returns null on failure.
+  Future<String?> _validOneDriveToken() async {
+    var od = settings.oneDrive;
+    if (!od.isConnected) return null;
+    if (od.isExpired) {
+      if (od.refreshToken == null) return null;
+      final tokens = await _onedrive.refreshAccessToken(refreshToken: od.refreshToken!);
+      od = od.copyWith(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        accessTokenExpiresAt: tokens.expiresAt,
+      );
+      settings = settings.copyWith(oneDrive: od);
+      await repo.saveSettings(settings);
+    }
+    return settings.oneDrive.accessToken;
+  }
+
+  /// Uploads the full local database to the OneDrive app folder. Throws on
+  /// failure (the UI surfaces it); [silent] swallows errors for auto-backup.
+  Future<void> backupToOneDrive({bool silent = false}) async {
+    try {
+      final token = await _validOneDriveToken();
+      if (token == null) throw Exception('OneDrive is not connected');
+      final envelope = {
+        'app': 'morningcoach',
+        'schema': 1,
+        'exportedAt': DateTime.now().toIso8601String(),
+        'data': await repo.db.exportAll(),
+      };
+      await _onedrive.uploadBackup(token, jsonEncode(envelope));
+      oneDriveError = null;
+      settings = settings.copyWith(oneDrive: settings.oneDrive.copyWith(lastBackupAt: DateTime.now()));
+      await repo.saveSettings(settings);
+      notifyListeners();
+    } catch (e) {
+      oneDriveError = 'Backup failed: $e';
+      notifyListeners();
+      if (!silent) rethrow;
+    }
+  }
+
+  /// Downloads the OneDrive backup and replaces the local database with it,
+  /// preserving this device's OneDrive connection so it stays signed in.
+  /// Returns false if no backup exists yet.
+  Future<bool> restoreFromOneDrive() async {
+    final token = await _validOneDriveToken();
+    if (token == null) throw Exception('OneDrive is not connected');
+    final content = await _onedrive.downloadBackup(token);
+    if (content == null) return false;
+    final envelope = jsonDecode(content) as Map<String, dynamic>;
+    final data = envelope['data'];
+    if (data is! Map<String, dynamic>) throw Exception('Backup file is not readable');
+
+    final keepConnection = settings.oneDrive; // don't sign out on restore
+    await repo.db.importAll(data);
+    await _reloadAll();
+    // Re-apply this device's tokens on top of whatever the backup carried.
+    settings = settings.copyWith(oneDrive: keepConnection);
+    await repo.saveSettings(settings);
+    notifyListeners();
+    return true;
+  }
+
+  /// Reloads all in-memory state from the database (used at startup and
+  /// after a OneDrive restore).
+  Future<void> _reloadAll() async {
+    settings = await repo.loadSettings();
+    queueState = await repo.loadQueueState();
+    exerciseStates = await repo.loadExerciseStates();
+    todayTrace = await repo.loadDecisionTraceForDate(today());
+    _recentLogs = await repo.loadSessionLogsSince(today().subtract(const Duration(days: 3)));
   }
 
   Future<void> disconnectOura() async {
@@ -441,6 +575,11 @@ class AppController extends ChangeNotifier {
       await repo.saveQueueState(queueState);
     }
     notifyListeners();
+
+    // Auto-backup after a logged session, if enabled (best-effort).
+    if (settings.oneDrive.autoBackup && settings.oneDrive.isConnected) {
+      unawaited(backupToOneDrive(silent: true));
+    }
   }
 
   /// Logs a cardio-only session (S3 4×4, S6 Zone 2, S7 REHIT) that has no

@@ -231,3 +231,25 @@ treat filename as canonical version).
 - **Spec-internal tension**: a +15 recency boost can outrank S6's weekend base 60
   (50+15=65), contradicting §2.1's "S6 becomes top-ranked iff ALL hold". The
   numeric scoring (§5 Step 4, v1.1) is treated as authoritative.
+
+## Session 2026-07-07, later (OneDrive backup/sync)
+
+29. **OneDrive backup via manual PKCE OAuth, not the MSAL SDK.** The Entra app
+    is a public client ("Mobile and desktop applications" platform); the app
+    reuses the existing Oura pattern (`app_links` custom-scheme redirect +
+    `url_launcher` + manual token exchange) rather than pulling in a heavy
+    MSAL/AAD plugin. Client id is a compile-time constant; **no client secret**
+    is stored — PKCE (S256, `package:crypto`) protects the code exchange.
+    Redirect `morningcoach://onedrive-callback`; scopes
+    `Files.ReadWrite.AppFolder offline_access User.Read` so the app only ever
+    sees its own OneDrive folder.
+30. **Whole-DB JSON blob backup.** `AppDatabase.exportAll/importAll` dump and
+    restore every row of every table (the schema is already JSON-blob-per-row),
+    wrapped in an envelope `{app, schema, exportedAt, data}` uploaded to
+    `/approot/morningcoach-backup.json`. `importAll` runs in one transaction and
+    ignores unknown tables/columns so a newer backup can't corrupt an older
+    schema. Restore preserves *this device's* OneDrive tokens (re-applied after
+    import) so a restore never signs you out.
+31. **Auto-backup** (opt-in) fires best-effort after each completed session;
+    all OneDrive failures surface via `oneDriveError` and never block training
+    flow. Access token refreshes 1 min early via the stored refresh token.

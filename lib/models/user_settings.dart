@@ -1,5 +1,6 @@
 import 'equipment.dart';
 import 'floor_category.dart';
+import 'onedrive_connection.dart';
 import 'oura_connection.dart';
 
 enum Units { lb, kg }
@@ -16,6 +17,7 @@ class UserSettings {
   final int age;
   final double? hrMaxOverride;
   final OuraConnection oura;
+  final OneDriveConnection oneDrive;
   final String? anthropicApiKey;
 
   /// §9.1: when off, the app always uses the deterministic fallback
@@ -41,6 +43,7 @@ class UserSettings {
     this.age = 35,
     this.hrMaxOverride,
     this.oura = const OuraConnection(),
+    this.oneDrive = const OneDriveConnection(),
     this.anthropicApiKey,
     this.aiExplanationsEnabled = true,
     this.aiTone = 'direct, encouraging, no fluff',
@@ -61,6 +64,7 @@ class UserSettings {
     int? age,
     double? hrMaxOverride,
     OuraConnection? oura,
+    OneDriveConnection? oneDrive,
     String? anthropicApiKey,
     bool? aiExplanationsEnabled,
     String? aiTone,
@@ -78,6 +82,7 @@ class UserSettings {
       age: age ?? this.age,
       hrMaxOverride: hrMaxOverride ?? this.hrMaxOverride,
       oura: oura ?? this.oura,
+      oneDrive: oneDrive ?? this.oneDrive,
       anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
       aiExplanationsEnabled: aiExplanationsEnabled ?? this.aiExplanationsEnabled,
       aiTone: aiTone ?? this.aiTone,

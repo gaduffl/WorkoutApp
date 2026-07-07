@@ -76,6 +76,52 @@ class AppDatabase {
     return rows.map((r) => jsonDecode(r['json'] as String) as Map<String, dynamic>).toList();
   }
 
+  /// Table → key column(s), for whole-database export/import (OneDrive backup).
+  static const _tableColumns = {
+    'exercise_states': ['trackKey', 'json'],
+    'check_ins': ['date', 'json'],
+    'recovery_snapshots': ['date', 'json'],
+    'session_logs': ['id', 'date', 'json'],
+    'decision_traces': ['date', 'json'],
+    'meta': ['key', 'json'],
+  };
+
+  /// Dumps every row of every table as raw column maps (values are strings).
+  Future<Map<String, List<Map<String, Object?>>>> exportAll() async {
+    final db = await open();
+    final out = <String, List<Map<String, Object?>>>{};
+    for (final table in _tableColumns.keys) {
+      out[table] = await db.query(table);
+    }
+    return out;
+  }
+
+  /// Replaces the whole database with [data] (from [exportAll]) in one
+  /// transaction: each known table is cleared and its rows re-inserted.
+  /// Unknown tables/columns are ignored so a newer backup can't corrupt an
+  /// older schema.
+  Future<void> importAll(Map<String, dynamic> data) async {
+    final db = await open();
+    await db.transaction((txn) async {
+      for (final entry in _tableColumns.entries) {
+        final table = entry.key;
+        final cols = entry.value;
+        final rows = data[table];
+        if (rows is! List) continue;
+        await txn.delete(table);
+        for (final row in rows) {
+          if (row is! Map) continue;
+          final values = <String, Object?>{};
+          for (final c in cols) {
+            if (row.containsKey(c)) values[c] = row[c];
+          }
+          if (values.isEmpty) continue;
+          await txn.insert(table, values, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+    });
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;

@@ -35,6 +35,13 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="morningcoach" android:host="oauth-callback"/>
             </intent-filter>
+            <!-- OneDrive OAuth2 (PKCE) redirect -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="morningcoach" android:host="onedrive-callback"/>
+            </intent-filter>
         </activity>
         <!-- flutter_local_notifications: deliver scheduled notifications and
              re-register them after reboot/app update -->
