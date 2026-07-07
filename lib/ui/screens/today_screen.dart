@@ -65,10 +65,26 @@ class _TodayScreenState extends State<TodayScreen> {
     return 'Next up in your rotation';
   }
 
+  Future<void> _logCardio(SessionTypeId id, int minutes) async {
+    final controller = context.read<AppController>();
+    await controller.logCardioSession(id, durationMinutes: minutes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${sessionTypes[id]!.name} logged ✓')));
+  }
+
+  /// Nominal minutes for a cardio-only session's log entry.
+  int _cardioMinutes(SessionTypeId id) => switch (id) {
+        SessionTypeId.s3 => 36,
+        SessionTypeId.s7 => 10,
+        _ => 60, // S6 Zone 2
+      };
+
   @override
   Widget build(BuildContext context) {
+    final controller = context.watch<AppController>();
     final trace = _trace;
     final plan = trace.plan;
+    final done = controller.sessionDoneToday;
 
     return Scaffold(
       appBar: AppBar(
@@ -138,7 +154,27 @@ class _TodayScreenState extends State<TodayScreen> {
                     ),
                   )),
             const SizedBox(height: 24),
-            if (plan != null)
+            if (done)
+              Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: const ListTile(
+                  leading: Icon(Icons.check_circle),
+                  title: Text('Session complete'),
+                  subtitle: Text('Nice work — see it on the History tab.'),
+                ),
+              )
+            else if (plan != null && plan.exercises.isEmpty)
+              // Cardio-only session (S3 4×4, S6 Zone 2, S7 REHIT): nothing to
+              // log set-by-set, just mark it done.
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.directions_bike),
+                  onPressed: () => _logCardio(plan.sessionId, _cardioMinutes(plan.sessionId)),
+                  label: Text('Mark ${plan.sessionName} done'),
+                ),
+              )
+            else if (plan != null)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -147,7 +183,34 @@ class _TodayScreenState extends State<TodayScreen> {
                   child: const Text('Start session'),
                 ),
               ),
-            if (trace.candidates.length > 1) ...[
+
+            // §2.1/§12 second-session REHIT offer: after a strength session
+            // with no intensity in the trailing 48 h.
+            if (controller.canOfferSecondRehit) ...[
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Add an 8-min REHIT?', style: Theme.of(context).textTheme.titleMedium),
+                      const Text('Covers your weekly intensity floor — the bike runs the protocol.'),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.bolt),
+                          onPressed: () => _logCardio(SessionTypeId.s7, 10),
+                          label: const Text('Log REHIT'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (!done && trace.candidates.length > 1) ...[
               const SizedBox(height: 24),
               Text('Other options today', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 2),
