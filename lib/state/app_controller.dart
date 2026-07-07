@@ -99,14 +99,13 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _handleIncomingLink(Uri uri) async {
-    if (uri.scheme != 'morningcoach') return;
-    if (uri.host == 'oauth-callback') {
+    if (uri.scheme == 'morningcoach' && uri.host == 'oauth-callback') {
       final code = uri.queryParameters['code'];
       final state = uri.queryParameters['state'];
       if (code == null || _oauthState == null || state != _oauthState) return;
       _oauthState = null;
       await _completeOuraConnection(code);
-    } else if (uri.host == 'onedrive-callback') {
+    } else if (uri.scheme == OneDriveClient.redirectScheme && uri.host == OneDriveClient.redirectHost) {
       final code = uri.queryParameters['code'];
       final state = uri.queryParameters['state'];
       if (code == null || _odState == null || state != _odState) return;
