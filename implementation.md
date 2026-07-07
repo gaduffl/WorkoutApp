@@ -159,6 +159,30 @@ treat filename as canonical version).
     Android: POST_NOTIFICATIONS + BOOT_COMPLETED receivers, core-library
     desugaring enabled (plugin requirement).
 
+## Session 2026-07-06, later still (user-reported logger bugs)
+
+22. **Weight stepper now follows the PowerBlock steps (§2.6), not a flat ±5.**
+    Each work/warm-up `PlannedExercise` carries `loadSteps` (the exercise's
+    achievable dumbbell totals: single-DB union or matched/uneven 2-DB set).
+    The logger's +/- snaps to the next/prev entry in that list; backpack/free
+    entries fall back to ±5, bodyweight hides the stepper. Weight is tracked
+    per exercise so interleaved superset sets keep independent loads.
+
+23. **Supersets are now explicit and toggleable (§2.5).** Templates order
+    compounds as antagonist pairs, so the engine pairs consecutive compound
+    WORK exercises into `supersetGroup` (0,0,1,1,...); accessories and any odd
+    remainder stay straight. Today shows an A/B badge; the logger builds its
+    play order from the groups (warm up both partners, then alternate work
+    sets, rest after each pair) and offers a "Superset mode" switch that
+    rebuilds the remaining order as straight sets (rest after every set).
+    Toggling mid-session preserves already-logged sets by (exIdx:setNumber).
+
+24. **Incidental fix:** the old logger picked rest duration via
+    `repRange.low <= 10`, which is true for both compounds (6) and accessories
+    (8) — so every rest was 90 s. Now keyed on `PatternClass.compound`
+    (90 s compound / 60 s accessory). The body is also scrollable now, so
+    small screens / large font scales don't overflow.
+
 ## Documented deviations left as-is (deliberate, not bugs introduced today)
 
 - **Both floors hard-forced**: the engine suppresses the intensity +100 rather

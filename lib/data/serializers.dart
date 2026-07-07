@@ -276,6 +276,8 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'instruction': e.instruction,
       'persistLoadOnCompletion': e.persistLoadOnCompletion,
       'isTravel': e.isTravel,
+      'loadSteps': e.loadSteps,
+      'supersetGroup': e.supersetGroup,
     };
 
 PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExercise(
@@ -292,6 +294,8 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       instruction: j['instruction'] as String?,
       persistLoadOnCompletion: j['persistLoadOnCompletion'] as bool? ?? false,
       isTravel: j['isTravel'] as bool? ?? false,
+      loadSteps: (j['loadSteps'] as List?)?.map((e) => (e as num).toDouble()).toList(),
+      supersetGroup: j['supersetGroup'] as int?,
     );
 
 Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {

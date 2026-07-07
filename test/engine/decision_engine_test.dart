@@ -433,6 +433,41 @@ void main() {
     );
   });
 
+  test('§2.6: work exercises carry their PowerBlock achievable-total steps', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    final squat = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
+    // goblet squat is single-DB: steps are the union of both blocks
+    expect(squat.loadSteps, isNotNull);
+    expect(squat.loadSteps, containsAllInOrder([6, 9, 10, 12, 15, 18, 20, 21, 24, 25]));
+    // and the current load sits on a real step
+    expect(squat.loadSteps!.contains(squat.loadTotal), isTrue);
+  });
+
+  test('§2.5: consecutive compound work exercises are paired into superset groups', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 60,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s2),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    final work = output.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
+    final compounds = work.where((e) => e.pattern.patternClass == PatternClass.compound).toList();
+    // S2 extended has 4 compounds -> two superset groups (0,0,1,1)
+    expect(compounds.map((e) => e.supersetGroup).toList(), [0, 0, 1, 1]);
+    // the accessory (core/grip) stays straight
+    final accessory = work.firstWhere((e) => e.pattern == MovementPattern.coreGrip);
+    expect(accessory.supersetGroup, isNull);
+  });
+
   test('§12 travel mode: ladders resolve to bodyweight, arm accessories drop out', () {
     final s1 = decisionEngine.decide(buildInput(
       time: 35,

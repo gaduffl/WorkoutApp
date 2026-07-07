@@ -27,6 +27,16 @@ class PlannedExercise {
   /// the pattern (lastTrained still updates on completion).
   final bool isTravel;
 
+  /// §2.6: the achievable dumbbell *totals* for this exercise, so the logger
+  /// steps weight through real PowerBlock jumps instead of a flat ±5.
+  /// Null for bodyweight / backpack-loaded / travel (free-entry) exercises.
+  final List<double>? loadSteps;
+
+  /// §2.5: work exercises that share a superset group are alternated with
+  /// ~90 s rest after the *pair*. Null = run as straight sets. Warm-ups are
+  /// never grouped.
+  final int? supersetGroup;
+
   const PlannedExercise({
     required this.trackKey,
     required this.pattern,
@@ -41,7 +51,27 @@ class PlannedExercise {
     this.instruction,
     this.persistLoadOnCompletion = false,
     this.isTravel = false,
+    this.loadSteps,
+    this.supersetGroup,
   });
+
+  PlannedExercise copyWith({int? supersetGroup}) => PlannedExercise(
+        trackKey: trackKey,
+        pattern: pattern,
+        name: name,
+        sets: sets,
+        repRange: repRange,
+        loadTotal: loadTotal,
+        loadDisplay: loadDisplay,
+        rirTarget: rirTarget,
+        substitutedFrom: substitutedFrom,
+        isWarmup: isWarmup,
+        instruction: instruction,
+        persistLoadOnCompletion: persistLoadOnCompletion,
+        isTravel: isTravel,
+        loadSteps: loadSteps,
+        supersetGroup: supersetGroup ?? this.supersetGroup,
+      );
 }
 
 class SessionPlan {
