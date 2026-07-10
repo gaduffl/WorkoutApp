@@ -1,7 +1,7 @@
 import 'movement_pattern.dart';
 
 /// Reps-in-reserve, §2.4 / §6 logger input.
-enum Rir { rir0, rir1, rir2, rir3plus }
+enum Rir { rir0, rir1, rir2, rir3plus, rir4plus }
 
 class SetLog {
   final String trackKey;
