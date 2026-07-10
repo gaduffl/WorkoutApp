@@ -18,6 +18,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   int? _time;
   int _feel = 3;
   final Map<BodyRegion, PainSeverity> _pain = {};
+  final Map<BodyRegion, Set<PainTag>> _painTags = {};
   final _hrvController = TextEditingController();
   final _rhrController = TextEditingController();
   final _sleepController = TextEditingController();
@@ -35,6 +36,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
     BodyRegion.elbow: 'Elbow',
     BodyRegion.wrist: 'Wrist',
     BodyRegion.hip: 'Hip',
+  };
+
+  static const _tagLabels = {
+    PainTag.radiating: 'Radiating',
+    PainTag.numbness: 'Numbness',
+    PainTag.tingling: 'Tingling',
   };
 
   @override
@@ -79,26 +86,55 @@ class _CheckInScreenState extends State<CheckInScreen> {
         _pain[region] = PainSeverity.sharp;
       } else {
         _pain.remove(region);
+        _painTags.remove(region);
       }
     });
   }
 
+  void _togglePainTag(BodyRegion region, PainTag tag, bool selected) {
+    setState(() {
+      final tags = _painTags.putIfAbsent(region, () => <PainTag>{});
+      selected ? tags.add(tag) : tags.remove(tag);
+      if (tags.isEmpty) _painTags.remove(region);
+    });
+  }
+
   Future<void> _submit() async {
-    if (_time == null) return;
-    setState(() => _submitting = true);
+    if (_time == null || _submitting) return;
     final controller = context.read<AppController>();
     final now = controller.today();
     final pain = _pain.entries
-        .map((e) => PainFlag(region: e.key, severity: e.value, flaggedDate: now))
+        .map((e) => PainFlag(
+              region: e.key,
+              severity: e.value,
+              flaggedDate: now,
+              tags: Set.of(_painTags[e.key] ?? const <PainTag>{}),
+            ))
         .toList();
 
     RecoverySnapshot? recovery;
-    final hrv = double.tryParse(_hrvController.text);
-    final rhr = double.tryParse(_rhrController.text);
-    final sleep = int.tryParse(_sleepController.text);
+    final hrvText = _hrvController.text.trim();
+    final rhrText = _rhrController.text.trim();
+    final sleepText = _sleepController.text.trim();
+    final hrv = hrvText.isEmpty ? null : double.tryParse(hrvText);
+    final rhr = rhrText.isEmpty ? null : double.tryParse(rhrText);
+    final sleep = sleepText.isEmpty ? null : int.tryParse(sleepText);
+    final invalidMessage = hrvText.isNotEmpty && (hrv == null || !hrv.isFinite || hrv <= 0)
+        ? 'HRV must be a positive number.'
+        : rhrText.isNotEmpty && (rhr == null || !rhr.isFinite || rhr <= 0)
+            ? 'Resting HR must be a positive number.'
+            : sleepText.isNotEmpty && (sleep == null || sleep < 0 || sleep > 100)
+                ? 'Sleep score must be a whole number from 0 to 100.'
+                : null;
+    if (invalidMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(invalidMessage)));
+      return;
+    }
     if (hrv != null || rhr != null || sleep != null) {
       recovery = RecoverySnapshot(date: now, hrvRmssd: hrv, restingHr: rhr, sleepScore: sleep);
     }
+
+    setState(() => _submitting = true);
 
     final trace = await controller.submitCheckIn(
       timeMinutes: _time!,
@@ -163,6 +199,38 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   );
                 }).toList(),
               ),
+              if (_pain.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Add any warning symptoms (optional)',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                ..._pain.keys.map((region) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 92,
+                            child: Text(_regionLabels[region]!, style: Theme.of(context).textTheme.bodySmall),
+                          ),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 6,
+                              children: _tagLabels.entries
+                                  .map((tag) => FilterChip(
+                                        visualDensity: VisualDensity.compact,
+                                        label: Text(tag.value),
+                                        selected: _painTags[region]?.contains(tag.key) ?? false,
+                                        onSelected: (selected) => _togglePainTag(region, tag.key, selected),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -189,7 +257,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     child: TextField(
                       controller: _hrvController,
                       decoration: const InputDecoration(labelText: 'HRV (rMSSD)'),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -197,7 +265,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     child: TextField(
                       controller: _rhrController,
                       decoration: const InputDecoration(labelText: 'Resting HR'),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
                   ),
                   const SizedBox(width: 8),
