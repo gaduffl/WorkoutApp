@@ -43,6 +43,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   int _reps = 8;
   Rir _rir = Rir.rir2;
   bool _painFlag = false;
+  bool _finishing = false;
   Timer? _restTimer;
   int _restSecondsLeft = 0;
   final _stopwatch = Stopwatch()..start();
@@ -176,6 +177,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   }
 
   Future<void> _logSet() async {
+    if (_finishing) return;
     final step = _steps[_current];
     final ex = _ex[step.exIdx];
     final wasLast = _current == _steps.length - 1;
@@ -210,34 +212,40 @@ class _LoggerScreenState extends State<LoggerScreen> {
   }
 
   Future<void> _finish({bool wrapUp = false}) async {
+    if (_finishing) return;
+    setState(() => _finishing = true);
     final controller = context.read<AppController>();
 
-    var rehitDone = false;
-    final offersFinisher = sessionTemplates[widget.plan.sessionId]?.hasOptionalRehitFinisher ?? false;
-    if (!wrapUp && offersFinisher && widget.plan.tier == SessionTier.extended && mounted) {
-      rehitDone = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('REHIT finisher'),
-              content: const Text('Did you do the 8-min REHIT finisher? (That is what earns the intensity credit.)'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Skipped')),
-                FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Done')),
-              ],
-            ),
-          ) ??
-          false;
-    }
-    if (!mounted) return;
+    try {
+      var rehitDone = false;
+      final offersFinisher = sessionTemplates[widget.plan.sessionId]?.hasOptionalRehitFinisher ?? false;
+      if (!wrapUp && offersFinisher && widget.plan.tier == SessionTier.extended && mounted) {
+        rehitDone = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('REHIT finisher'),
+                content: const Text('Did you do the 8-min REHIT finisher? (That is what earns the intensity credit.)'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Skipped')),
+                  FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Done')),
+                ],
+              ),
+            ) ??
+            false;
+      }
+      if (!mounted) return;
 
-    await controller.completeSession(
-      widget.plan,
-      _logged,
-      durationMinutes: _stopwatch.elapsed.inMinutes.clamp(1, 999),
-      rehitFinisherCompleted: rehitDone,
-    );
-    if (!mounted) return;
-    Navigator.of(context).popUntil((r) => r.isFirst);
+      await controller.completeSession(
+        widget.plan,
+        _logged,
+        durationMinutes: _stopwatch.elapsed.inMinutes.clamp(1, 999),
+        rehitFinisherCompleted: rehitDone,
+      );
+      if (!mounted) return;
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    } finally {
+      if (mounted) setState(() => _finishing = false);
+    }
   }
 
   @override
@@ -252,7 +260,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
         title: Text('${e.name}${e.isWarmup ? '' : ' - set ${step.setNumber}/${e.sets}'}'),
         actions: [
           TextButton(
-            onPressed: () => _finish(wrapUp: true),
+            onPressed: _finishing ? null : () => _finish(wrapUp: true),
             child: const Text('Wrap up', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -309,11 +317,21 @@ class _LoggerScreenState extends State<LoggerScreen> {
                             .toList(),
                       ),
                       const SizedBox(height: 12),
-                      FilterChip(
-                        label: const Text('Pain on this set'),
-                        selected: _painFlag,
-                        onSelected: (v) => setState(() => _painFlag = v),
+                      Tooltip(
+                        message: 'Stops progression for this exercise today. '
+                            'Identify persistent pain at your next check-in.',
+                        child: FilterChip(
+                          label: const Text('Pain — stop progression today'),
+                          selected: _painFlag,
+                          onSelected: (v) => setState(() => _painFlag = v),
+                        ),
                       ),
+                      if (_painFlag)
+                        Text(
+                          'Persistent pain? Identify its location and symptoms at your next check-in.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
                       if (_restSecondsLeft > 0) ...[
                         const SizedBox(height: 16),
                         Text('Rest: $_restSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
@@ -326,7 +344,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _logSet,
+                  onPressed: _finishing ? null : _logSet,
                   child: Text(isLast ? 'Log set & finish' : 'Log set'),
                 ),
               ),
@@ -335,7 +353,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => _finish(),
+                    onPressed: _finishing ? null : () => _finish(),
                     child: const Text('Finish early'),
                   ),
                 ),
@@ -399,5 +417,6 @@ class _LoggerScreenState extends State<LoggerScreen> {
         Rir.rir1 => 'RIR 1',
         Rir.rir2 => 'RIR 2',
         Rir.rir3plus => 'RIR 3+',
+        Rir.rir4plus => 'RIR 4+',
       };
 }
