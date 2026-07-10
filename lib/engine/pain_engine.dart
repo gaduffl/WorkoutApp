@@ -114,6 +114,7 @@ class PainEngine {
     required PainFlag? activeFlag,
     required bool patternScheduledToday,
     required bool sessionRanPainFree,
+    DateTime? today,
   }) {
     final next = state.clone();
 
@@ -129,7 +130,7 @@ class PainEngine {
       // (§7.2: the flag lives until it decays/clears, not per check-in) —
       // the scheduled-while-flagged counter must keep ticking.
       if (next.painFrozen && patternScheduledToday) {
-        next.sessionsScheduledWhileFlagged += 1;
+        _recordScheduledSession(next, today);
         if (next.painSeverity == PainSeverity.sharp && next.sessionsScheduledWhileFlagged >= 2) {
           next.painReentryTestOffered = true;
         }
@@ -142,7 +143,9 @@ class PainEngine {
       next.painSeverity = activeFlag.severity;
       next.painRegion = activeFlag.region;
       next.painFlaggedDate = activeFlag.flaggedDate;
+      next.painTags = Set.of(activeFlag.tags);
       next.sessionsScheduledWhileFlagged = 0;
+      next.lastPainScheduledDate = null;
       next.prePainLoad = next.currentLoad;
       next.prePainLadderStepIndex = next.ladderStepIndex;
       next.painReentryTestOffered = false;
@@ -153,11 +156,16 @@ class PainEngine {
       if (activeFlag.severity == PainSeverity.sharp) {
         next.painSeverity = PainSeverity.sharp;
       }
-      next.painRegion ??= activeFlag.region;
+      // DecisionEngine passes the most restrictive applicable active or
+      // persisted flag. Update its identifying details while never allowing
+      // a later mild tap to soften an existing sharp freeze.
+      next.painRegion = activeFlag.region;
+      next.painFlaggedDate = activeFlag.flaggedDate;
+      next.painTags.addAll(activeFlag.tags);
     }
 
     if (patternScheduledToday) {
-      next.sessionsScheduledWhileFlagged += 1;
+      _recordScheduledSession(next, today);
     }
 
     // §7.2: sharp flags substituted for >=2 scheduled sessions, then the
@@ -169,12 +177,31 @@ class PainEngine {
     return next;
   }
 
+  void _recordScheduledSession(ExerciseState state, DateTime? today) {
+    // The optional date keeps completion-only callers source-compatible;
+    // decision-time callers always provide it and therefore get idempotency.
+    if (today != null &&
+        state.lastPainScheduledDate != null &&
+        _isSameDate(state.lastPainScheduledDate!, today)) {
+      return;
+    }
+    state.sessionsScheduledWhileFlagged += 1;
+    if (today != null) {
+      state.lastPainScheduledDate = DateTime(today.year, today.month, today.day);
+    }
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   void _clearFreeze(ExerciseState s) {
     s.painFrozen = false;
     s.painSeverity = null;
     s.painRegion = null;
     s.painFlaggedDate = null;
+    s.painTags.clear();
     s.sessionsScheduledWhileFlagged = 0;
+    s.lastPainScheduledDate = null;
     s.painReentryTestOffered = false;
     s.painReentryTestPassed = false;
   }
