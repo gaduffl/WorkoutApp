@@ -11,6 +11,7 @@ import '../engine/decision_engine.dart';
 import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
+import '../engine/session_templates.dart';
 import '../integrations/onedrive_client.dart';
 import '../integrations/oura_client.dart';
 import '../notifications/notification_service.dart';
@@ -36,6 +37,10 @@ class AppController extends ChangeNotifier {
   Map<String, ExerciseState> exerciseStates = {};
   DecisionTrace? todayTrace;
   bool loading = true;
+
+  /// Serializes session persistence so a rapid double action cannot append
+  /// the same workout twice or advance the queue twice.
+  bool _completionInFlight = false;
 
   /// Sessions logged in the trailing 3 days, so the UI can reflect what's
   /// already done today and whether a second-session REHIT is worth offering.
@@ -461,8 +466,18 @@ class AppController extends ChangeNotifier {
     final loggedToday = (await repo.loadSessionLogsSince(now))
         .any((l) => l.date.year == now.year && l.date.month == now.month && l.date.day == now.day);
 
-    if (!loggedToday && _preCheckInSnapshot != null) {
-      exerciseStates = _preCheckInSnapshot!;
+    if (!loggedToday) {
+      if (_preCheckInSnapshot != null) {
+        exerciseStates = _preCheckInSnapshot!;
+      } else {
+        // The in-memory snapshot is lost across an app restart. Reconstruct
+        // the inverse of today's pain bookkeeping from persisted dates so
+        // "Redo check-in" still removes a mistaken flag/schedule tick.
+        exerciseStates = {
+          for (final entry in exerciseStates.entries)
+            entry.key: _painStateBeforeTodaysCheckIn(entry.value, now),
+        };
+      }
       await repo.saveExerciseStates(exerciseStates);
     }
     _preCheckInSnapshot = null;
@@ -480,104 +495,132 @@ class AppController extends ChangeNotifier {
     required int durationMinutes,
     bool rehitFinisherCompleted = false,
   }) async {
-    const progression = ProgressionEngine();
-    final now = today();
+    if (_completionInFlight) return;
+    _completionInFlight = true;
 
-    final byTrack = <String, List<SetLog>>{};
-    for (final s in loggedSets) {
-      if (s.isWarmup) continue;
-      byTrack.putIfAbsent(s.trackKey, () => []).add(s);
-    }
+    try {
+      const progression = ProgressionEngine();
+      final now = today();
 
-    // Pain-flag lifecycle at completion (§7.2): a pain-free session decays a
-    // mild flag; a pain-free graded re-entry test passes and resumes the
-    // pattern per §6.6 precedence. Runs BEFORE progression evaluation so the
-    // resume still sees the real untrained gap (evaluateSession stamps
-    // lastTrainedDate = today).
-    for (final entry in byTrack.entries) {
-      final state = exerciseStates[entry.key];
-      if (state == null || !state.painFrozen) continue;
-      final ranPainFree = entry.value.every((s) => !s.painFlag);
-      if (state.painReentryTestOffered && !state.painReentryTestPassed) {
-        if (ranPainFree) {
-          exerciseStates[entry.key] =
-              progression.resolvePostReentryResume(state, now, settings.equipment);
+      // Keep every set for pain safety, while progression/completion math
+      // continues to use work sets only.
+      final allSetsByTrack = <String, List<SetLog>>{};
+      final byTrack = <String, List<SetLog>>{};
+      for (final s in loggedSets) {
+        allSetsByTrack.putIfAbsent(s.trackKey, () => []).add(s);
+        if (s.isWarmup) continue;
+        byTrack.putIfAbsent(s.trackKey, () => []).add(s);
+      }
+      final painFlaggedTodayKeys = allSetsByTrack.entries
+          .where((entry) => entry.value.any((set) => set.painFlag))
+          .map((entry) => entry.key)
+          .toSet();
+
+      // Snapshot this before the pain lifecycle below can clear a mild freeze
+      // or resolve a graded re-entry. A session that began frozen records that
+      // the pattern was trained, but never feeds the progression state machine.
+      final startedPainFrozenKeys =
+          byTrack.keys.where((key) => exerciseStates[key]?.painFrozen == true).toSet();
+
+      // Pain-flag lifecycle at completion (§7.2): a pain-free session decays a
+      // mild flag; a pain-free graded re-entry test passes and resumes the
+      // pattern per §6.6 precedence. Runs BEFORE progression evaluation so the
+      // resume still sees the real untrained gap (evaluateSession stamps
+      // lastTrainedDate = today).
+      for (final entry in byTrack.entries) {
+        final state = exerciseStates[entry.key];
+        if (state == null || !state.painFrozen) continue;
+        final ranPainFree = allSetsByTrack[entry.key]!.every((s) => !s.painFlag);
+        if (state.painReentryTestOffered && !state.painReentryTestPassed) {
+          if (ranPainFree) {
+            exerciseStates[entry.key] =
+                progression.resolvePostReentryResume(state, now, settings.equipment);
+          }
+          continue;
         }
-        continue;
+        exerciseStates[entry.key] = painEngine.advanceFlagState(
+          state,
+          activeFlag: null,
+          patternScheduledToday: false,
+          sessionRanPainFree: ranPainFree,
+        );
       }
-      exerciseStates[entry.key] = painEngine.advanceFlagState(
-        state,
-        activeFlag: null,
-        patternScheduledToday: false,
-        sessionRanPainFree: ranPainFree,
-      );
-    }
 
-    // §6.6: a completed detraining re-entry session makes the ramp load the
-    // new working load — otherwise tomorrow snaps back to the pre-break load.
-    for (final e in plan.exercises) {
-      if (!e.persistLoadOnCompletion || e.loadTotal == null) continue;
-      final state = exerciseStates[e.trackKey];
-      if (state == null || !byTrack.containsKey(e.trackKey)) continue;
-      final next = state.clone()..currentLoad = e.loadTotal!;
-      exerciseStates[e.trackKey] = next;
-    }
-
-    // §12 travel mode: bodyweight variants keep the pattern "trained"
-    // (so §6.6 detraining doesn't misfire on return) but never advance
-    // the load-based state machine.
-    final travelKeys = plan.exercises.where((e) => e.isTravel).map((e) => e.trackKey).toSet();
-
-    for (final entry in byTrack.entries) {
-      final state = exerciseStates[entry.key];
-      if (state == null) continue;
-      if (travelKeys.contains(entry.key)) {
-        exerciseStates[entry.key] = state.clone()..lastTrainedDate = now;
-        continue;
+      // §6.6: a completed detraining re-entry session makes the ramp load the
+      // new working load — otherwise tomorrow snaps back to the pre-break load.
+      for (final e in plan.exercises) {
+        if (!e.persistLoadOnCompletion || e.loadTotal == null) continue;
+        if (startedPainFrozenKeys.contains(e.trackKey) || painFlaggedTodayKeys.contains(e.trackKey)) continue;
+        final state = exerciseStates[e.trackKey];
+        if (state == null || !byTrack.containsKey(e.trackKey)) continue;
+        final next = state.clone()..currentLoad = e.loadTotal!;
+        exerciseStates[e.trackKey] = next;
       }
-      exerciseStates[entry.key] = progression.evaluateSession(
-        state,
-        entry.value,
-        equipmentConfig: settings.equipment,
-        sessionDate: now,
+
+      // §12 travel mode: bodyweight variants keep the pattern "trained"
+      // (so §6.6 detraining doesn't misfire on return) but never advance
+      // the load-based state machine.
+      final travelKeys = plan.exercises.where((e) => e.isTravel).map((e) => e.trackKey).toSet();
+      final progressionEligibility = <String, bool>{
+        for (final e in plan.exercises.where((e) => !e.isWarmup)) e.trackKey: e.progressionEligible,
+      };
+
+      for (final entry in byTrack.entries) {
+        final state = exerciseStates[entry.key];
+        if (state == null) continue;
+        if (travelKeys.contains(entry.key) ||
+            startedPainFrozenKeys.contains(entry.key) ||
+            painFlaggedTodayKeys.contains(entry.key) ||
+            progressionEligibility[entry.key] != true) {
+          exerciseStates[entry.key] = state.clone()..lastTrainedDate = now;
+          continue;
+        }
+        exerciseStates[entry.key] = progression.evaluateSession(
+          state,
+          entry.value,
+          equipmentConfig: settings.equipment,
+          sessionDate: now,
+        );
+      }
+      await repo.saveExerciseStates(exerciseStates);
+
+      final def = sessionTypes[plan.sessionId]!;
+      final countsAs = <FloorCategory>{};
+      if (def.countsAs.contains(FloorCategory.strength)) countsAs.add(FloorCategory.strength);
+      if (plan.sessionId == SessionTypeId.s2) {
+        if (rehitFinisherCompleted) countsAs.add(FloorCategory.intensity);
+      } else if (def.countsAs.contains(FloorCategory.intensity)) {
+        countsAs.add(FloorCategory.intensity);
+      }
+      if (def.countsAs.contains(FloorCategory.aerobic)) countsAs.add(FloorCategory.aerobic);
+
+      final log = SessionLog(
+        id: '${now.toIso8601String()}-${plan.sessionId.name}-${DateTime.now().microsecondsSinceEpoch}',
+        templateId: plan.sessionId,
+        tier: plan.tier,
+        date: now,
+        setLogs: loggedSets,
+        plannedWorkSets: plan.plannedWorkSets,
+        completedWorkSets: loggedSets.where((s) => !s.isWarmup).length,
+        durationMinutes: durationMinutes,
+        countsAs: countsAs,
+        rehitFinisherCompleted: rehitFinisherCompleted,
       );
-    }
-    await repo.saveExerciseStates(exerciseStates);
+      await repo.saveSessionLog(log);
+      _recentLogs = [..._recentLogs, log];
 
-    final def = sessionTypes[plan.sessionId]!;
-    final countsAs = <FloorCategory>{};
-    if (def.countsAs.contains(FloorCategory.strength)) countsAs.add(FloorCategory.strength);
-    if (plan.sessionId == SessionTypeId.s2) {
-      if (rehitFinisherCompleted) countsAs.add(FloorCategory.intensity);
-    } else if (def.countsAs.contains(FloorCategory.intensity)) {
-      countsAs.add(FloorCategory.intensity);
-    }
-    if (def.countsAs.contains(FloorCategory.aerobic)) countsAs.add(FloorCategory.aerobic);
+      if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
+        queueState = const QueueEngine().advance(queueState, plan.sessionId);
+        await repo.saveQueueState(queueState);
+      }
+      notifyListeners();
 
-    final log = SessionLog(
-      id: '${now.toIso8601String()}-${plan.sessionId.name}-${DateTime.now().microsecondsSinceEpoch}',
-      templateId: plan.sessionId,
-      tier: plan.tier,
-      date: now,
-      setLogs: loggedSets,
-      plannedWorkSets: plan.plannedWorkSets,
-      completedWorkSets: loggedSets.where((s) => !s.isWarmup).length,
-      durationMinutes: durationMinutes,
-      countsAs: countsAs,
-      rehitFinisherCompleted: rehitFinisherCompleted,
-    );
-    await repo.saveSessionLog(log);
-    _recentLogs = [..._recentLogs, log];
-
-    if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
-      queueState = const QueueEngine().advance(queueState, plan.sessionId);
-      await repo.saveQueueState(queueState);
-    }
-    notifyListeners();
-
-    // Auto-backup after a logged session, if enabled (best-effort).
-    if (settings.oneDrive.autoBackup && settings.oneDrive.isConnected) {
-      unawaited(backupToOneDrive(silent: true));
+      // Auto-backup after a logged session, if enabled (best-effort).
+      if (settings.oneDrive.autoBackup && settings.oneDrive.isConnected) {
+        unawaited(backupToOneDrive(silent: true));
+      }
+    } finally {
+      _completionInFlight = false;
     }
   }
 
@@ -585,20 +628,36 @@ class AppController extends ChangeNotifier {
   /// per-set logging — either the day's primary cardio pick or an added
   /// second-session REHIT. Reuses [completeSession] with an empty set list
   /// (plannedWorkSets == 0 → completionRatio 1.0 → counts & credits).
-  Future<void> logCardioSession(SessionTypeId id, {required int durationMinutes}) async {
+  Future<void> logCardioSession(
+    SessionTypeId id, {
+    required int durationMinutes,
+    SessionPlan? plan,
+  }) async {
+    if (durationMinutes <= 0) {
+      throw ArgumentError.value(durationMinutes, 'durationMinutes', 'Must be positive');
+    }
     final def = sessionTypes[id];
-    if (def == null) return;
-    final plan = SessionPlan(
-      sessionId: id,
-      sessionName: def.name,
-      tier: SessionTier.full,
-      exercises: const [],
-      estimatedDurationMin: durationMinutes,
-      // A second-session REHIT must not move the cycle pointer; S7 isn't a
-      // cycle type so advance() is already a no-op, but be explicit.
-      grantsQueueCredit: cycleOrder.contains(id),
-    );
-    await completeSession(plan, const [], durationMinutes: durationMinutes);
+    if (def == null || sessionTemplates[id]?.isCardioOnly != true) {
+      throw ArgumentError.value(id, 'id', 'Must identify a cardio-only session');
+    }
+    if (plan != null && plan.sessionId != id) {
+      throw ArgumentError.value(plan.sessionId, 'plan', 'Session ID does not match');
+    }
+
+    // Today's primary cardio plan is passed through intact so readiness/time
+    // substitutions retain their tier, duration estimate, and queue-credit
+    // decision. With no plan this is an added cardio session (currently the
+    // second-session REHIT affordance).
+    final effectivePlan = plan ??
+        SessionPlan(
+          sessionId: id,
+          sessionName: def.name,
+          tier: SessionTier.full,
+          exercises: const [],
+          estimatedDurationMin: durationMinutes,
+          grantsQueueCredit: cycleOrder.contains(id),
+        );
+    await completeSession(effectivePlan, const [], durationMinutes: durationMinutes);
   }
 
   /// Marks a pain re-entry test (§7.2, 50% x 8) as passed pain-free, then
@@ -611,6 +670,51 @@ class AppController extends ChangeNotifier {
     await repo.saveExerciseState(next);
     notifyListeners();
   }
+
+  /// Explicit user override for a pain freeze that is no longer relevant.
+  /// This clears only pain-protocol metadata; progression, load, regression,
+  /// and deload state remain exactly where they were.
+  Future<void> clearPainFreeze(String trackKey) async {
+    final state = exerciseStates[trackKey];
+    if (state == null || !state.painFrozen) return;
+    final next = _withoutPainFreeze(state);
+    exerciseStates[trackKey] = next;
+    await repo.saveExerciseState(next);
+    notifyListeners();
+  }
+
+  ExerciseState _painStateBeforeTodaysCheckIn(ExerciseState state, DateTime date) {
+    if (state.painFrozen &&
+        state.painFlaggedDate != null &&
+        _isSameDate(state.painFlaggedDate!, date)) {
+      return _withoutPainFreeze(state);
+    }
+    if (state.painFrozen &&
+        state.lastPainScheduledDate != null &&
+        _isSameDate(state.lastPainScheduledDate!, date)) {
+      final next = state.clone()
+        ..sessionsScheduledWhileFlagged = max(0, state.sessionsScheduledWhileFlagged - 1)
+        ..lastPainScheduledDate = null;
+      if (next.sessionsScheduledWhileFlagged < 2) {
+        next.painReentryTestOffered = false;
+      }
+      return next;
+    }
+    return state;
+  }
+
+  ExerciseState _withoutPainFreeze(ExerciseState state) => state.clone()
+    ..painFrozen = false
+    ..painSeverity = null
+    ..painRegion = null
+    ..painTags = {}
+    ..painFlaggedDate = null
+    ..sessionsScheduledWhileFlagged = 0
+    ..lastPainScheduledDate = null
+    ..prePainLoad = null
+    ..prePainLadderStepIndex = null
+    ..painReentryTestOffered = false
+    ..painReentryTestPassed = false;
 
   Future<void> triggerManualDeload() async {
     exerciseStates = {
