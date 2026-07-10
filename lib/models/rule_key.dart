@@ -22,6 +22,7 @@ enum RuleKey {
   painSubMild,
   painSubSharp,
   painFreeze,
+  painMedicalEscalation,
   painReentryTest,
   deloadActive,
   detrainAdjust,
@@ -39,6 +40,7 @@ extension RuleKeyCode on RuleKey {
         RuleKey.painSubMild ||
         RuleKey.painSubSharp ||
         RuleKey.painFreeze ||
+        RuleKey.painMedicalEscalation ||
         RuleKey.painReentryTest ||
         RuleKey.deloadActive ||
         RuleKey.detrainAdjust ||
@@ -93,6 +95,8 @@ extension RuleKeyCode on RuleKey {
         return 'PAIN_SUB_${p}_SHARP';
       case RuleKey.painFreeze:
         return 'PAIN_FREEZE_$p';
+      case RuleKey.painMedicalEscalation:
+        return 'PAIN_MEDICAL_ESCALATION_$p';
       case RuleKey.painReentryTest:
         return 'PAIN_REENTRY_TEST_$p';
       case RuleKey.deloadActive:
