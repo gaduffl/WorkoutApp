@@ -106,7 +106,20 @@ class DecisionEngine {
     // Pain-lifecycle bookkeeping: tick "scheduled while flagged" counters
     // regardless of what gets picked below (§7.2). Patched at the very end
     // once we know which patterns were actually scheduled.
-    final patchedStates = Map<String, ExerciseState>.from(input.exerciseStates);
+    var patchedStates = Map<String, ExerciseState>.from(input.exerciseStates);
+
+    // §6.3 automatic global deload: the current readiness day participates
+    // in the rolling seven-day window. Apply this before any rest short
+    // circuit so a third RED day still persists the deload state even when it
+    // is also the second consecutive RED day.
+    final automaticGlobalDeload =
+        _redDaysInRollingWindow(input, recovery.bucket, today) >= 3;
+    if (automaticGlobalDeload) {
+      patchedStates = {
+        for (final state in progressionEngine.forceGlobalDeload(patchedStates.values.toList()))
+          state.trackKey: state,
+      };
+    }
 
     // --- Step 1: rest-day short-circuit ---
     if (checkin.timeMinutes == 0) {
@@ -165,12 +178,6 @@ class DecisionEngine {
     );
     final bothHardForced =
         strengthPressure.level == FloorPressureLevel.hard && intensityPressure.level == FloorPressureLevel.hard;
-    if (strengthPressure.level == FloorPressureLevel.hard) fired.add(const FiredRule(RuleKey.floorForceStrength));
-    if (!bothHardForced && intensityPressure.level == FloorPressureLevel.hard) {
-      fired.add(const FiredRule(RuleKey.floorForceIntensity));
-    }
-    if (strengthPressure.level == FloorPressureLevel.soft) fired.add(const FiredRule(RuleKey.floorSoftBoost, params: {'category': 'strength'}));
-    if (intensityPressure.level == FloorPressureLevel.soft) fired.add(const FiredRule(RuleKey.floorSoftBoost, params: {'category': 'intensity'}));
     if (bothHardForced) fired.add(const FiredRule(RuleKey.s7SecondSessionOffer));
 
     // --- Step 4: candidate scoring ---
@@ -190,7 +197,8 @@ class DecisionEngine {
         final dist = queueEngine.cycleDistance(id, input.queueState);
         base = 50 - 10 * dist;
       } else if (id == SessionTypeId.s6) {
-        base = s6ConditionMet ? 60 : 10;
+        base = 10;
+        if (s6ConditionMet) terms['weekendPriority'] = 50;
       } else {
         base = 10; // S7
       }
@@ -243,7 +251,6 @@ class DecisionEngine {
         winner.terms.remove('recencyBoostCandidate');
         winner.terms['recencyBoost'] = 15;
         winner.score += 15;
-        fired.add(FiredRule(RuleKey.recencyBoost, pattern: mostOverdue.name));
       }
       for (final s in scored) {
         s.terms.remove('recencyBoostCandidate');
@@ -281,23 +288,23 @@ class DecisionEngine {
       }
     }
 
-    // QUEUE_NEXT only when the plan really is "next in queue" — a forced or
-    // weekend-rule pick is explained by its own rule key instead.
-    if (winner.id == input.queueState.pointer &&
-        strengthPressure.level != FloorPressureLevel.hard &&
-        intensityPressure.level != FloorPressureLevel.hard) {
-      fired.add(FiredRule(RuleKey.queueNext, params: {'session': winner.def.name}));
-    }
-
-    // §7.1: sharp hip pain forces a swap away from a leg-heavy winner - but
-    // not when the user just explicitly chose this alternative themselves.
+    // §7.1: sharp hip pain forces a swap away from a leg-heavy winner,
+    // including a manually forced leg-heavy alternative.
     var chosen = winner;
-    if (input.forcedSessionId == null && painEngine.hipSharpActive(checkin.pain) && chosen.def.legHeavy) {
+    if (painEngine.hipSharpActive(checkin.pain) && chosen.def.legHeavy) {
       final alt = scored.firstWhere((s) => !s.def.legHeavy, orElse: () => chosen);
       if (!identical(alt, chosen)) {
         chosen = alt;
         fired.add(const FiredRule(RuleKey.painSubSharp, pattern: 'HIP_SESSION_SWAP'));
       }
+    }
+    if (input.forcedSessionId == null &&
+        winner.id == SessionTypeId.s6 &&
+        s6ConditionMet) {
+      fired.add(const FiredRule(RuleKey.s6WeekendRule));
+    }
+    if (chosen.terms.containsKey('recencyBoost') && mostOverdue != null) {
+      fired.add(FiredRule(RuleKey.recencyBoost, pattern: mostOverdue.name));
     }
 
     // --- Step 6/7: readiness modulation + time compression (baseline first) ---
@@ -312,14 +319,22 @@ class DecisionEngine {
     if (checkin.timeMinutes != 60 && chosen.tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin == 60) {
       fired.add(const FiredRule(RuleKey.timeCompress60_35));
     }
-    if (checkin.timeMinutes == 20) {
+    if (checkin.timeMinutes == 20 &&
+        chosen.def.cycleMember &&
+        chosen.def.countsAs.contains(FloorCategory.strength) &&
+        chosen.def.isCompressible) {
       fired.add(const FiredRule(RuleKey.timeCompress35_20));
     }
 
     if (effectiveSessionId == SessionTypeId.s3 && checkin.timeMinutes < 35) {
       effectiveSessionId = SessionTypeId.s7;
       fired.add(const FiredRule(RuleKey.s7TimeSub));
-    } else if (recovery.bucket == ReadinessBucket.yellow) {
+    }
+
+    // Readiness modulation evaluates the time-adjusted effective type. In
+    // particular, RED S3@20 first becomes S7 for feasibility, then becomes
+    // S6 because high-intensity REHIT is not a RED-day prescription.
+    if (recovery.bucket == ReadinessBucket.yellow) {
       if (effectiveSessionId == SessionTypeId.s1 ||
           effectiveSessionId == SessionTypeId.s2 ||
           effectiveSessionId == SessionTypeId.s4 ||
@@ -336,10 +351,14 @@ class DecisionEngine {
       if (effectiveSessionId == SessionTypeId.s3 || effectiveSessionId == SessionTypeId.s7) {
         effectiveSessionId = SessionTypeId.s6;
         fired.add(const FiredRule(RuleKey.redSwapZ2));
+      } else if (effectiveSessionId == SessionTypeId.s6) {
+        // Zone 2 is already the recovery-safe cardio outcome. Keep it as-is;
+        // strength technique load/set modifiers have no meaning here.
+        fired.add(const FiredRule(RuleKey.redSwapZ2));
       } else {
         setMultiplier = 0.5;
         loadMultiplier = 0.6;
-        rirFloor = Rir.rir3plus;
+        rirFloor = Rir.rir4plus;
         progressionEligible = false;
         redTechnique = true; // §5 Step 6: a swap — the queue item stays pending
         fired.add(const FiredRule(RuleKey.redSwapTechnique));
@@ -348,6 +367,50 @@ class DecisionEngine {
 
     if (volumeCutForLegHeavyEscape) {
       setMultiplier *= 0.8;
+    }
+
+    // Selection rationale must describe the plan that survives forced
+    // selection, pain protection, and readiness/time substitutions. Pressure
+    // still contributes to every candidate's score even when its rule is not
+    // emitted for the final plan.
+    final effectiveCountsAs = sessionTypes[effectiveSessionId]!.countsAs;
+    if (strengthPressure.level == FloorPressureLevel.hard &&
+        effectiveCountsAs.contains(FloorCategory.strength)) {
+      fired.add(const FiredRule(RuleKey.floorForceStrength));
+    }
+    if (!bothHardForced &&
+        intensityPressure.level == FloorPressureLevel.hard &&
+        effectiveCountsAs.contains(FloorCategory.intensity)) {
+      fired.add(const FiredRule(RuleKey.floorForceIntensity));
+    }
+    if (strengthPressure.level == FloorPressureLevel.soft &&
+        effectiveCountsAs.contains(FloorCategory.strength)) {
+      fired.add(const FiredRule(
+        RuleKey.floorSoftBoost,
+        params: {'category': 'strength'},
+      ));
+    }
+    if (intensityPressure.level == FloorPressureLevel.soft &&
+        effectiveCountsAs.contains(FloorCategory.intensity)) {
+      fired.add(const FiredRule(
+        RuleKey.floorSoftBoost,
+        params: {'category': 'intensity'},
+      ));
+    }
+    // QUEUE_NEXT only describes an unchanged, credit-bearing natural cycle
+    // pick. Forced, pain-swapped, readiness-swapped, and time-substituted
+    // plans are explained by their own rule keys.
+    if (input.forcedSessionId == null &&
+        chosen.id == input.queueState.pointer &&
+        chosen.id == effectiveSessionId &&
+        !redTechnique &&
+        cycleOrder.contains(chosen.id) &&
+        strengthPressure.level != FloorPressureLevel.hard &&
+        intensityPressure.level != FloorPressureLevel.hard) {
+      fired.add(FiredRule(
+        RuleKey.queueNext,
+        params: {'session': chosen.def.name},
+      ));
     }
 
     // --- Plan assembly (Steps 7-9) ---
@@ -378,33 +441,72 @@ class DecisionEngine {
       // block - otherwise the plan physically cannot fit the slot.
       final compress60to35 =
           tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin >= 60;
-      final slots = template.slotsForTier(tier, dropAccessories: compress60to35);
+      var slots = template.slotsForTier(tier, dropAccessories: compress60to35);
+      if (input.settings.travelMode) {
+        var travelViable = slots
+            .where((slot) => slot.$3 == null && travelSteps.containsKey(slot.$1))
+            .toList();
+        if (travelViable.isEmpty) {
+          final fallback = [
+            for (final pattern in template.compoundPatterns)
+              (pattern, true, null as SubstituteExercise?),
+            for (final pattern in template.accessoryPatterns)
+              (pattern, false, null as SubstituteExercise?),
+          ].where((slot) => travelSteps.containsKey(slot.$1)).toList();
+          travelViable = tier == SessionTier.compressed
+              ? fallback.take(2).map((slot) => (slot.$1, true, slot.$3)).toList()
+              : fallback;
+        }
+        slots = travelViable;
+      }
       for (final (pattern, isCompound, namedExercise) in slots) {
         scheduledPatterns.add(pattern);
         final baseSets = template.setsFor(isCompound, tier);
         final cutSets = (baseSets * setMultiplier).floor().clamp(baseSets == 0 ? 0 : 1, baseSets);
 
         final trackKey = namedExercise?.trackKey ?? pattern.name;
-        var state = patchedStates[trackKey] ?? ExerciseState(trackKey: trackKey, pattern: pattern);
+        final stateExisted = patchedStates.containsKey(trackKey);
+        var state = patchedStates[trackKey] ??
+            ExerciseState(trackKey: trackKey, pattern: pattern);
+        if (automaticGlobalDeload && !stateExisted) {
+          state = progressionEngine.forceGlobalDeload([state]).single;
+        }
 
         // Pain flag lifecycle for this pattern.
-        final todayFlag = _flagFor(checkin.pain, pattern);
+        final persistedFlag = state.painFrozen && state.painRegion != null
+            ? PainFlag(
+                region: state.painRegion!,
+                severity: state.painSeverity ?? PainSeverity.sharp,
+                flaggedDate: state.painFlaggedDate ?? today,
+                tags: state.painTags,
+              )
+            : null;
+        final effectiveFlag = _flagFor(
+          [
+            ...checkin.pain,
+            if (persistedFlag != null) persistedFlag,
+          ],
+          pattern,
+          today,
+        );
         state = painEngine.advanceFlagState(
           state,
-          activeFlag: todayFlag,
+          activeFlag: effectiveFlag,
           patternScheduledToday: true,
           sessionRanPainFree: false,
+          today: today,
         );
         patchedStates[trackKey] = state;
 
         // Effective flag = today's tap OR the persisted freeze from a prior
         // day (§7.2: flags decay by rule, not by the user re-tapping the map).
-        var flag = todayFlag;
+        var flag = effectiveFlag;
         if (flag == null && state.painFrozen && state.painRegion != null) {
           flag = PainFlag(
             region: state.painRegion!,
             severity: state.painSeverity ?? PainSeverity.sharp,
             flaggedDate: state.painFlaggedDate ?? today,
+            tags: state.painTags,
           );
         }
         final reentryPending = state.painReentryTestOffered && !state.painReentryTestPassed;
@@ -413,7 +515,10 @@ class DecisionEngine {
         // pattern stays off the plan until the flag is cleared manually.
         if (flag != null && painEngine.isEscalated(flag, today)) {
           fired.add(FiredRule(RuleKey.painFreeze, pattern: pattern.name));
-          fired.add(FiredRule(RuleKey.painSubSharp, pattern: pattern.name));
+          fired.add(FiredRule(
+            RuleKey.painMedicalEscalation,
+            pattern: pattern.name,
+          ));
           continue;
         }
 
@@ -442,12 +547,45 @@ class DecisionEngine {
         var exerciseLoadMultiplier = loadMultiplier;
         var exerciseRir = rirFloor;
         var persistLoad = false;
+        var painReentryPrescription = false;
+        var capLadderJumpFired = false;
         if (action.kind == PainActionKind.substituteNamed && action.substitute != null) {
           final sub = action.substitute!;
-          final subState = patchedStates[sub.trackKey] ?? ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
+          final subStateExisted = patchedStates.containsKey(sub.trackKey);
+          var subState = patchedStates[sub.trackKey] ??
+              ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
+          if (automaticGlobalDeload && !subStateExisted) {
+            subState = progressionEngine.forceGlobalDeload([subState]).single;
+          }
           patchedStates[sub.trackKey] = subState;
           substitutedFrom = pattern.name;
-          prescriptionState = subState;
+          final resolution = progressionEngine.resolveTodaysPrescription(
+            subState,
+            today,
+            input.settings.equipment,
+          );
+          prescriptionState = resolution.state;
+          if (resolution.detrainFired) {
+            fired.add(FiredRule(
+              RuleKey.detrainAdjust,
+              pattern: sub.pattern.name,
+            ));
+            persistLoad = loadMultiplier == 1.0;
+          }
+          if (resolution.deloadActive) {
+            exerciseLoadMultiplier *= 0.6;
+            exerciseSets = exerciseSets == 0
+                ? 0
+                : (exerciseSets * 0.5)
+                    .floor()
+                    .clamp(1, exerciseSets)
+                    .toInt();
+            exerciseRir = Rir.rir4plus;
+            fired.add(FiredRule(
+              RuleKey.deloadActive,
+              pattern: sub.pattern.name,
+            ));
+          }
           fired.add(const FiredRule(RuleKey.onboardSubstitute));
         } else {
           final resolution = progressionEngine.resolveTodaysPrescription(state, today, input.settings.equipment);
@@ -458,15 +596,27 @@ class DecisionEngine {
             persistLoad = loadMultiplier == 1.0;
           }
           if (resolution.painReentryTestFired) {
+            // The graded test is a deliberately fixed prescription: exactly
+            // 1 x 8 at the resolved 50% load, unaffected by readiness volume
+            // or load multipliers.
+            exerciseSets = 1;
+            exerciseLoadMultiplier = 1.0;
+            exerciseRir = Rir.rir4plus;
+            painReentryPrescription = true;
             fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
           }
           if (resolution.deloadActive) {
             // §6.5 deload parameters: 60% load, 50% of sets, RIR >= 4.
             exerciseLoadMultiplier *= 0.6;
             exerciseSets = exerciseSets == 0 ? 0 : (exerciseSets * 0.5).floor().clamp(1, exerciseSets).toInt();
-            exerciseRir = Rir.rir3plus;
+            exerciseRir = Rir.rir4plus;
             fired.add(FiredRule(RuleKey.deloadActive, pattern: pattern.name));
           }
+
+          capLadderJumpFired = state.awaitingUndershootCheck &&
+              !resolution.detrainFired &&
+              !resolution.painReentryTestFired &&
+              !resolution.deloadActive;
 
           if (action.kind == PainActionKind.reduceLoadOne) {
             prescriptionState = _reduceLoadOne(prescriptionState, input.settings.equipment);
@@ -484,6 +634,10 @@ class DecisionEngine {
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
           persistLoadOnCompletion: persistLoad,
+          repRangeOverride: painReentryPrescription ? (8, 8) : null,
+          instruction: painReentryPrescription
+              ? 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
+              : null,
         );
 
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
@@ -501,6 +655,7 @@ class DecisionEngine {
               rirTarget: planned.rirTarget,
               substitutedFrom: substitutedFrom,
               instruction: 'Travel mode - bodyweight variant, add reps/ROM',
+              progressionEligible: planned.progressionEligible,
               isTravel: true,
             );
           }
@@ -528,7 +683,7 @@ class DecisionEngine {
         }
         exercises.add(planned);
 
-        if (prescriptionState.ladderStepIndex != state.ladderStepIndex && action.kind == PainActionKind.none) {
+        if (capLadderJumpFired && action.kind == PainActionKind.none) {
           fired.add(FiredRule(RuleKey.capLadderJump, pattern: pattern.name));
         }
       }
@@ -553,12 +708,37 @@ class DecisionEngine {
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
     final queueCreditType = redTechnique ? null : _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
+    if (template != null &&
+        !template.isCardioOnly &&
+        exercises.where((exercise) => !exercise.isWarmup).fold<int>(
+              0,
+              (sum, exercise) => sum + exercise.sets,
+            ) ==
+            0) {
+      return DecisionEngineOutput(
+        DecisionTrace(
+          date: today,
+          checkin: checkin,
+          recovery: recoveryTrace,
+          candidates: candidatesTrace,
+          firedRules: fired,
+          plan: null,
+          restReason: 'No pain-free work is available for this session',
+          queue: queueTraceBase,
+        ),
+        patchedStates,
+      );
+    }
+    final estimatedDuration = template?.isCardioOnly == true &&
+            planSessionDef.fullDurationMin < checkin.timeMinutes
+        ? planSessionDef.fullDurationMin
+        : checkin.timeMinutes;
     final plan = SessionPlan(
       sessionId: effectiveSessionId,
       sessionName: planSessionDef.name,
       tier: tier,
       exercises: exercises,
-      estimatedDurationMin: checkin.timeMinutes,
+      estimatedDurationMin: estimatedDuration,
       grantsQueueCredit: queueCreditType != null,
     );
 
@@ -585,12 +765,21 @@ class DecisionEngine {
   /// S3->S7 time substitution never do (§2.1, §5 Step 6).
   SessionTypeId? _queueCreditType(SessionTypeId chosenId, SessionTypeId effectiveId, ReadinessBucket bucket) {
     if (chosenId != effectiveId) return null;
+    if (!cycleOrder.contains(chosenId)) return null;
     return chosenId;
   }
 
   List<SessionTypeId> _feasibleCandidates(int time) {
     if (time == 20) {
-      return [SessionTypeId.s1, SessionTypeId.s5, SessionTypeId.s7];
+      // S3 remains a conceptual candidate so its queue priority and floor
+      // pressure are resolved first; Step 6 then substitutes the feasible
+      // short REHIT plan without granting S3 queue credit.
+      return [
+        SessionTypeId.s1,
+        SessionTypeId.s3,
+        SessionTypeId.s5,
+        SessionTypeId.s7,
+      ];
     }
     final list = <SessionTypeId>[];
     for (final t in sessionTypes.values) {
@@ -626,7 +815,8 @@ class DecisionEngine {
       if (s.trackKey.startsWith('sub:')) continue;
       if (s.pattern.patternClass == PatternClass.kneeHealth) continue;
       final days = s.daysUntrained(today);
-      if (days > bestDays) {
+      if (days > bestDays ||
+          (days == bestDays && best != null && s.pattern.index < best.index)) {
         bestDays = days;
         best = s.pattern;
       }
@@ -634,11 +824,39 @@ class DecisionEngine {
     return best;
   }
 
-  PainFlag? _flagFor(List<PainFlag> pain, MovementPattern pattern) {
-    for (final f in pain) {
-      if (f.region.affectedPatterns.contains(pattern)) return f;
-    }
-    return null;
+  PainFlag? _flagFor(List<PainFlag> pain, MovementPattern pattern, DateTime today) {
+    final applicable = pain
+        .where((flag) => flag.region.affectedPatterns.contains(pattern))
+        .toList();
+    if (applicable.isEmpty) return null;
+    applicable.sort((a, b) {
+      final byRestriction =
+          _painRestrictionRank(b, pattern, today).compareTo(_painRestrictionRank(a, pattern, today));
+      if (byRestriction != 0) return byRestriction;
+      final byRegion = a.region.index.compareTo(b.region.index);
+      if (byRegion != 0) return byRegion;
+      final byDate = a.flaggedDate.compareTo(b.flaggedDate);
+      if (byDate != 0) return byDate;
+      return a.severity.index.compareTo(b.severity.index);
+    });
+    return applicable.first;
+  }
+
+  int _painRestrictionRank(
+    PainFlag flag,
+    MovementPattern pattern,
+    DateTime today,
+  ) {
+    if (painEngine.isEscalated(flag, today)) return 100;
+    final action = painEngine.resolve(flag.region, flag.severity, pattern);
+    final actionRank = switch (action.kind) {
+      PainActionKind.removePattern => 4,
+      PainActionKind.substituteNamed => 3,
+      PainActionKind.regressLadderAndReduce => 2,
+      PainActionKind.reduceLoadOne => 1,
+      PainActionKind.none => 0,
+    };
+    return actionRank * 10 + (flag.severity == PainSeverity.sharp ? 1 : 0);
   }
 
   ExerciseState _reduceLoadOne(ExerciseState state, EquipmentConfig cfg) {
@@ -701,12 +919,15 @@ class DecisionEngine {
     String? substitutedFrom,
     required bool progressionEligible,
     bool persistLoadOnCompletion = false,
+    (int, int)? repRangeOverride,
+    String? instruction,
   }) {
     final substitute = substituteRegistry[state.trackKey];
     final step = substitute != null
         ? LadderStep(name: substitute.name, dumbbells: substitute.dumbbells)
         : ladders[state.pattern]!.steps[state.ladderStepIndex.clamp(0, ladders[state.pattern]!.steps.length - 1)];
-    final repRange = state.trackKey.startsWith('sub:') ? (8, 15) : state.pattern.repRange;
+    final repRange = repRangeOverride ??
+        (state.trackKey.startsWith('sub:') ? (8, 15) : state.pattern.repRange);
 
     double? loadTotal;
     String? loadDisplay;
@@ -738,8 +959,23 @@ class DecisionEngine {
       loadSteps: loadSteps,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
+      instruction: instruction,
       persistLoadOnCompletion: persistLoadOnCompletion,
+      progressionEligible: progressionEligible,
     );
+  }
+
+  int _redDaysInRollingWindow(
+    DecisionEngineInput input,
+    ReadinessBucket currentBucket,
+    DateTime today,
+  ) {
+    var redDays = currentBucket == ReadinessBucket.red ? 1 : 0;
+    for (var offset = 1; offset < 7; offset++) {
+      final date = today.subtract(Duration(days: offset));
+      if (_bucketForDate(input, date) == ReadinessBucket.red) redDays += 1;
+    }
+    return redDays;
   }
 
   ReadinessBucket? _bucketForDate(DecisionEngineInput input, DateTime date) {
