@@ -55,21 +55,77 @@ void main() {
       var state = ExerciseState(trackKey: 'hinge', pattern: MovementPattern.hinge, currentLoad: 90);
       final flag = PainFlag(region: BodyRegion.lowerBack, severity: PainSeverity.sharp, flaggedDate: today);
 
-      state = engine.advanceFlagState(state, activeFlag: flag, patternScheduledToday: true, sessionRanPainFree: false);
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: flag,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today,
+      );
       expect(state.painReentryTestOffered, isFalse);
 
-      state = engine.advanceFlagState(state, activeFlag: flag, patternScheduledToday: true, sessionRanPainFree: false);
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: flag,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today.add(const Duration(days: 1)),
+      );
       expect(state.painReentryTestOffered, isTrue);
       expect(state.prePainLoad, 90);
+    });
+
+    test('same-day recommendation recomputations increment the counter only once', () {
+      var state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 90,
+      );
+      final flag = PainFlag(
+        region: BodyRegion.lowerBack,
+        severity: PainSeverity.sharp,
+        flaggedDate: today,
+      );
+
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: flag,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today,
+      );
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: flag,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today.add(const Duration(hours: 8)),
+      );
+
+      expect(state.sessionsScheduledWhileFlagged, 1);
+      expect(state.painReentryTestOffered, isFalse);
+      expect(state.lastPainScheduledDate, DateTime(2026, 1, 20));
     });
 
     test('mild flag decays after 1 pain-free session', () {
       var state = ExerciseState(trackKey: 'squat', pattern: MovementPattern.squat);
       final flag = PainFlag(region: BodyRegion.kneeLeft, severity: PainSeverity.mild, flaggedDate: today);
-      state = engine.advanceFlagState(state, activeFlag: flag, patternScheduledToday: true, sessionRanPainFree: false);
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: flag,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today,
+      );
       expect(state.painFrozen, isTrue);
 
-      state = engine.advanceFlagState(state, activeFlag: null, patternScheduledToday: true, sessionRanPainFree: true);
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: null,
+        patternScheduledToday: true,
+        sessionRanPainFree: true,
+        today: today.add(const Duration(days: 1)),
+      );
       expect(state.painFrozen, isFalse);
     });
   });
