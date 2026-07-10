@@ -95,15 +95,26 @@ class ProgressionEngine {
       return _handleDeloadSession(next, equipmentConfig);
     }
 
+    // The logger is authoritative for a regular session's working load. A
+    // user may adjust the prescription before or between sets, so progression
+    // must start from the most recently completed work set rather than stale
+    // planned state. Bodyweight steps have no persisted load dimension, while
+    // backpack-loaded steps are intentionally free-entry.
+    final step = ladderStepFor(next);
+    if (step.backpackLoaded || _achievableSet(step, equipmentConfig) != null) {
+      next.currentLoad = workSets.last.weight;
+    }
+
     final (low, high) = repRangeFor(next);
     final anyBelowRange = workSets.any((s) => s.reps < low);
     final anyRir0 = workSets.any((s) => s.rir == Rir.rir0);
-    final allAtTopHighRir =
-        workSets.every((s) => s.reps >= high && (s.rir == Rir.rir2 || s.rir == Rir.rir3plus));
+    final allAtTopHighRir = workSets.every((s) =>
+        s.reps >= high &&
+        (s.rir == Rir.rir2 || s.rir == Rir.rir3plus || s.rir == Rir.rir4plus));
 
     if (next.awaitingUndershootCheck) {
       next.awaitingUndershootCheck = false;
-      if (workSets.every((s) => s.rir == Rir.rir3plus)) {
+      if (workSets.every((s) => s.rir == Rir.rir3plus || s.rir == Rir.rir4plus)) {
         _applyOneIncrement(next, equipmentConfig);
         next.status = ExerciseStatus.progress;
         next.consecutiveHoldCount = 0;
@@ -187,6 +198,12 @@ class ProgressionEngine {
       s.microStepStage += 1; // tempo -> pause -> deficit
       return;
     }
+    // Named substitutes/accessories deliberately have no movement ladder.
+    // Once their load and micro-progressions are exhausted, keep the named
+    // exercise capped instead of falling through to the underlying pattern's
+    // ladder (which can change an irrelevant index and reset the load).
+    if (substituteRegistry.containsKey(s.trackKey)) return;
+
     final ladder = ladders[s.pattern]!;
     if (s.ladderStepIndex < ladder.steps.length - 1) {
       s.ladderStepIndex += 1;
@@ -217,6 +234,10 @@ class ProgressionEngine {
     s.preDeloadLadderStepIndex = s.ladderStepIndex;
     s.status = ExerciseStatus.deload;
     s.deloadSessionsRemaining = 2;
+    // Consume the regression window that triggered this deload. Leaving the
+    // same dates in place would immediately start another deload on the first
+    // normal session after the two-session deload finishes.
+    s.regressionDates.clear();
   }
 
   /// §6.5: deload parameters (60% load, 50% sets, RIR>=4) are applied by the
@@ -274,7 +295,7 @@ class ProgressionEngine {
     if (days < 10) return PrescriptionResolution(state);
 
     final next = state.clone();
-    if (days > 21) {
+    if (days > 21 && !substituteRegistry.containsKey(next.trackKey)) {
       next.ladderStepIndex = math.max(0, next.ladderStepIndex - 1);
     }
     final step = ladderStepFor(next);
@@ -301,8 +322,11 @@ class ProgressionEngine {
     next.status = ExerciseStatus.progress;
     next.painFrozen = false;
     next.painSeverity = null;
+    next.painRegion = null;
     next.painFlaggedDate = null;
+    next.painTags.clear();
     next.sessionsScheduledWhileFlagged = 0;
+    next.lastPainScheduledDate = null;
     next.painReentryTestOffered = false;
     next.painReentryTestPassed = false;
     next.prePainLoad = null;

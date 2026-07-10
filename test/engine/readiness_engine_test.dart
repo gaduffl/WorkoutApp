@@ -62,6 +62,35 @@ void main() {
       expect(result.inputsMissing, isEmpty);
       expect(result.hrvZToday, closeTo(0, 0.5));
     });
+
+    test("today's persisted sample is excluded from its own HRV/RHR baselines", () {
+      final prior = List.generate(
+        20,
+        (i) => RecoverySnapshot(
+          date: today.subtract(Duration(days: i + 1)),
+          hrvRmssd: i.isEven ? 40 : 60, // mean 50, population SD 10
+          restingHr: 60,
+          sleepScore: 80,
+        ),
+      );
+      final extremeToday = RecoverySnapshot(
+        date: today,
+        hrvRmssd: 100,
+        restingHr: 90,
+        sleepScore: 80,
+      );
+      final result = engine.compute(
+        subjective: 3,
+        today: extremeToday,
+        // Mirrors Repository.loadRecoverySnapshotsSince after today's
+        // snapshot has already been saved.
+        history: [...prior, extremeToday],
+        asOf: today,
+      );
+
+      expect(result.hrvZToday, closeTo(5, 0.0001));
+      expect(result.rhrDev, closeTo(30, 0.0001));
+    });
   });
 
   group('§4.3 buckets & overrides', () {

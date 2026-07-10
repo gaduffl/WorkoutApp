@@ -27,7 +27,14 @@ class ExerciseState {
   /// applying on later days when the user doesn't re-tap the body map.
   BodyRegion? painRegion;
   DateTime? painFlaggedDate;
+  Set<PainTag> painTags;
   int sessionsScheduledWhileFlagged;
+
+  /// Calendar day on which [sessionsScheduledWhileFlagged] was last
+  /// incremented. A recommendation can be recomputed several times (for
+  /// example after a same-day session swap), but that still represents one
+  /// scheduled session for pain-lifecycle purposes.
+  DateTime? lastPainScheduledDate;
   double? prePainLoad;
   int? prePainLadderStepIndex;
   bool painReentryTestOffered;
@@ -62,7 +69,9 @@ class ExerciseState {
     this.painSeverity,
     this.painRegion,
     this.painFlaggedDate,
+    Set<PainTag>? painTags,
     this.sessionsScheduledWhileFlagged = 0,
+    this.lastPainScheduledDate,
     this.prePainLoad,
     this.prePainLadderStepIndex,
     this.painReentryTestOffered = false,
@@ -72,7 +81,8 @@ class ExerciseState {
     this.preDeloadLadderStepIndex,
     this.awaitingUndershootCheck = false,
     this.microStepStage = 0,
-  }) : regressionDates = regressionDates ?? [];
+  })  : regressionDates = regressionDates ?? [],
+        painTags = painTags ?? {};
 
   int regressionCountWithinDays(DateTime asOf, int windowDays) {
     final cutoff = asOf.subtract(Duration(days: windowDays));
@@ -97,7 +107,9 @@ class ExerciseState {
         painSeverity: painSeverity,
         painRegion: painRegion,
         painFlaggedDate: painFlaggedDate,
+        painTags: Set.of(painTags),
         sessionsScheduledWhileFlagged: sessionsScheduledWhileFlagged,
+        lastPainScheduledDate: lastPainScheduledDate,
         prePainLoad: prePainLoad,
         prePainLadderStepIndex: prePainLadderStepIndex,
         painReentryTestOffered: painReentryTestOffered,

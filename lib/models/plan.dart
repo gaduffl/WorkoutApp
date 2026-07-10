@@ -23,6 +23,11 @@ class PlannedExercise {
   /// the pre-break load the very next day).
   final bool persistLoadOnCompletion;
 
+  /// Whether completing this work is allowed to advance the exercise state.
+  /// Readiness-modulated YELLOW/RED prescriptions deliberately retain the
+  /// exercise but suppress progression for that session.
+  final bool progressionEligible;
+
   /// §12 travel mode: bodyweight variant — progression state is frozen for
   /// the pattern (lastTrained still updates on completion).
   final bool isTravel;
@@ -50,6 +55,7 @@ class PlannedExercise {
     this.isWarmup = false,
     this.instruction,
     this.persistLoadOnCompletion = false,
+    this.progressionEligible = true,
     this.isTravel = false,
     this.loadSteps,
     this.supersetGroup,
@@ -68,6 +74,7 @@ class PlannedExercise {
         isWarmup: isWarmup,
         instruction: instruction,
         persistLoadOnCompletion: persistLoadOnCompletion,
+        progressionEligible: progressionEligible,
         isTravel: isTravel,
         loadSteps: loadSteps,
         supersetGroup: supersetGroup ?? this.supersetGroup,

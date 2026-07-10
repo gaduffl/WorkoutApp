@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/floor_category.dart';
+import '../../models/movement_pattern.dart';
 import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _ouraClientSecretController;
   late TextEditingController _apiKeyController;
   bool _connecting = false;
+  String? _clearingPainTrack;
 
   @override
   void initState() {
@@ -149,10 +151,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final oura = context.watch<AppController>().settings.oura;
-    final ouraError = context.watch<AppController>().ouraError;
-    final od = context.watch<AppController>().settings.oneDrive;
-    final odError = context.watch<AppController>().oneDriveError;
+    final controller = context.watch<AppController>();
+    final oura = controller.settings.oura;
+    final ouraError = controller.ouraError;
+    final od = controller.settings.oneDrive;
+    final odError = controller.oneDriveError;
+    final frozenTracks = controller.exerciseStates.values.where((state) => state.painFrozen).toList()
+      ..sort((a, b) => a.pattern.displayName.compareTo(b.pattern.displayName));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -259,6 +264,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     weeklyFloor: {..._settings.weeklyFloor, FloorCategory.intensity: v})),
               ),
             ),
+            if (frozenTracks.isNotEmpty) ...[
+              const Divider(height: 32),
+              Text('Pain progression freezes', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'These tracks stay frozen while the pain protocol is active. Clear one only when the '
+                'flag is no longer relevant; its load and progression state are preserved.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 4),
+              ...frozenTracks.map((state) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(state.pattern.displayName),
+                    subtitle: Text(
+                      '${state.painSeverity?.name ?? 'Pain'}'
+                      '${state.painRegion == null ? '' : ' · ${_humanize(state.painRegion!.name)}'}'
+                      '${state.trackKey == state.pattern.name ? '' : '\n${state.trackKey}'}',
+                    ),
+                    trailing: TextButton(
+                      onPressed: _clearingPainTrack == null
+                          ? () => _confirmClearPainFreeze(context, state.trackKey, state.pattern.displayName)
+                          : null,
+                      child: Text(_clearingPainTrack == state.trackKey ? 'Clearing…' : 'Clear'),
+                    ),
+                  )),
+            ],
             const Divider(height: 32),
             Text('Profile', style: Theme.of(context).textTheme.titleMedium),
             TextField(controller: _ageController, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number),
@@ -452,6 +482,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SnackBar(content: Text('All patterns are now in a 2-session deload.')),
       );
     }
+  }
+
+  Future<void> _confirmClearPainFreeze(
+    BuildContext context,
+    String trackKey,
+    String patternName,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Clear $patternName pain freeze?'),
+        content: const Text(
+          'Only clear this when the pain flag is no longer relevant and it is appropriate to resume. '
+          'This removes the stored pain flag and re-entry bookkeeping. It does not change the current '
+          'load, ladder step, regression history, or deload state.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Clear freeze')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    setState(() => _clearingPainTrack = trackKey);
+    try {
+      await context.read<AppController>().clearPainFreeze(trackKey);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$patternName pain freeze cleared.')));
+      }
+    } finally {
+      if (mounted) setState(() => _clearingPainTrack = null);
+    }
+  }
+
+  String _humanize(String value) {
+    final spaced = value.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    return '${spaced[0].toUpperCase()}${spaced.substring(1)}';
   }
 
   Widget _stepper(int value, void Function(int) onChanged) {

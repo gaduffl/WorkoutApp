@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../ai/ai_explainer.dart';
+import '../../engine/session_templates.dart';
 import '../../models/decision_trace.dart';
+import '../../models/pain.dart';
+import '../../models/plan.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 import 'checkin_screen.dart';
@@ -21,6 +24,7 @@ class _TodayScreenState extends State<TodayScreen> {
   late DecisionTrace _trace;
   late Future<String> _explanation;
   SessionTypeId? _swapping;
+  bool _loggingCardio = false;
 
   @override
   void initState() {
@@ -62,22 +66,41 @@ class _TodayScreenState extends State<TodayScreen> {
     if (terms.containsKey('floorSoftBoost')) return 'Slightly behind on your weekly floor';
     if (terms.containsKey('legHeavyDemoted')) return 'Deprioritized - legs were worked yesterday';
     if (terms.containsKey('recencyBoost')) return "Covers a pattern you haven't trained in a while";
+    if (terms.containsKey('weekendPriority')) return 'Prioritized for your weekend schedule';
     return 'Next up in your rotation';
   }
 
-  Future<void> _logCardio(SessionTypeId id, int minutes) async {
-    final controller = context.read<AppController>();
-    await controller.logCardioSession(id, durationMinutes: minutes);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${sessionTypes[id]!.name} logged ✓')));
+  SessionTypeId _effectiveAlternativeId(DecisionTrace trace, SessionTypeId sourceId) {
+    if (trace.recovery.bucket == ReadinessBucket.red &&
+        (sourceId == SessionTypeId.s3 || sourceId == SessionTypeId.s7)) {
+      return SessionTypeId.s6;
+    }
+    if (sourceId == SessionTypeId.s3 &&
+        (trace.checkin.timeMinutes < 35 || trace.recovery.bucket == ReadinessBucket.yellow)) {
+      return SessionTypeId.s7;
+    }
+    return sourceId;
   }
 
-  /// Nominal minutes for a cardio-only session's log entry.
-  int _cardioMinutes(SessionTypeId id) => switch (id) {
-        SessionTypeId.s3 => 36,
-        SessionTypeId.s7 => 10,
-        _ => 60, // S6 Zone 2
-      };
+  Future<void> _logCardio(
+    SessionTypeId id,
+    int minutes, {
+    SessionPlan? plan,
+  }) async {
+    if (_loggingCardio) return;
+    setState(() => _loggingCardio = true);
+    final controller = context.read<AppController>();
+    try {
+      await controller.logCardioSession(id, durationMinutes: minutes, plan: plan);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${sessionTypes[id]!.name} logged ✓')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not log cardio: $e')));
+    } finally {
+      if (mounted) setState(() => _loggingCardio = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +108,26 @@ class _TodayScreenState extends State<TodayScreen> {
     final trace = _trace;
     final plan = trace.plan;
     final done = controller.sessionDoneToday;
+    final noOpAlternativeIds = <SessionTypeId>{if (plan != null) plan.sessionId};
+    final firedCodes = trace.firedRuleCodes.toSet();
+    if (firedCodes.contains('S7_TIME_SUB') || firedCodes.contains('YELLOW_4X4_TO_REHIT')) {
+      noOpAlternativeIds.add(SessionTypeId.s3);
+    }
+    if (firedCodes.contains('RED_SWAP_Z2')) {
+      noOpAlternativeIds.addAll(const {SessionTypeId.s3, SessionTypeId.s7});
+    }
+    final sharpHipPain = trace.checkin.pain.any(
+      (flag) => flag.region == BodyRegion.hip && flag.severity == PainSeverity.sharp,
+    );
+    final seenEffectiveAlternatives = <SessionTypeId>{};
+    final alternatives = plan == null
+        ? <ScoredCandidate>[]
+        : trace.candidates
+            .where((c) => !noOpAlternativeIds.contains(c.sessionId))
+            .where((c) => !sharpHipPain || sessionTypes[c.sessionId]?.legHeavy != true)
+            .where((c) => seenEffectiveAlternatives.add(_effectiveAlternativeId(trace, c.sessionId)))
+            .take(2)
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -163,24 +206,39 @@ class _TodayScreenState extends State<TodayScreen> {
                   subtitle: Text('Nice work — see it on the History tab.'),
                 ),
               )
-            else if (plan != null && plan.exercises.isEmpty)
+            else if (plan != null && sessionTemplates[plan.sessionId]?.isCardioOnly == true)
               // Cardio-only session (S3 4×4, S6 Zone 2, S7 REHIT): nothing to
               // log set-by-set, just mark it done.
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
                   icon: const Icon(Icons.directions_bike),
-                  onPressed: () => _logCardio(plan.sessionId, _cardioMinutes(plan.sessionId)),
+                  onPressed: _loggingCardio
+                      ? null
+                      : () => _logCardio(
+                            plan.sessionId,
+                            plan.estimatedDurationMin,
+                            plan: plan,
+                          ),
                   label: Text('Mark ${plan.sessionName} done'),
                 ),
               )
-            else if (plan != null)
+            else if (plan != null && plan.exercises.isNotEmpty)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => LoggerScreen(plan: plan))),
                   child: const Text('Start session'),
+                ),
+              )
+            else if (plan != null)
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('No exercises available for this plan'),
+                  subtitle: Text('Choose another option below or redo your check-in.'),
                 ),
               ),
 
@@ -201,7 +259,7 @@ class _TodayScreenState extends State<TodayScreen> {
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonalIcon(
                           icon: const Icon(Icons.bolt),
-                          onPressed: () => _logCardio(SessionTypeId.s7, 10),
+                          onPressed: _loggingCardio ? null : () => _logCardio(SessionTypeId.s7, 10),
                           label: const Text('Log REHIT'),
                         ),
                       ),
@@ -210,7 +268,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 ),
               ),
             ],
-            if (!done && trace.candidates.length > 1) ...[
+            if (!done && alternatives.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text('Other options today', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 2),
@@ -220,18 +278,31 @@ class _TodayScreenState extends State<TodayScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              ...trace.candidates.skip(1).take(2).map((c) {
-                final def = sessionTypes[c.sessionId]!;
+              ...alternatives.map((c) {
+                final effectiveId = _effectiveAlternativeId(trace, c.sessionId);
+                String? modulationLabel;
+                if (effectiveId == SessionTypeId.s6 && effectiveId != c.sessionId) {
+                  modulationLabel =
+                      '~${trace.checkin.timeMinutes} min · Substitutes high-intensity cardio due to RED readiness';
+                } else if (effectiveId == SessionTypeId.s7 && effectiveId != c.sessionId) {
+                  modulationLabel = trace.checkin.timeMinutes < 35
+                      ? '${sessionTypes[SessionTypeId.s7]!.fullDurationMin} min · '
+                          'Substitutes queued 4×4 due to time'
+                      : '${sessionTypes[SessionTypeId.s7]!.fullDurationMin} min · '
+                          'Substitutes 4×4 due to YELLOW readiness';
+                }
+                final def = sessionTypes[effectiveId]!;
                 final isSwapping = _swapping == c.sessionId;
                 // A natively-60-min session in a 35-min slot runs 60->35
                 // compressed (accessories dropped) - say so honestly.
-                final tierLabel = c.tier == SessionTier.full && def.fullDurationMin >= 60
-                    ? 'compressed to 35 min'
-                    : '${c.tier.name} tier';
+                final tierLabel = modulationLabel ??
+                    (c.tier == SessionTier.full && def.fullDurationMin >= 60
+                        ? 'compressed to 35 min'
+                        : '${c.tier.name} tier · ${_candidateReason(c)}');
                 return Card(
                   child: ListTile(
                     title: Text(def.name),
-                    subtitle: Text('$tierLabel · ${_candidateReason(c)}'),
+                    subtitle: Text(tierLabel),
                     trailing: isSwapping
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.swap_horiz),
@@ -275,6 +346,7 @@ class _TodayScreenState extends State<TodayScreen> {
         'rir0' => '0',
         'rir1' => '1',
         'rir2' => '2',
+        'rir4plus' => '4+',
         _ => '3+',
       };
 }
