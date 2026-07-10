@@ -32,7 +32,9 @@ Map<String, dynamic> exerciseStateToJson(ExerciseState s) => {
       'painSeverity': s.painSeverity?.name,
       'painRegion': s.painRegion?.name,
       'painFlaggedDate': s.painFlaggedDate?.toIso8601String(),
+      'painTags': s.painTags.map((tag) => tag.name).toList(),
       'sessionsScheduledWhileFlagged': s.sessionsScheduledWhileFlagged,
+      'lastPainScheduledDate': s.lastPainScheduledDate?.toIso8601String(),
       'prePainLoad': s.prePainLoad,
       'prePainLadderStepIndex': s.prePainLadderStepIndex,
       'painReentryTestOffered': s.painReentryTestOffered,
@@ -57,7 +59,13 @@ ExerciseState exerciseStateFromJson(Map<String, dynamic> j) => ExerciseState(
       painSeverity: j['painSeverity'] == null ? null : PainSeverity.values.byName(j['painSeverity'] as String),
       painRegion: j['painRegion'] == null ? null : BodyRegion.values.byName(j['painRegion'] as String),
       painFlaggedDate: j['painFlaggedDate'] == null ? null : DateTime.parse(j['painFlaggedDate'] as String),
+      painTags: (j['painTags'] as List? ?? const [])
+          .map((tag) => PainTag.values.byName(tag as String))
+          .toSet(),
       sessionsScheduledWhileFlagged: j['sessionsScheduledWhileFlagged'] as int,
+      lastPainScheduledDate: j['lastPainScheduledDate'] == null
+          ? null
+          : DateTime.parse(j['lastPainScheduledDate'] as String),
       prePainLoad: (j['prePainLoad'] as num?)?.toDouble(),
       prePainLadderStepIndex: j['prePainLadderStepIndex'] as int?,
       painReentryTestOffered: j['painReentryTestOffered'] as bool,
@@ -296,6 +304,7 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'isWarmup': e.isWarmup,
       'instruction': e.instruction,
       'persistLoadOnCompletion': e.persistLoadOnCompletion,
+      'progressionEligible': e.progressionEligible,
       'isTravel': e.isTravel,
       'loadSteps': e.loadSteps,
       'supersetGroup': e.supersetGroup,
@@ -314,6 +323,7 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       isWarmup: j['isWarmup'] as bool? ?? false,
       instruction: j['instruction'] as String?,
       persistLoadOnCompletion: j['persistLoadOnCompletion'] as bool? ?? false,
+      progressionEligible: j['progressionEligible'] as bool? ?? true,
       isTravel: j['isTravel'] as bool? ?? false,
       loadSteps: (j['loadSteps'] as List?)?.map((e) => (e as num).toDouble()).toList(),
       supersetGroup: j['supersetGroup'] as int?,
