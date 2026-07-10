@@ -43,9 +43,28 @@ class ReadinessEngine {
     return y0 + t * (y1 - y0);
   }
 
+  DateTime _day(DateTime date) => DateTime(date.year, date.month, date.day);
+
   List<RecoverySnapshot> _windowed(List<RecoverySnapshot> history, DateTime asOf, int days) {
-    final cutoff = asOf.subtract(Duration(days: days - 1));
-    return history.where((s) => !s.date.isBefore(cutoff) && !s.date.isAfter(asOf)).toList();
+    final end = _day(asOf);
+    final cutoff = end.subtract(Duration(days: days - 1));
+    return history.where((s) {
+      final date = _day(s.date);
+      return !date.isBefore(cutoff) && !date.isAfter(end);
+    }).toList();
+  }
+
+  /// The baseline is formed only from nights before [asOf]. The controller
+  /// persists today's explicit sample before loading history, so allowing the
+  /// as-of day into this window would make the observation influence the mean
+  /// and standard deviation used to score itself.
+  List<RecoverySnapshot> _baselineWindow(List<RecoverySnapshot> history, DateTime asOf) {
+    final endExclusive = _day(asOf);
+    final cutoff = endExclusive.subtract(const Duration(days: baselineWindowDays));
+    return history.where((s) {
+      final date = _day(s.date);
+      return !date.isBefore(cutoff) && date.isBefore(endExclusive);
+    }).toList();
   }
 
   (double, double)? _hrvBaselineAndSd(List<RecoverySnapshot> window) {
@@ -69,7 +88,7 @@ class ReadinessEngine {
     required List<RecoverySnapshot> history,
     required DateTime asOf,
   }) {
-    final window = _windowed(history, asOf, baselineWindowDays);
+    final window = _baselineWindow(history, asOf);
     final baselineStats = _hrvBaselineAndSd(window);
     final rhrBaseline = _rhrBaseline(window);
 
