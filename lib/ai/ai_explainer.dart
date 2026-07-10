@@ -50,7 +50,7 @@ class AiExplainer {
       case RuleKey.redSwapTechnique:
         return 'recovery is low, running a light technique session instead';
       case RuleKey.redSwapZ2:
-        return 'recovery is low, intensity swapped for Zone 2 / mobility';
+        return 'recovery is low, so Zone 2 / mobility is the safe choice';
       case RuleKey.timeCompress60_35:
         return 'compressed from 60 to 35 minutes';
       case RuleKey.timeCompress35_20:
@@ -61,6 +61,8 @@ class AiExplainer {
         return 'sharp pain flagged, exercise substituted for a pain-free one';
       case RuleKey.painFreeze:
         return 'progression paused on this pattern while pain is flagged';
+      case RuleKey.painMedicalEscalation:
+        return 'fixed safety instruction: stop the affected movement and seek qualified medical assessment before resuming';
       case RuleKey.painReentryTest:
         return 'offering a light 50% x 8 test to check pain-free readiness';
       case RuleKey.deloadActive:
@@ -97,6 +99,15 @@ class AiExplainer {
   }
 
   Future<String> dailyExplanation(DecisionTrace trace, UserSettings settings) async {
+    // Safety escalation text is a fixed product rule, not narration. Return
+    // it verbatim and never send it through the model where it could be
+    // softened, paraphrased, or obscured by other rationale.
+    final medicalEscalation = trace.firedRules.where(
+      (rule) => rule.key == RuleKey.painMedicalEscalation,
+    );
+    if (medicalEscalation.isNotEmpty) {
+      return fallbackText(medicalEscalation.first, settings.language);
+    }
     final fallback = _fallbackConcat(trace, settings.language) + _painAdvisory(trace);
     if (!settings.aiExplanationsEnabled) return fallback;
     final apiKey = settings.anthropicApiKey;
