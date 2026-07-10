@@ -67,8 +67,8 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Recovery is low - today runs as a technique session: 60% load, half the sets, RIR>=4.';
     case RuleKey.redSwapZ2:
       return lang == AppLanguage.de
-          ? 'Erholung ist niedrig - Intensität wurde durch Zone 2 / Mobility ersetzt.'
-          : 'Recovery is low - intensity work swapped for Zone 2 / mobility instead.';
+          ? 'Erholung ist niedrig - Zone 2 / Mobility ist heute die sichere Wahl.'
+          : 'Recovery is low, so Zone 2 / mobility is the safe choice today.';
     case RuleKey.timeCompress60_35:
       return lang == AppLanguage.de
           ? '60 -> 35 Min: Zusatzübungen und/oder REHIT-Finisher gestrichen, Hauptsupersätze bleiben.'
@@ -89,6 +89,10 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? '${pat('pattern')}: Fortschritt pausiert, solange Schmerz gemeldet ist.'
           : "${pat('pattern')} progression is frozen while pain is flagged.";
+    case RuleKey.painMedicalEscalation:
+      return lang == AppLanguage.de
+          ? 'Betroffene Bewegung stoppen und vor der Wiederaufnahme eine qualifizierte medizinische Abklärung suchen.'
+          : 'Stop the affected movement and seek a qualified medical assessment before resuming it.';
     case RuleKey.painReentryTest:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: seit 2 Einheiten gemeldet - heute ein leichter Test (50% x 8).'
