@@ -154,8 +154,8 @@ const Map<MovementPattern, LadderStep> travelSteps = {
   MovementPattern.hinge: LadderStep(name: 'Single-leg RDL (bodyweight)'),
   MovementPattern.pushHorizontal: LadderStep(name: 'Push-up'),
   MovementPattern.pushVertical: LadderStep(name: 'Pike push-up'),
-  MovementPattern.pullVertical: LadderStep(name: 'Pull-up (bar or rings, where possible)'),
-  MovementPattern.pullHorizontal: LadderStep(name: 'Table / towel row'),
+  MovementPattern.pullVertical: LadderStep(name: 'Prone lat pull-down'),
+  MovementPattern.pullHorizontal: LadderStep(name: 'Prone W-row'),
   MovementPattern.coreGrip: LadderStep(name: 'Plank / hollow hold'),
 };
 
@@ -184,6 +184,18 @@ const overheadTriceps = SubstituteExercise(
   pattern: MovementPattern.pushVertical,
   dumbbells: 1,
 );
+
+/// No-equipment equivalents for S5's named dumbbell accessories. Keeping
+/// their normal track keys means the session still records recency for the
+/// intended slot while load-based progression remains frozen in travel mode.
+const Map<String, LadderStep> travelNamedSteps = {
+  'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
+  'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
+  'sub:pushHorizontal:floor_press': LadderStep(name: 'Wall push-up (pain-free range)'),
+  'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
+  'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
+  'sub:pushVertical:overhead_triceps': LadderStep(name: 'Diamond push-up'),
+};
 
 /// Keyed by [SubstituteExercise.trackKey] so plan assembly can resolve a
 /// substitute's real name/load setup instead of falling back to its
