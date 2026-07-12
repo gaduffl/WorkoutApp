@@ -25,6 +25,7 @@ class _TodayScreenState extends State<TodayScreen> {
   late Future<String> _explanation;
   SessionTypeId? _swapping;
   bool _loggingCardio = false;
+  bool _changingTravelMode = false;
 
   @override
   void initState() {
@@ -53,6 +54,31 @@ class _TodayScreenState extends State<TodayScreen> {
       if (!mounted) return;
       setState(() => _swapping = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not switch sessions: $e')));
+    }
+  }
+
+  Future<void> _toggleTravelMode() async {
+    if (_changingTravelMode) return;
+    final controller = context.read<AppController>();
+    final enabled = !controller.settings.travelMode;
+    setState(() => _changingTravelMode = true);
+    try {
+      final refreshed = await controller.setTravelMode(enabled);
+      if (!mounted) return;
+      setState(() {
+        if (refreshed != null) _trace = refreshed;
+        _changingTravelMode = false;
+        _loadExplanation();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(enabled ? 'Travel mode enabled — plan updated' : 'Travel mode disabled — plan updated')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _changingTravelMode = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not change travel mode: $error')),
+      );
     }
   }
 
@@ -108,6 +134,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final trace = _trace;
     final plan = trace.plan;
     final done = controller.sessionDoneToday;
+    final loggingStarted = controller.sessionLoggedToday;
     final noOpAlternativeIds = <SessionTypeId>{if (plan != null) plan.sessionId};
     final firedCodes = trace.firedRuleCodes.toSet();
     if (firedCodes.contains('S7_TIME_SUB') || firedCodes.contains('YELLOW_4X4_TO_REHIT')) {
@@ -133,6 +160,20 @@ class _TodayScreenState extends State<TodayScreen> {
       appBar: AppBar(
         title: const Text('Today'),
         actions: [
+          IconButton(
+            icon: _changingTravelMode
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    controller.settings.travelMode ? Icons.luggage : Icons.luggage_outlined,
+                    color: controller.settings.travelMode ? Theme.of(context).colorScheme.primary : null,
+                  ),
+            tooltip: controller.settings.travelMode ? 'End travel mode' : 'Start travel mode',
+            onPressed: _changingTravelMode || loggingStarted ? null : _toggleTravelMode,
+          ),
           IconButton(
             icon: const Icon(Icons.restart_alt),
             tooltip: 'Redo check-in',
@@ -176,6 +217,25 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            if (controller.settings.travelMode) ...[
+              Card(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.luggage),
+                  title: const Text('Travel mode active'),
+                  subtitle: const Text(
+                    'No-equipment variants are in use. Load progression is paused; completed work still counts.',
+                  ),
+                  trailing: loggingStarted
+                      ? null
+                      : TextButton(
+                          onPressed: _changingTravelMode ? null : _toggleTravelMode,
+                          child: const Text('End'),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (plan != null)
               ...plan.exercises.map((e) => Card(
                     child: ListTile(
@@ -187,11 +247,18 @@ class _TodayScreenState extends State<TodayScreen> {
                             )
                           : (e.isWarmup ? const Icon(Icons.local_fire_department_outlined) : null),
                       title: Text(e.name),
-                      subtitle: Text(
-                        '${e.isWarmup ? 'warm-up' : '${e.sets} x ${e.repRange.$1}-${e.repRange.$2} reps'}'
-                        '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}'
-                        '${e.substitutedFrom != null ? ' (sub for ${e.substitutedFrom})' : ''}'
-                        '${e.supersetGroup != null ? ' · superset ${String.fromCharCode(65 + e.supersetGroup!)}' : ''}',
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${e.isWarmup ? 'warm-up' : '${e.sets} x ${e.repRange.$1}-${e.repRange.$2} reps'}'
+                            '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}'
+                            '${e.substitutedFrom != null ? ' (sub for ${e.substitutedFrom})' : ''}'
+                            '${e.supersetGroup != null ? ' · superset ${String.fromCharCode(65 + e.supersetGroup!)}' : ''}',
+                          ),
+                          if (e.instruction != null)
+                            Text(e.instruction!, style: Theme.of(context).textTheme.bodySmall),
+                        ],
                       ),
                       trailing: e.isWarmup ? null : Text('RIR ${_rirLabel(e.rirTarget.name)}'),
                     ),
