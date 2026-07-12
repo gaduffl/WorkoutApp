@@ -41,6 +41,8 @@ class AppController extends ChangeNotifier {
   /// Serializes session persistence so a rapid double action cannot append
   /// the same workout twice or advance the queue twice.
   bool _completionInFlight = false;
+  bool _travelModeChangeInFlight = false;
+  bool get travelModeChanging => _travelModeChangeInFlight;
 
   /// Sessions logged in the trailing 3 days, so the UI can reflect what's
   /// already done today and whether a second-session REHIT is worth offering.
@@ -51,6 +53,11 @@ class AppController extends ChangeNotifier {
 
   /// Whether a counted session has been logged today (Home/Today "done" state).
   bool get sessionDoneToday => _todaysLogs.any((l) => l.countsTowardQueueAndFloor);
+
+  /// Any persisted work today, including a partial session. A plan must not
+  /// be regenerated after logging has begun because that would change the
+  /// prescription underneath an in-progress/partial workout.
+  bool get sessionLoggedToday => _todaysLogs.isNotEmpty;
 
   bool _hasCategoryToday(FloorCategory c) =>
       _todaysLogs.any((l) => l.countsAs.contains(c) && l.countsTowardQueueAndFloor);
@@ -366,10 +373,46 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveSettings(UserSettings newSettings) async {
+    final travelModeChanged = settings.travelMode != newSettings.travelMode;
     settings = newSettings;
     await repo.saveSettings(settings);
     unawaited(syncNotifications());
+    if (travelModeChanged && todayTrace != null && !sessionLoggedToday) {
+      await _refreshPendingPlanForSettings();
+      return;
+    }
     notifyListeners();
+  }
+
+  /// Enables or disables no-equipment travel mode immediately. If today's
+  /// session has not started/completed, regenerate it from the persisted
+  /// check-in so the visible prescription can never lag behind the toggle.
+  Future<DecisionTrace?> setTravelMode(bool enabled) async {
+    if (_travelModeChangeInFlight) return todayTrace;
+    if (settings.travelMode == enabled) return todayTrace;
+    _travelModeChangeInFlight = true;
+    notifyListeners();
+    try {
+      await saveSettings(settings.copyWith(travelMode: enabled));
+      return todayTrace;
+    } finally {
+      _travelModeChangeInFlight = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _refreshPendingPlanForSettings() async {
+    final current = todayTrace;
+    if (current == null) return;
+    final now = today();
+    final todaySnapshots = (await repo.loadRecoverySnapshotsSince(now))
+        .where((snapshot) => _isSameDate(snapshot.date, now))
+        .toList();
+    await _recomputeAndPersist(
+      checkin: current.checkin,
+      todaySnapshot: todaySnapshots.isEmpty ? null : todaySnapshots.first,
+      forcedSessionId: current.plan?.sessionId,
+    );
   }
 
   /// §3.1 + §12: (re)schedule the wake-window nudge and cutoff reminder.
@@ -521,6 +564,7 @@ class AppController extends ChangeNotifier {
       // the pattern was trained, but never feeds the progression state machine.
       final startedPainFrozenKeys =
           byTrack.keys.where((key) => exerciseStates[key]?.painFrozen == true).toSet();
+      final travelKeys = plan.exercises.where((e) => e.isTravel).map((e) => e.trackKey).toSet();
 
       // Pain-flag lifecycle at completion (§7.2): a pain-free session decays a
       // mild flag; a pain-free graded re-entry test passes and resumes the
@@ -532,7 +576,9 @@ class AppController extends ChangeNotifier {
         if (state == null || !state.painFrozen) continue;
         final ranPainFree = allSetsByTrack[entry.key]!.every((s) => !s.painFlag);
         if (state.painReentryTestOffered && !state.painReentryTestPassed) {
-          if (ranPainFree) {
+          // A travel variant is deliberately load-free and cannot validate
+          // the formal 50%-load re-entry test for home progression.
+          if (ranPainFree && !travelKeys.contains(entry.key)) {
             exerciseStates[entry.key] =
                 progression.resolvePostReentryResume(state, now, settings.equipment);
           }
@@ -560,7 +606,6 @@ class AppController extends ChangeNotifier {
       // §12 travel mode: bodyweight variants keep the pattern "trained"
       // (so §6.6 detraining doesn't misfire on return) but never advance
       // the load-based state machine.
-      final travelKeys = plan.exercises.where((e) => e.isTravel).map((e) => e.trackKey).toSet();
       final progressionEligibility = <String, bool>{
         for (final e in plan.exercises.where((e) => !e.isWarmup)) e.trackKey: e.progressionEligible,
       };
@@ -605,6 +650,7 @@ class AppController extends ChangeNotifier {
         durationMinutes: durationMinutes,
         countsAs: countsAs,
         rehitFinisherCompleted: rehitFinisherCompleted,
+        travelMode: plan.travelMode,
       );
       await repo.saveSessionLog(log);
       _recentLogs = [..._recentLogs, log];
@@ -656,6 +702,7 @@ class AppController extends ChangeNotifier {
           exercises: const [],
           estimatedDurationMin: durationMinutes,
           grantsQueueCredit: cycleOrder.contains(id),
+          travelMode: settings.travelMode,
         );
     await completeSession(effectivePlan, const [], durationMinutes: durationMinutes);
   }
