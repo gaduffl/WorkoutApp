@@ -92,6 +92,11 @@ class SessionPlan {
   /// original queue item pending — completing them grants no queue credit.
   final bool grantsQueueCredit;
 
+  /// The plan was generated while no-equipment travel mode was active.
+  /// Stored on the plan rather than inferred from exercises so cardio-only
+  /// plans and historical logs retain the correct context too.
+  final bool travelMode;
+
   const SessionPlan({
     required this.sessionId,
     required this.sessionName,
@@ -99,6 +104,7 @@ class SessionPlan {
     required this.exercises,
     required this.estimatedDurationMin,
     this.grantsQueueCredit = true,
+    this.travelMode = false,
   });
 
   int get plannedWorkSets =>
