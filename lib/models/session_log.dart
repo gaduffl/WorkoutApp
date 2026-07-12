@@ -21,6 +21,7 @@ class SessionLog {
   /// (only if the REHIT finisher was actually done, §2.1).
   final Set<FloorCategory> countsAs;
   final bool rehitFinisherCompleted;
+  final bool travelMode;
 
   SessionLog({
     required this.id,
@@ -33,6 +34,7 @@ class SessionLog {
     required this.durationMinutes,
     required this.countsAs,
     this.rehitFinisherCompleted = false,
+    this.travelMode = false,
     this.notes,
   });
 

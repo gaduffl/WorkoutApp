@@ -77,6 +77,10 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? '35 -> 20 Min: nur das erste Supersatz-Paar, 2 harte Sätze je Übung.'
           : '35 -> 20 min: just the first superset pair, 2 hard sets each.';
+    case RuleKey.travelModeActive:
+      return lang == AppLanguage.de
+          ? 'Reisemodus ist aktiv: keine Geräte, Fortschritt über Wiederholungen, Tempo oder Bewegungsumfang; die Laststeigerung pausiert.'
+          : 'Travel mode is active: no equipment, progress through reps, tempo, or range of motion; load progression is paused.';
     case RuleKey.painSubMild:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: leichter Schmerz - Last reduziert und Bewegungsradius angepasst.'

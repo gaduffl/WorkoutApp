@@ -182,9 +182,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }),
             ),
             SwitchListTile(
+              secondary: const Icon(Icons.luggage_outlined),
               title: const Text('Travel mode (no equipment)'),
-              subtitle: const Text('Ladders resolve to bodyweight variants; load progression pauses, '
-                  'sessions still count toward queue and weekly floor (§12)'),
+              subtitle: const Text('Uses bodyweight and self-resisted variants. Load progression pauses, '
+                  'but sessions still count toward your rotation and weekly targets.'),
               value: _settings.travelMode,
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(travelMode: v);

@@ -142,7 +142,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
 
   void _syncSetInputs() {
     _reps = _exercise.repRange.$1;
-    _rir = Rir.rir2;
+    _rir = _exercise.rirTarget;
     _painFlag = false;
   }
 
@@ -286,7 +286,12 @@ class _LoggerScreenState extends State<LoggerScreen> {
                         ),
                       if (e.isWarmup)
                         const Chip(label: Text('Warm-up set'))
-                      else if (_superset && partner != null)
+                      else if (e.isTravel)
+                        const Chip(
+                          avatar: Icon(Icons.luggage_outlined, size: 18),
+                          label: Text('Travel · no equipment'),
+                        ),
+                      if (!e.isWarmup && _superset && partner != null)
                         Chip(
                           avatar: const Icon(Icons.swap_vert, size: 18),
                           label: Text('Superset — next: $partner'),
@@ -298,6 +303,14 @@ class _LoggerScreenState extends State<LoggerScreen> {
                         style: Theme.of(context).textTheme.bodyLarge,
                         textAlign: TextAlign.center,
                       ),
+                      if (e.instruction != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          e.instruction!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       if (e.loadTotal != null || e.loadSteps != null)
                         _weightStepper()

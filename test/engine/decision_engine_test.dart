@@ -548,8 +548,37 @@ void main() {
     expect(work.any((e) => e.name == 'Split squat (bodyweight)'), isTrue);
     expect(work.any((e) => e.name == 'Single-leg RDL (bodyweight)'), isTrue);
     expect(work.every((e) => e.isTravel), isTrue);
+    expect(work.every((e) => !e.progressionEligible), isTrue);
+    expect(s1.trace.plan!.travelMode, isTrue);
+    expect(s1.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
     // no percent-load warm-ups without loads
     expect(s1.trace.plan!.exercises.any((e) => e.isWarmup), isFalse);
+
+    final s2 = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s2),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: const UserSettings(travelMode: true),
+    ));
+    final s2Names = s2.trace.plan!.exercises.map((e) => e.name).toSet();
+    expect(s2Names, containsAll(const ['Prone lat pull-down', 'Prone W-row']));
+    expect(s2Names.any((name) => name.contains('bar') || name.contains('Table')), isFalse);
+
+    final s4 = decisionEngine.decide(buildInput(
+      time: 60,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s4),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: const UserSettings(travelMode: true),
+    ));
+    final s4Names = s4.trace.plan!.exercises.map((e) => e.name).toList();
+    expect(s4Names, contains('Travel knee-health: backward walking, wall tibialis raises, calf raises'));
+    expect(s4Names.any((name) => name.contains('treadmill') || name.contains('slant-board')), isFalse);
 
     final s5 = decisionEngine.decide(buildInput(
       time: 35,
@@ -561,6 +590,37 @@ void main() {
       settings: const UserSettings(travelMode: true),
     ));
     expect(s5.trace.plan!.exercises.any((e) => e.name == 'DB curl'), isFalse);
+    final s5Work = s5.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
+    expect(
+      s5Work.map((e) => e.name),
+      containsAll(const ['Self-resisted curl', 'Prone Y-raise', 'Diamond push-up', 'Plank / hollow hold']),
+    );
+    expect(s5Work.every((e) => e.isTravel && e.loadTotal == null), isTrue);
+  });
+
+  test('travel mode keeps pain adjustments conservative without equipment', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: const UserSettings(travelMode: true),
+    ));
+
+    final work = output.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
+    expect(work.any((e) => e.name == 'Bridge hamstring curl'), isTrue);
+    expect(work.every((e) => e.loadTotal == null), isTrue);
+    expect(work.where((e) => e.instruction?.contains('pain-free range') == true), isNotEmpty);
+    expect(work.where((e) => e.instruction?.contains('pain-free range') == true).every((e) => e.rirTarget == Rir.rir4plus), isTrue);
   });
 
   test('§6.6: a detraining-adjusted load is marked to persist on completion', () {
@@ -722,6 +782,49 @@ void main() {
     expect(squat.rirTarget, Rir.rir4plus);
     expect(squat.instruction, contains('stop if pain returns'));
     expect(output.trace.firedRuleCodes, contains('PAIN_REENTRY_TEST_SQUAT'));
+  });
+
+  test('travel movement check does not claim to complete the loaded pain re-entry test', () {
+    final states = baseStates();
+    states['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 24,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+      painFrozen: true,
+      painSeverity: PainSeverity.sharp,
+      painRegion: BodyRegion.kneeLeft,
+      painFlaggedDate: today.subtract(const Duration(days: 2)),
+      sessionsScheduledWhileFlagged: 2,
+      lastPainScheduledDate: today.subtract(const Duration(days: 1)),
+      prePainLoad: 24,
+      painReentryTestOffered: true,
+    );
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+      settings: const UserSettings(travelMode: true),
+    ));
+
+    final squat = output.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.pattern == MovementPattern.squat && !exercise.isWarmup,
+    );
+    expect(squat.sets, 1);
+    expect(squat.repRange, (8, 8));
+    expect(squat.loadTotal, isNull);
+    expect(squat.instruction, contains('formal loaded re-entry remains pending'));
+    expect(output.trace.firedRuleCodes, isNot(contains('PAIN_REENTRY_TEST_SQUAT')));
+    expect(output.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
   });
 
   test('compressed travel S5 retains a bodyweight core work slot', () {

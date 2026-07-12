@@ -424,15 +424,21 @@ class DecisionEngine {
       // gets its 60% feeder set below.
       var rampDone = false;
       if (template.hasKneeHealthBlock) {
-        exercises.add(const PlannedExercise(
+        exercises.add(PlannedExercise(
           trackKey: 'atg_block',
           pattern: MovementPattern.kneeHealth,
-          name: 'ATG block: backward treadmill 3-4 min, tibialis raises, slant-board calf raises',
+          name: input.settings.travelMode
+              ? 'Travel knee-health: backward walking, wall tibialis raises, calf raises'
+              : 'ATG block: backward treadmill 3-4 min, tibialis raises, slant-board calf raises',
           sets: 1,
-          repRange: (15, 25),
+          repRange: const (15, 25),
           rirTarget: Rir.rir3plus,
           isWarmup: true,
-          instruction: 'Runs first - replaces the general warm-up (§2.5)',
+          instruction: input.settings.travelMode
+              ? 'No equipment - walk backward only where it is safe and clear'
+              : 'Runs first - replaces the general warm-up (§2.5)',
+          progressionEligible: !input.settings.travelMode,
+          isTravel: input.settings.travelMode,
         ));
         rampDone = true;
       }
@@ -444,15 +450,26 @@ class DecisionEngine {
       var slots = template.slotsForTier(tier, dropAccessories: compress60to35);
       if (input.settings.travelMode) {
         var travelViable = slots
-            .where((slot) => slot.$3 == null && travelSteps.containsKey(slot.$1))
+            .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
             .toList();
+        // S5's compressed source normally starts with two DB accessories.
+        // In travel mode keep the foundational core slot plus one
+        // equipment-free pump slot instead of dropping core entirely.
+        if (effectiveSessionId == SessionTypeId.s5 && tier == SessionTier.compressed) {
+          travelViable = [
+            for (final pattern in template.accessoryPatterns)
+              (pattern, true, null as SubstituteExercise?),
+            for (final named in template.namedAccessories)
+              (named.pattern, true, named as SubstituteExercise?),
+          ].where((slot) => _travelStepFor(slot.$1, slot.$3) != null).take(2).toList();
+        }
         if (travelViable.isEmpty) {
           final fallback = [
             for (final pattern in template.compoundPatterns)
               (pattern, true, null as SubstituteExercise?),
             for (final pattern in template.accessoryPatterns)
               (pattern, false, null as SubstituteExercise?),
-          ].where((slot) => travelSteps.containsKey(slot.$1)).toList();
+          ].where((slot) => _travelStepFor(slot.$1, slot.$3) != null).toList();
           travelViable = tier == SessionTier.compressed
               ? fallback.take(2).map((slot) => (slot.$1, true, slot.$3)).toList()
               : fallback;
@@ -565,7 +582,7 @@ class DecisionEngine {
             input.settings.equipment,
           );
           prescriptionState = resolution.state;
-          if (resolution.detrainFired) {
+          if (resolution.detrainFired && !input.settings.travelMode) {
             fired.add(FiredRule(
               RuleKey.detrainAdjust,
               pattern: sub.pattern.name,
@@ -590,7 +607,7 @@ class DecisionEngine {
         } else {
           final resolution = progressionEngine.resolveTodaysPrescription(state, today, input.settings.equipment);
           prescriptionState = resolution.state;
-          if (resolution.detrainFired) {
+          if (resolution.detrainFired && !input.settings.travelMode) {
             fired.add(FiredRule(RuleKey.detrainAdjust, pattern: pattern.name));
             // §6.6: the ramp load becomes the working load once actually trained
             persistLoad = loadMultiplier == 1.0;
@@ -603,7 +620,12 @@ class DecisionEngine {
             exerciseLoadMultiplier = 1.0;
             exerciseRir = Rir.rir4plus;
             painReentryPrescription = true;
-            fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
+            // A no-equipment travel variant can be used only as a light
+            // pain-free movement check. It must not be represented as the
+            // formal 50%-load re-entry test that resumes home progression.
+            if (!input.settings.travelMode) {
+              fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
+            }
           }
           if (resolution.deloadActive) {
             // §6.5 deload parameters: 60% load, 50% of sets, RIR >= 4.
@@ -613,7 +635,8 @@ class DecisionEngine {
             fired.add(FiredRule(RuleKey.deloadActive, pattern: pattern.name));
           }
 
-          capLadderJumpFired = state.awaitingUndershootCheck &&
+          capLadderJumpFired = !input.settings.travelMode &&
+              state.awaitingUndershootCheck &&
               !resolution.detrainFired &&
               !resolution.painReentryTestFired &&
               !resolution.deloadActive;
@@ -641,21 +664,31 @@ class DecisionEngine {
         );
 
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
-        // steps; DB-only named accessories drop out entirely.
+        // steps. Named S5 accessories and pain substitutes use explicit
+        // equipment-free equivalents while keeping their own state tracks.
         if (input.settings.travelMode) {
-          if (namedExercise != null) continue;
-          final travel = travelSteps[pattern];
+          final travelNamedExercise =
+              action.kind == PainActionKind.substituteNamed ? action.substitute : namedExercise;
+          final travel = _travelStepFor(pattern, travelNamedExercise);
           if (travel != null) {
+            final painAdjusted = painReentryPrescription ||
+                action.kind == PainActionKind.reduceLoadOne ||
+                action.kind == PainActionKind.regressLadderAndReduce ||
+                action.kind == PainActionKind.substituteNamed;
             planned = PlannedExercise(
-              trackKey: trackKey,
+              trackKey: planned.trackKey,
               pattern: pattern,
               name: travel.name,
               sets: planned.sets,
-              repRange: (8, 15), // bodyweight: progress by reps/ROM
-              rirTarget: planned.rirTarget,
-              substitutedFrom: substitutedFrom,
-              instruction: 'Travel mode - bodyweight variant, add reps/ROM',
-              progressionEligible: planned.progressionEligible,
+              repRange: painReentryPrescription ? (8, 8) : (8, 15),
+              rirTarget: painAdjusted ? Rir.rir4plus : planned.rirTarget,
+              substitutedFrom: planned.substitutedFrom,
+              instruction: painReentryPrescription
+                  ? 'Travel mode - light pain-free check only; the formal loaded re-entry remains pending'
+                  : painAdjusted
+                      ? 'Travel mode - use an easier variation and pain-free range; stop if pain worsens'
+                      : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
+              progressionEligible: false,
               isTravel: true,
             );
           }
@@ -729,6 +762,9 @@ class DecisionEngine {
         patchedStates,
       );
     }
+    if (exercises.any((exercise) => exercise.isTravel)) {
+      fired.add(const FiredRule(RuleKey.travelModeActive));
+    }
     final estimatedDuration = template?.isCardioOnly == true &&
             planSessionDef.fullDurationMin < checkin.timeMinutes
         ? planSessionDef.fullDurationMin
@@ -740,6 +776,7 @@ class DecisionEngine {
       exercises: exercises,
       estimatedDurationMin: estimatedDuration,
       grantsQueueCredit: queueCreditType != null,
+      travelMode: input.settings.travelMode,
     );
 
     return DecisionEngineOutput(
@@ -758,6 +795,14 @@ class DecisionEngine {
       ),
       patchedStates,
     );
+  }
+
+  LadderStep? _travelStepFor(
+    MovementPattern pattern,
+    SubstituteExercise? namedExercise,
+  ) {
+    if (namedExercise != null) return travelNamedSteps[namedExercise.trackKey];
+    return travelSteps[pattern];
   }
 
   /// Only a same-type completion grants queue credit; RED/YELLOW swaps

@@ -19,6 +19,7 @@ enum RuleKey {
   redSwapZ2,
   timeCompress60_35,
   timeCompress35_20,
+  travelModeActive,
   painSubMild,
   painSubSharp,
   painFreeze,
@@ -89,6 +90,8 @@ extension RuleKeyCode on RuleKey {
         return 'TIME_COMPRESS_60_35';
       case RuleKey.timeCompress35_20:
         return 'TIME_COMPRESS_35_20';
+      case RuleKey.travelModeActive:
+        return 'TRAVEL_MODE_ACTIVE';
       case RuleKey.painSubMild:
         return 'PAIN_SUB_${p}_MILD';
       case RuleKey.painSubSharp:

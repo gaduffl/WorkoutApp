@@ -49,7 +49,9 @@ class HistoryScreen extends StatelessWidget {
               ...logs.reversed.take(30).map((l) => Card(
                     child: ListTile(
                       dense: true,
-                      title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'),
+                      leading: l.travelMode ? const Icon(Icons.luggage_outlined) : null,
+                      title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'
+                          '${l.travelMode ? ' · travel' : ''}'),
                       subtitle: Text(
                         '${_d(l.date)} - ${l.completedWorkSets}/${l.plannedWorkSets} sets - ${l.durationMinutes} min'
                         '${l.countsTowardQueueAndFloor ? '' : ' (partial)'}',

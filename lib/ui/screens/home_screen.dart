@@ -19,6 +19,34 @@ class HomeScreen extends StatelessWidget {
         title: const Text('MorningCoach'),
         actions: [
           IconButton(
+            icon: controller.travelModeChanging
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    controller.settings.travelMode ? Icons.luggage : Icons.luggage_outlined,
+                    color: controller.settings.travelMode ? Theme.of(context).colorScheme.primary : null,
+                  ),
+            tooltip: controller.settings.travelMode ? 'End travel mode' : 'Start travel mode',
+            onPressed: controller.travelModeChanging ? null : () async {
+              final enabled = !controller.settings.travelMode;
+              try {
+                await controller.setTravelMode(enabled);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(enabled ? 'Travel mode enabled' : 'Travel mode disabled')),
+                );
+              } catch (error) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not change travel mode: $error')),
+                );
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
           ),
@@ -34,6 +62,23 @@ class HomeScreen extends StatelessWidget {
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (controller.settings.travelMode) ...[
+                    Card(
+                      color: Theme.of(context).colorScheme.tertiaryContainer,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.luggage),
+                            SizedBox(width: 8),
+                            Text('Travel mode · no equipment'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (controller.sessionDoneToday)
                     const Icon(Icons.check_circle, color: Colors.green, size: 48),
                   Text(

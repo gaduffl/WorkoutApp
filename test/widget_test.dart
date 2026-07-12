@@ -5,7 +5,12 @@ import 'package:provider/provider.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/state/app_controller.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
+import 'package:morningcoach/models/plan.dart';
+import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/ui/screens/checkin_screen.dart';
+import 'package:morningcoach/ui/screens/logger_screen.dart';
 
 /// Widget-level smoke test for the check-in screen. Deliberately avoids
 /// calling `AppController.init()` (which opens the on-device sqflite
@@ -38,5 +43,42 @@ void main() {
 
     final buttonAfter = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(buttonAfter.onPressed, isNotNull);
+  });
+
+  testWidgets('travel logger shows context and starts at the prescribed RIR', (WidgetTester tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+    const plan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Strength — Lower',
+      tier: SessionTier.full,
+      estimatedDurationMin: 35,
+      travelMode: true,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          name: 'Split squat (bodyweight)',
+          sets: 2,
+          repRange: (8, 15),
+          rirTarget: Rir.rir4plus,
+          isTravel: true,
+          progressionEligible: false,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(home: LoggerScreen(plan: plan)),
+      ),
+    );
+
+    expect(find.text('Travel · no equipment'), findsOneWidget);
+    expect(find.text('Bodyweight'), findsOneWidget);
+    final rir4 = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'RIR 4+'),
+    );
+    expect(rir4.selected, isTrue);
   });
 }

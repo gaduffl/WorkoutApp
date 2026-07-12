@@ -163,6 +163,7 @@ Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'notes': l.notes,
       'countsAs': l.countsAs.map((c) => c.name).toList(),
       'rehitFinisherCompleted': l.rehitFinisherCompleted,
+      'travelMode': l.travelMode,
     };
 
 SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
@@ -177,6 +178,7 @@ SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
       notes: j['notes'] as String?,
       countsAs: (j['countsAs'] as List).map((c) => FloorCategory.values.byName(c as String)).toSet(),
       rehitFinisherCompleted: j['rehitFinisherCompleted'] as bool? ?? false,
+      travelMode: j['travelMode'] as bool? ?? false,
     );
 
 Map<String, dynamic> queueStateToJson(QueueState q) => {
@@ -336,6 +338,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
       'exercises': p.exercises.map(plannedExerciseToJson).toList(),
       'estimatedDurationMin': p.estimatedDurationMin,
       'grantsQueueCredit': p.grantsQueueCredit,
+      'travelMode': p.travelMode,
     };
 
 SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
@@ -345,6 +348,7 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
       exercises: (j['exercises'] as List).map((e) => plannedExerciseFromJson(e as Map<String, dynamic>)).toList(),
       estimatedDurationMin: j['estimatedDurationMin'] as int,
       grantsQueueCredit: j['grantsQueueCredit'] as bool? ?? true,
+      travelMode: j['travelMode'] as bool? ?? false,
     );
 
 Map<String, dynamic> decisionTraceToJson(DecisionTrace t) => {
