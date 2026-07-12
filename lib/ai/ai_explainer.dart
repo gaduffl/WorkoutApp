@@ -55,6 +55,8 @@ class AiExplainer {
         return 'compressed from 60 to 35 minutes';
       case RuleKey.timeCompress35_20:
         return 'compressed to a 20-minute first-superset-only session';
+      case RuleKey.travelModeActive:
+        return 'no-equipment travel mode active; use reps, tempo, or range of motion while load progression stays paused';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:
