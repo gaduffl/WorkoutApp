@@ -71,7 +71,7 @@ void main() {
       pattern: MovementPattern.squat,
       exerciseName: 'Goblet squat',
       weight: 24,
-      reps: 10,
+      value: 10,
       rir: Rir.rir2,
       timestamp: DateTime(2026, 7, 15),
     ))
@@ -86,7 +86,7 @@ void main() {
       pattern: MovementPattern.squat,
       name: 'Goblet squat',
       sets: 3,
-      repRange: (6, 10),
+      targetRange: (6, 10),
       rirTarget: Rir.rir2,
     ))
       ..remove('metric')

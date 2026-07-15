@@ -18,7 +18,7 @@ void main() {
         pattern: MovementPattern.hinge,
         exerciseName: 'DB RDL',
         weight: weight,
-        reps: reps,
+        value: reps,
         rir: rir,
         timestamp: today,
       );
@@ -67,7 +67,7 @@ void main() {
             pattern: MovementPattern.hinge,
             exerciseName: 'DB RDL - warm-up 80%',
             weight: 50,
-            reps: 10,
+            value: 10,
             rir: Rir.rir4plus,
             isWarmup: true,
             timestamp: today,
@@ -126,7 +126,7 @@ void main() {
         pattern: MovementPattern.pushHorizontal,
         exerciseName: 'Push-up',
         weight: 25,
-        reps: 8,
+        value: 8,
         rir: Rir.rir1,
         timestamp: today,
       );
@@ -196,7 +196,7 @@ void main() {
             pattern: MovementPattern.pushVertical,
             exerciseName: 'Standing DB press',
             weight: 30,
-            reps: 10,
+            value: 10,
             rir: Rir.rir2,
             timestamp: today,
           );
@@ -323,7 +323,7 @@ void main() {
             pattern: dbCurl.pattern,
             exerciseName: dbCurl.name,
             weight: 24,
-            reps: 15,
+            value: 15,
             rir: Rir.rir2,
             timestamp: today,
           );
@@ -350,7 +350,7 @@ void main() {
             pattern: dbCurl.pattern,
             exerciseName: dbCurl.name,
             weight: 50,
-            reps: 15,
+            value: 15,
             rir: Rir.rir2,
             timestamp: today,
           );

@@ -49,8 +49,7 @@ class PlannedExercise {
     required this.pattern,
     required this.name,
     required this.sets,
-    (int, int)? targetRange,
-    (int, int)? repRange,
+    required this.targetRange,
     this.metric = ExerciseMetric.reps,
     this.loadTotal,
     this.loadDisplay,
@@ -63,8 +62,7 @@ class PlannedExercise {
     this.isTravel = false,
     this.loadSteps,
     this.supersetGroup,
-  })  : assert(targetRange != null || repRange != null),
-        targetRange = targetRange ?? repRange!;
+  });
 
   /// Compatibility alias for existing callers and persisted plan consumers.
   /// New code should use [targetRange] together with [metric].

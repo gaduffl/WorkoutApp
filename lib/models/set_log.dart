@@ -21,15 +21,13 @@ class SetLog {
     required this.pattern,
     required this.exerciseName,
     required this.weight,
-    int? value,
-    int? reps,
+    required this.value,
     this.metric = ExerciseMetric.reps,
     required this.rir,
     this.painFlag = false,
     this.isWarmup = false,
     required this.timestamp,
-  })  : assert(value != null || reps != null),
-        value = value ?? reps!;
+  });
 
   /// Compatibility alias for older call sites and serialized history.
   int get reps => value;

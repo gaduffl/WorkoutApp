@@ -60,7 +60,7 @@ void main() {
           pattern: MovementPattern.squat,
           name: 'Split squat (bodyweight)',
           sets: 2,
-          repRange: (8, 15),
+          targetRange: (8, 15),
           rirTarget: Rir.rir4plus,
           isTravel: true,
           progressionEligible: false,
