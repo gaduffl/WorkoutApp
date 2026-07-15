@@ -1,6 +1,7 @@
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
+import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/ladders.dart';
@@ -431,16 +432,22 @@ class DecisionEngine {
               ? 'Travel knee-health: backward walking, wall tibialis raises, calf raises'
               : 'ATG block: backward treadmill 3-4 min, tibialis raises, slant-board calf raises',
           sets: 1,
-          repRange: const (15, 25),
+          metric: ExerciseMetric.minutes,
+          targetRange: const (5, 7),
           rirTarget: Rir.rir3plus,
           isWarmup: true,
           instruction: input.settings.travelMode
               ? 'No equipment - walk backward only where it is safe and clear'
               : 'Runs first - replaces the general warm-up (§2.5)',
-          progressionEligible: !input.settings.travelMode,
+          progressionEligible: false,
           isTravel: input.settings.travelMode,
         ));
         rampDone = true;
+      } else {
+        exercises.add(_generalWarmupEntry(
+          effectiveSessionId,
+          travelMode: input.settings.travelMode,
+        ));
       }
       // §5 Step 7 "60 -> 35": a natively-60-minute session (S2/S4) in a
       // 35-minute slot keeps its superset pairs but drops the accessory
@@ -613,9 +620,9 @@ class DecisionEngine {
             persistLoad = loadMultiplier == 1.0;
           }
           if (resolution.painReentryTestFired) {
-            // The graded test is a deliberately fixed prescription: exactly
-            // 1 x 8 at the resolved 50% load, unaffected by readiness volume
-            // or load multipliers.
+            // The graded test is a deliberately fixed light prescription
+            // (1 x 8 for reps, 10 seconds for a hold), unaffected by
+            // readiness volume or load multipliers.
             exerciseSets = 1;
             exerciseLoadMultiplier = 1.0;
             exerciseRir = Rir.rir4plus;
@@ -648,6 +655,12 @@ class DecisionEngine {
           }
         }
 
+        final prescriptionStep = progressionEngine.ladderStepFor(prescriptionState);
+        final reentryTarget = painReentryPrescription
+            ? prescriptionStep.metric == ExerciseMetric.seconds
+                ? const (10, 10)
+                : const (8, 8)
+            : null;
         var planned = _buildPlannedExercise(
           prescriptionState,
           sets: exerciseSets,
@@ -657,9 +670,11 @@ class DecisionEngine {
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
           persistLoadOnCompletion: persistLoad,
-          repRangeOverride: painReentryPrescription ? (8, 8) : null,
+          targetRangeOverride: reentryTarget,
           instruction: painReentryPrescription
-              ? 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
+              ? prescriptionStep.metric == ExerciseMetric.seconds
+                  ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
+                  : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
               : null,
         );
 
@@ -680,14 +695,21 @@ class DecisionEngine {
               pattern: pattern,
               name: travel.name,
               sets: planned.sets,
-              repRange: painReentryPrescription ? (8, 8) : (8, 15),
+              metric: travel.metric,
+              targetRange: painReentryPrescription
+                  ? travel.metric == ExerciseMetric.seconds
+                      ? const (10, 10)
+                      : const (8, 8)
+                  : travel.targetRange ?? const (8, 15),
               rirTarget: painAdjusted ? Rir.rir4plus : planned.rirTarget,
               substitutedFrom: planned.substitutedFrom,
               instruction: painReentryPrescription
                   ? 'Travel mode - light pain-free check only; the formal loaded re-entry remains pending'
                   : painAdjusted
                       ? 'Travel mode - use an easier variation and pain-free range; stop if pain worsens'
-                      : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
+                      : travel.metric == ExerciseMetric.seconds
+                          ? 'Travel mode - no equipment; progress with hold duration, control, or position'
+                          : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
               progressionEligible: false,
               isTravel: true,
             );
@@ -737,6 +759,8 @@ class DecisionEngine {
         exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(supersetGroup: g ~/ 2);
         exercises[compoundWork[g + 1]] = exercises[compoundWork[g + 1]].copyWith(supersetGroup: g ~/ 2);
       }
+    } else if (template?.isCardioOnly == true) {
+      exercises.add(_cardioWarmupEntry(effectiveSessionId));
     }
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
@@ -945,13 +969,73 @@ class DecisionEngine {
       pattern: work.pattern,
       name: '${work.name} - warm-up ${(pct * 100).round()}%',
       sets: 1,
-      repRange: (reps, reps),
+      targetRange: (reps, reps),
+      metric: ExerciseMetric.reps,
       loadTotal: load,
       loadDisplay: equipmentEngine.describeLoad(resolved, cfg),
       loadSteps: achievable,
       rirTarget: Rir.rir3plus,
       isWarmup: true,
       instruction: 'Rest <= 60 s',
+      progressionEligible: false,
+    );
+  }
+
+  PlannedExercise _generalWarmupEntry(
+    SessionTypeId id, {
+    required bool travelMode,
+  }) {
+    final instruction = switch (id) {
+      SessionTypeId.s1 =>
+        'Start with easy walking or marching, then controlled hip hinges, squats, and ankle movement',
+      SessionTypeId.s2 =>
+        'Start with easy movement, then shoulder circles, scapular push-ups, and light reach-and-pulls',
+      SessionTypeId.s5 =>
+        'Start with easy movement, then shoulder, elbow, wrist, and trunk preparation',
+      _ => 'Start easy, then rehearse today\'s movement patterns through a comfortable range',
+    };
+    return PlannedExercise(
+      trackKey: 'warmup:${id.name}',
+      pattern: MovementPattern.kneeHealth,
+      name: 'General warm-up & movement prep',
+      sets: 1,
+      metric: ExerciseMetric.minutes,
+      targetRange: const (5, 7),
+      rirTarget: Rir.rir4plus,
+      isWarmup: true,
+      instruction: travelMode ? '$instruction. No equipment needed.' : instruction,
+      progressionEligible: false,
+      isTravel: travelMode,
+    );
+  }
+
+  PlannedExercise _cardioWarmupEntry(SessionTypeId id) {
+    final (range, instruction) = switch (id) {
+      SessionTypeId.s3 => (
+          const (8, 10),
+          'Pedal easily, then include 2-3 short controlled builds before the first hard interval',
+        ),
+      SessionTypeId.s6 => (
+          const (5, 10),
+          'Begin below Zone 2 and increase gradually until breathing and cadence settle',
+        ),
+      SessionTypeId.s7 => (
+          const (2, 3),
+          'Pedal easily and include one short cadence build before the first sprint',
+        ),
+      _ => (const (5, 8), 'Begin at an easy effort and increase gradually'),
+    };
+    return PlannedExercise(
+      trackKey: 'warmup:${id.name}',
+      pattern: MovementPattern.kneeHealth,
+      name: 'Easy cardio warm-up',
+      sets: 1,
+      metric: ExerciseMetric.minutes,
+      targetRange: range,
+      rirTarget: Rir.rir4plus,
+      isWarmup: true,
+      instruction: instruction,
+      progressionEligible: false,
     );
   }
 
@@ -964,14 +1048,16 @@ class DecisionEngine {
     String? substitutedFrom,
     required bool progressionEligible,
     bool persistLoadOnCompletion = false,
-    (int, int)? repRangeOverride,
+    (int, int)? targetRangeOverride,
     String? instruction,
   }) {
     final substitute = substituteRegistry[state.trackKey];
     final step = substitute != null
         ? LadderStep(name: substitute.name, dumbbells: substitute.dumbbells)
         : ladders[state.pattern]!.steps[state.ladderStepIndex.clamp(0, ladders[state.pattern]!.steps.length - 1)];
-    final repRange = repRangeOverride ??
+    final metric = step.metric;
+    final targetRange = targetRangeOverride ??
+        step.targetRange ??
         (state.trackKey.startsWith('sub:') ? (8, 15) : state.pattern.repRange);
 
     double? loadTotal;
@@ -998,7 +1084,8 @@ class DecisionEngine {
       pattern: state.pattern,
       name: step.name,
       sets: sets,
-      repRange: repRange,
+      metric: metric,
+      targetRange: targetRange,
       loadTotal: loadTotal,
       loadDisplay: loadDisplay,
       loadSteps: loadSteps,

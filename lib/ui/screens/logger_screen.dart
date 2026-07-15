@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/session_templates.dart';
+import '../../models/exercise_metric.dart';
 import '../../models/movement_pattern.dart';
 import '../../models/plan.dart';
 import '../../models/session_type.dart';
@@ -40,12 +41,15 @@ class _LoggerScreenState extends State<LoggerScreen> {
   final List<SetLog> _logged = [];
   final Set<String> _loggedKeys = {}; // 'exIdx:setNumber' of completed steps
   final Map<int, double> _weightByExercise = {}; // per plan-exercise working weight
-  int _reps = 8;
+  int _value = 8;
   Rir _rir = Rir.rir2;
   bool _painFlag = false;
   bool _finishing = false;
   Timer? _restTimer;
   int _restSecondsLeft = 0;
+  Timer? _holdTimer;
+  int _holdSecondsLeft = 0;
+  bool _holdRunning = false;
   final _stopwatch = Stopwatch()..start();
 
   List<PlannedExercise> get _ex => widget.plan.exercises;
@@ -65,6 +69,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   @override
   void dispose() {
     _restTimer?.cancel();
+    _holdTimer?.cancel();
     super.dispose();
   }
 
@@ -141,7 +146,10 @@ class _LoggerScreenState extends State<LoggerScreen> {
   }
 
   void _syncSetInputs() {
-    _reps = _exercise.repRange.$1;
+    _holdTimer?.cancel();
+    _holdRunning = false;
+    _value = _exercise.targetRange.$1;
+    _holdSecondsLeft = _value;
     _rir = _exercise.rirTarget;
     _painFlag = false;
   }
@@ -176,6 +184,42 @@ class _LoggerScreenState extends State<LoggerScreen> {
     });
   }
 
+  void _toggleHoldTimer() {
+    if (_holdRunning) {
+      _holdTimer?.cancel();
+      setState(() => _holdRunning = false);
+      return;
+    }
+    setState(() {
+      if (_holdSecondsLeft <= 0) _holdSecondsLeft = _value;
+      _holdRunning = true;
+    });
+    _holdTimer?.cancel();
+    _holdTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_holdSecondsLeft <= 1) {
+        timer.cancel();
+        setState(() {
+          _holdSecondsLeft = 0;
+          _holdRunning = false;
+        });
+      } else {
+        setState(() => _holdSecondsLeft -= 1);
+      }
+    });
+  }
+
+  void _resetHoldTimer() {
+    _holdTimer?.cancel();
+    setState(() {
+      _holdRunning = false;
+      _holdSecondsLeft = _value;
+    });
+  }
+
   Future<void> _logSet() async {
     if (_finishing) return;
     final step = _steps[_current];
@@ -186,7 +230,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
       pattern: ex.pattern,
       exerciseName: ex.name,
       weight: _weightByExercise[step.exIdx] ?? 0,
-      reps: _reps,
+      metric: ex.metric,
+      value: _value,
       rir: _rir,
       painFlag: _painFlag,
       isWarmup: ex.isWarmup,
@@ -199,6 +244,9 @@ class _LoggerScreenState extends State<LoggerScreen> {
       // a fresh one only if this set is followed by rest.
       _restTimer?.cancel();
       _restSecondsLeft = 0;
+      _holdTimer?.cancel();
+      _holdRunning = false;
+      _holdSecondsLeft = 0;
       if (!wasLast && step.restAfter && !ex.isWarmup) {
         _startRest(ex.pattern.patternClass == PatternClass.compound);
       }
@@ -298,7 +346,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
                         ),
                       const SizedBox(height: 12),
                       Text(
-                        'Target: ${e.repRange.$1}-${e.repRange.$2} reps'
+                        'Target: ${e.targetLabel}'
                         '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}',
                         style: Theme.of(context).textTheme.bodyLarge,
                         textAlign: TextAlign.center,
@@ -314,21 +362,23 @@ class _LoggerScreenState extends State<LoggerScreen> {
                       const SizedBox(height: 20),
                       if (e.loadTotal != null || e.loadSteps != null)
                         _weightStepper()
-                      else
+                      else if (!e.isWarmup)
                         const Text('Bodyweight', style: TextStyle(fontWeight: FontWeight.bold)),
-                      _repsStepper(),
+                      _valueStepper(),
+                      if (e.metric == ExerciseMetric.seconds) _holdCountdown(),
                       const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: Rir.values
-                            .map((r) => ChoiceChip(
-                                  label: Text(_rirLabel(r)),
-                                  selected: _rir == r,
-                                  onSelected: (_) => setState(() => _rir = r),
-                                ))
-                            .toList(),
-                      ),
+                      if (!e.isWarmup)
+                        Wrap(
+                          spacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: Rir.values
+                              .map((r) => ChoiceChip(
+                                    label: Text(_rirLabel(r)),
+                                    selected: _rir == r,
+                                    onSelected: (_) => setState(() => _rir = r),
+                                  ))
+                              .toList(),
+                        ),
                       const SizedBox(height: 12),
                       Tooltip(
                         message: 'Stops progression for this exercise today. '
@@ -358,7 +408,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _finishing ? null : _logSet,
-                  child: Text(isLast ? 'Log set & finish' : 'Log set'),
+                  child: Text(_logButtonLabel(e, isLast)),
                 ),
               ),
               if (!isLast) ...[
@@ -408,21 +458,70 @@ class _LoggerScreenState extends State<LoggerScreen> {
     );
   }
 
-  Widget _repsStepper() {
+  Widget _valueStepper() {
+    final step = _exercise.metric == ExerciseMetric.seconds ? 5 : 1;
+    final max = switch (_exercise.metric) {
+      ExerciseMetric.reps => 50,
+      ExerciseMetric.seconds => 600,
+      ExerciseMetric.minutes => 120,
+    };
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const SizedBox(width: 90, child: Text('Reps')),
+        SizedBox(width: 90, child: Text(_exercise.metric.inputLabel)),
         IconButton.filledTonal(
-            onPressed: () => setState(() => _reps = (_reps - 1).clamp(0, 50)), icon: const Icon(Icons.remove)),
+            onPressed: () => setState(() {
+                  _value = (_value - step).clamp(0, max);
+                  if (!_holdRunning) _holdSecondsLeft = _value;
+                }),
+            icon: const Icon(Icons.remove)),
         SizedBox(
           width: 96,
-          child: Text('$_reps', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+          child: Text('$_value', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
         ),
         IconButton.filledTonal(
-            onPressed: () => setState(() => _reps = (_reps + 1).clamp(0, 50)), icon: const Icon(Icons.add)),
+            onPressed: () => setState(() {
+                  _value = (_value + step).clamp(0, max);
+                  if (!_holdRunning) _holdSecondsLeft = _value;
+                }),
+            icon: const Icon(Icons.add)),
       ],
     );
+  }
+
+  Widget _holdCountdown() {
+    return Card(
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('$_holdSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(width: 12),
+            FilledButton.tonalIcon(
+              onPressed: _value <= 0 ? null : _toggleHoldTimer,
+              icon: Icon(_holdRunning ? Icons.pause : Icons.play_arrow),
+              label: Text(_holdRunning ? 'Pause' : 'Start hold'),
+            ),
+            IconButton(
+              tooltip: 'Reset hold timer',
+              onPressed: _resetHoldTimer,
+              icon: const Icon(Icons.replay),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _logButtonLabel(PlannedExercise exercise, bool isLast) {
+    final action = exercise.isWarmup
+        ? 'Log warm-up'
+        : exercise.metric == ExerciseMetric.seconds
+            ? 'Log hold'
+            : 'Log set';
+    return isLast ? '$action & finish' : action;
   }
 
   String _rirLabel(Rir r) => switch (r) {

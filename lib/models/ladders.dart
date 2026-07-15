@@ -1,3 +1,4 @@
+import 'exercise_metric.dart';
 import 'movement_pattern.dart';
 
 /// §2.3: ladder steps, easiest -> hardest. `dumbbells` is 0 for
@@ -9,6 +10,12 @@ class LadderStep {
   final int dumbbells;
   final bool backpackLoaded;
 
+  /// Per-step measurement and optional target. This deliberately lives on
+  /// the step rather than [MovementPattern], because core/grip mixes timed
+  /// holds with rep-based wrist curls.
+  final ExerciseMetric metric;
+  final (int, int)? targetRange;
+
   /// True for single-leg/single-arm steps - excludes uneven-pair mode
   /// even when 2 dumbbells are held (§2.6 rule 3).
   final bool unilateral;
@@ -18,6 +25,8 @@ class LadderStep {
     this.dumbbells = 0,
     this.backpackLoaded = false,
     this.unilateral = false,
+    this.metric = ExerciseMetric.reps,
+    this.targetRange,
   });
 }
 
@@ -99,10 +108,27 @@ final Map<MovementPattern, MovementLadder> ladders = {
   MovementPattern.coreGrip: const MovementLadder(
     pattern: MovementPattern.coreGrip,
     steps: [
-      LadderStep(name: 'Plank'),
-      LadderStep(name: 'L-sit progression'),
-      LadderStep(name: 'Hanging'),
-      LadderStep(name: 'Weighted hanging', backpackLoaded: true),
+      LadderStep(
+        name: 'Plank',
+        metric: ExerciseMetric.seconds,
+        targetRange: (20, 45),
+      ),
+      LadderStep(
+        name: 'L-sit progression',
+        metric: ExerciseMetric.seconds,
+        targetRange: (10, 30),
+      ),
+      LadderStep(
+        name: 'Hanging',
+        metric: ExerciseMetric.seconds,
+        targetRange: (20, 60),
+      ),
+      LadderStep(
+        name: 'Weighted hanging',
+        backpackLoaded: true,
+        metric: ExerciseMetric.seconds,
+        targetRange: (15, 45),
+      ),
       LadderStep(name: 'Wrist curls', dumbbells: 1),
     ],
   ),
@@ -147,7 +173,7 @@ const floorPress = SubstituteExercise(
 );
 
 /// §12 travel / no-equipment mode: each pattern's bodyweight resolution.
-/// Progression is by reps/ROM only — engine state is not advanced while
+/// Progression is by reps, hold duration, or ROM only — engine state is not advanced while
 /// travelling, but lastTrained still updates so §6.6 doesn't misfire later.
 const Map<MovementPattern, LadderStep> travelSteps = {
   MovementPattern.squat: LadderStep(name: 'Split squat (bodyweight)'),
@@ -156,7 +182,11 @@ const Map<MovementPattern, LadderStep> travelSteps = {
   MovementPattern.pushVertical: LadderStep(name: 'Pike push-up'),
   MovementPattern.pullVertical: LadderStep(name: 'Prone lat pull-down'),
   MovementPattern.pullHorizontal: LadderStep(name: 'Prone W-row'),
-  MovementPattern.coreGrip: LadderStep(name: 'Plank / hollow hold'),
+  MovementPattern.coreGrip: LadderStep(
+    name: 'Plank / hollow hold',
+    metric: ExerciseMetric.seconds,
+    targetRange: (20, 45),
+  ),
 };
 
 // S5 "Flex/Pump" direct accessories (§2.1: arms, shoulders, core). Not spec

@@ -1,6 +1,7 @@
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
+import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/movement_pattern.dart';
@@ -18,6 +19,15 @@ import '../engine/queue_engine.dart';
 
 String _dateStr(DateTime d) => DateTime(d.year, d.month, d.day).toIso8601String();
 DateTime _parseDate(String s) => DateTime.parse(s);
+
+ExerciseMetric _exerciseMetricFromJson(Object? value) {
+  if (value is String) {
+    for (final metric in ExerciseMetric.values) {
+      if (metric.name == value) return metric;
+    }
+  }
+  return ExerciseMetric.reps;
+}
 
 Map<String, dynamic> exerciseStateToJson(ExerciseState s) => {
       'trackKey': s.trackKey,
@@ -132,7 +142,11 @@ Map<String, dynamic> setLogToJson(SetLog s) => {
       'pattern': s.pattern.name,
       'exerciseName': s.exerciseName,
       'weight': s.weight,
-      'reps': s.reps,
+      'metric': s.metric.name,
+      'value': s.value,
+      // Retain the legacy field so older app builds can still import a
+      // backup. Its meaning is superseded by metric/value in new builds.
+      'reps': s.value,
       'rir': s.rir.name,
       'painFlag': s.painFlag,
       'isWarmup': s.isWarmup,
@@ -144,10 +158,11 @@ SetLog setLogFromJson(Map<String, dynamic> j) => SetLog(
       pattern: MovementPattern.values.byName(j['pattern'] as String),
       exerciseName: j['exerciseName'] as String,
       weight: (j['weight'] as num).toDouble(),
-      reps: j['reps'] as int,
+      metric: _exerciseMetricFromJson(j['metric']),
+      value: (j['value'] ?? j['reps']) as int,
       rir: Rir.values.byName(j['rir'] as String),
-      painFlag: j['painFlag'] as bool,
-      isWarmup: j['isWarmup'] as bool,
+      painFlag: j['painFlag'] as bool? ?? false,
+      isWarmup: j['isWarmup'] as bool? ?? false,
       timestamp: DateTime.parse(j['timestamp'] as String),
     );
 
@@ -297,8 +312,12 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'pattern': e.pattern.name,
       'name': e.name,
       'sets': e.sets,
-      'repRangeLow': e.repRange.$1,
-      'repRangeHigh': e.repRange.$2,
+      'metric': e.metric.name,
+      'targetRangeLow': e.targetRange.$1,
+      'targetRangeHigh': e.targetRange.$2,
+      // Legacy aliases keep decision traces importable by an older build.
+      'repRangeLow': e.targetRange.$1,
+      'repRangeHigh': e.targetRange.$2,
       'loadTotal': e.loadTotal,
       'loadDisplay': e.loadDisplay,
       'rirTarget': e.rirTarget.name,
@@ -317,7 +336,11 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       pattern: MovementPattern.values.byName(j['pattern'] as String),
       name: j['name'] as String,
       sets: j['sets'] as int,
-      repRange: (j['repRangeLow'] as int, j['repRangeHigh'] as int),
+      metric: _exerciseMetricFromJson(j['metric']),
+      targetRange: (
+        (j['targetRangeLow'] ?? j['repRangeLow']) as int,
+        (j['targetRangeHigh'] ?? j['repRangeHigh']) as int,
+      ),
       loadTotal: (j['loadTotal'] as num?)?.toDouble(),
       loadDisplay: j['loadDisplay'] as String?,
       rirTarget: Rir.values.byName(j['rirTarget'] as String),

@@ -1,3 +1,4 @@
+import 'exercise_metric.dart';
 import 'movement_pattern.dart';
 import 'session_type.dart';
 import 'set_log.dart';
@@ -7,7 +8,8 @@ class PlannedExercise {
   final MovementPattern pattern;
   final String name;
   final int sets;
-  final (int, int) repRange;
+  final ExerciseMetric metric;
+  final (int, int) targetRange;
   final double? loadTotal;
 
   /// Human-readable load setup, e.g. "2x large @ 25 lb" or
@@ -47,7 +49,9 @@ class PlannedExercise {
     required this.pattern,
     required this.name,
     required this.sets,
-    required this.repRange,
+    (int, int)? targetRange,
+    (int, int)? repRange,
+    this.metric = ExerciseMetric.reps,
     this.loadTotal,
     this.loadDisplay,
     required this.rirTarget,
@@ -59,14 +63,22 @@ class PlannedExercise {
     this.isTravel = false,
     this.loadSteps,
     this.supersetGroup,
-  });
+  })  : assert(targetRange != null || repRange != null),
+        targetRange = targetRange ?? repRange!;
+
+  /// Compatibility alias for existing callers and persisted plan consumers.
+  /// New code should use [targetRange] together with [metric].
+  (int, int) get repRange => targetRange;
+
+  String get targetLabel => metric.formatRange(targetRange);
 
   PlannedExercise copyWith({int? supersetGroup}) => PlannedExercise(
         trackKey: trackKey,
         pattern: pattern,
         name: name,
         sets: sets,
-        repRange: repRange,
+        targetRange: targetRange,
+        metric: metric,
         loadTotal: loadTotal,
         loadDisplay: loadDisplay,
         rirTarget: rirTarget,

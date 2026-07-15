@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/state/app_controller.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -80,5 +81,38 @@ void main() {
       find.widgetWithText(ChoiceChip, 'RIR 4+'),
     );
     expect(rir4.selected, isTrue);
+  });
+
+  testWidgets('timed hold logger uses seconds and exposes a countdown', (WidgetTester tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+    const plan = SessionPlan(
+      sessionId: SessionTypeId.s5,
+      sessionName: 'Flex / Pump',
+      tier: SessionTier.full,
+      estimatedDurationMin: 35,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'coreGrip',
+          pattern: MovementPattern.coreGrip,
+          name: 'Plank',
+          sets: 2,
+          metric: ExerciseMetric.seconds,
+          targetRange: (20, 45),
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(home: LoggerScreen(plan: plan)),
+      ),
+    );
+
+    expect(find.text('Target: 20-45 seconds'), findsOneWidget);
+    expect(find.text('Seconds'), findsOneWidget);
+    expect(find.text('Start hold'), findsOneWidget);
+    expect(find.text('Reps'), findsNothing);
   });
 }

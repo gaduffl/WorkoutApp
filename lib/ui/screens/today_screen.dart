@@ -251,7 +251,7 @@ class _TodayScreenState extends State<TodayScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${e.isWarmup ? 'warm-up' : '${e.sets} x ${e.repRange.$1}-${e.repRange.$2} reps'}'
+                            '${e.isWarmup ? 'Warm-up · ${e.targetLabel}' : '${e.sets} x ${e.targetLabel}'}'
                             '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}'
                             '${e.substitutedFrom != null ? ' (sub for ${e.substitutedFrom})' : ''}'
                             '${e.supersetGroup != null ? ' · superset ${String.fromCharCode(65 + e.supersetGroup!)}' : ''}',
