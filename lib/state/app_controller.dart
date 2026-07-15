@@ -270,6 +270,7 @@ class AppController extends ChangeNotifier {
     // Re-apply this device's tokens on top of whatever the backup carried.
     settings = settings.copyWith(oneDrive: keepConnection);
     await repo.saveSettings(settings);
+    unawaited(syncNotifications());
     notifyListeners();
     return true;
   }
@@ -417,12 +418,16 @@ class AppController extends ChangeNotifier {
 
   /// §3.1 + §12: (re)schedule the wake-window nudge and cutoff reminder.
   /// Best-effort - never blocks or throws.
-  Future<void> syncNotifications() {
-    return NotificationService.sync(
+  Future<void> syncNotifications() async {
+    await NotificationService.sync(
       enabled: settings.notificationsEnabled,
       wakeWindow: settings.wakeWindow,
       cutoffHour: settings.checkInCutoffHour,
       checkedInToday: todayTrace != null,
+    );
+    await NotificationService.syncSecondRehitNudge(
+      enabled: settings.notificationsEnabled,
+      eligible: canOfferSecondRehit,
     );
   }
 
@@ -529,6 +534,7 @@ class AppController extends ChangeNotifier {
     await repo.deleteRecoverySnapshot(now);
     await repo.deleteDecisionTrace(now);
     todayTrace = null;
+    unawaited(syncNotifications());
     notifyListeners();
   }
 
@@ -654,6 +660,7 @@ class AppController extends ChangeNotifier {
       );
       await repo.saveSessionLog(log);
       _recentLogs = [..._recentLogs, log];
+      unawaited(syncNotifications());
 
       if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
         queueState = const QueueEngine().advance(queueState, plan.sessionId);

@@ -2,6 +2,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+/// Picks today's one-time second-session REHIT nudge. The nudge is never
+/// allowed to land at or after 20:00 local time.
+DateTime? secondRehitNudgeTime(DateTime now) {
+  final atThree = DateTime(now.year, now.month, now.day, 15);
+  final threeHoursLater = now.add(const Duration(hours: 3));
+  final target = threeHoursLater.isAfter(atThree) ? threeHoursLater : atThree;
+  final cutoff = DateTime(now.year, now.month, now.day, 20);
+  return target.isBefore(cutoff) ? target : null;
+}
+
 /// §3.1 wake-window nudge ("Ready to plan today?") and §12 no-check-in
 /// cutoff ("No plan yet - tap for a 20-min default").
 ///
@@ -14,12 +24,23 @@ class NotificationService {
 
   static const _wakeId = 1;
   static const _cutoffId = 2;
+  static const _secondRehitId = 3;
 
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(
       'morningcoach_daily',
       'Daily check-in',
       channelDescription: 'Morning check-in reminders',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    ),
+  );
+
+  static const _trainingNudgeDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'morningcoach_training_nudges',
+      'Training nudges',
+      channelDescription: 'Optional later-day training reminders',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
     ),
@@ -122,6 +143,44 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } catch (_) {
+      // best-effort only
+    }
+  }
+
+  /// Keeps one optional second-session REHIT nudge in sync with the current
+  /// log state. This is a single inexact notification, never a daily alarm.
+  static Future<void> syncSecondRehitNudge({
+    required bool enabled,
+    required bool eligible,
+    DateTime? now,
+  }) async {
+    if (!await _init()) return;
+    try {
+      await _plugin.cancel(_secondRehitId);
+      if (!enabled || !eligible) return;
+
+      final target = secondRehitNudgeTime(now ?? DateTime.now());
+      if (target == null) return;
+      _setLocalLocationFromOffset();
+      final localTarget = tz.TZDateTime(
+        tz.local,
+        target.year,
+        target.month,
+        target.day,
+        target.hour,
+        target.minute,
+        target.second,
+      );
+      await _plugin.zonedSchedule(
+        _secondRehitId,
+        'Still up for a quick REHIT?',
+        'An 8-minute bike session can cover today\'s intensity work.',
+        localTarget,
+        _trainingNudgeDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
     } catch (_) {
       // best-effort only

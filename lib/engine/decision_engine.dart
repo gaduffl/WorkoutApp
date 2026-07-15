@@ -759,8 +759,6 @@ class DecisionEngine {
         exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(supersetGroup: g ~/ 2);
         exercises[compoundWork[g + 1]] = exercises[compoundWork[g + 1]].copyWith(supersetGroup: g ~/ 2);
       }
-    } else if (template?.isCardioOnly == true) {
-      exercises.add(_cardioWarmupEntry(effectiveSessionId));
     }
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
@@ -1006,36 +1004,6 @@ class DecisionEngine {
       instruction: travelMode ? '$instruction. No equipment needed.' : instruction,
       progressionEligible: false,
       isTravel: travelMode,
-    );
-  }
-
-  PlannedExercise _cardioWarmupEntry(SessionTypeId id) {
-    final (range, instruction) = switch (id) {
-      SessionTypeId.s3 => (
-          const (8, 10),
-          'Pedal easily, then include 2-3 short controlled builds before the first hard interval',
-        ),
-      SessionTypeId.s6 => (
-          const (5, 10),
-          'Begin below Zone 2 and increase gradually until breathing and cadence settle',
-        ),
-      SessionTypeId.s7 => (
-          const (2, 3),
-          'Pedal easily and include one short cadence build before the first sprint',
-        ),
-      _ => (const (5, 8), 'Begin at an easy effort and increase gradually'),
-    };
-    return PlannedExercise(
-      trackKey: 'warmup:${id.name}',
-      pattern: MovementPattern.kneeHealth,
-      name: 'Easy cardio warm-up',
-      sets: 1,
-      metric: ExerciseMetric.minutes,
-      targetRange: range,
-      rirTarget: Rir.rir4plus,
-      isWarmup: true,
-      instruction: instruction,
-      progressionEligible: false,
     );
   }
 

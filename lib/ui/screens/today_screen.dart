@@ -11,6 +11,17 @@ import '../../state/app_controller.dart';
 import 'checkin_screen.dart';
 import 'logger_screen.dart';
 
+const optionalRehitFinisherMessage =
+    'Optional finisher: 8-min REHIT after the strength work. Completing it earns intensity credit.';
+
+/// Mirrors the logger's finisher dialog gate exactly, so Today never
+/// promises a finisher that the completed plan cannot actually offer.
+String? optionalRehitFinisherHint(SessionPlan? plan) {
+  if (plan == null || plan.tier != SessionTier.extended) return null;
+  if (sessionTemplates[plan.sessionId]?.hasOptionalRehitFinisher != true) return null;
+  return optionalRehitFinisherMessage;
+}
+
 class TodayScreen extends StatefulWidget {
   final DecisionTrace trace;
 
@@ -135,6 +146,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final plan = trace.plan;
     final done = controller.sessionDoneToday;
     final loggingStarted = controller.sessionLoggedToday;
+    final finisherHint = loggingStarted ? null : optionalRehitFinisherHint(plan);
     final noOpAlternativeIds = <SessionTypeId>{if (plan != null) plan.sessionId};
     final firedCodes = trace.firedRuleCodes.toSet();
     if (firedCodes.contains('S7_TIME_SUB') || firedCodes.contains('YELLOW_4X4_TO_REHIT')) {
@@ -263,6 +275,14 @@ class _TodayScreenState extends State<TodayScreen> {
                       trailing: e.isWarmup ? null : Text('RIR ${_rirLabel(e.rirTarget.name)}'),
                     ),
                   )),
+            if (finisherHint != null)
+              Card(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.bolt),
+                  title: Text(finisherHint),
+                ),
+              ),
             const SizedBox(height: 24),
             if (done)
               Card(

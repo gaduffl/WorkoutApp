@@ -1094,7 +1094,7 @@ void main() {
     expect(s7.trace.plan!.grantsQueueCredit, isFalse);
   });
 
-  test('every cardio plan visibly prescribes an easy warm-up without work-set credit', () {
+  test('cardio plans contain no app-added warm-up exercises', () {
     for (final id in [SessionTypeId.s3, SessionTypeId.s6, SessionTypeId.s7]) {
       final output = decisionEngine.decide(buildInput(
         time: 60,
@@ -1110,10 +1110,7 @@ void main() {
         forcedSessionId: id,
       ));
       final plan = output.trace.plan!;
-      final warmup = plan.exercises.singleWhere((exercise) => exercise.isWarmup);
-      expect(warmup.name, 'Easy cardio warm-up', reason: id.name);
-      expect(warmup.metric, ExerciseMetric.minutes, reason: id.name);
-      expect(warmup.instruction, isNotEmpty, reason: id.name);
+      expect(plan.exercises, isEmpty, reason: id.name);
       expect(plan.plannedWorkSets, 0, reason: id.name);
     }
   });
