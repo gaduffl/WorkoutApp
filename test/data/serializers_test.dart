@@ -8,6 +8,7 @@ import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
+import 'package:morningcoach/models/user_settings.dart';
 
 void main() {
   test('travel context round-trips on plans and session logs', () {
@@ -95,5 +96,19 @@ void main() {
     final restoredPlan = plannedExerciseFromJson(legacyPlan);
     expect(restoredPlan.metric, ExerciseMetric.reps);
     expect(restoredPlan.targetRange, (6, 10));
+  });
+
+  test('REHIT nudge day round-trips and older settings default to null', () {
+    const settings = UserSettings(
+      secondRehitNudgeScheduledDay: '2026-07-15',
+    );
+    final json = userSettingsToJson(settings);
+    expect(
+      userSettingsFromJson(json).secondRehitNudgeScheduledDay,
+      '2026-07-15',
+    );
+
+    json.remove('secondRehitNudgeScheduledDay');
+    expect(userSettingsFromJson(json).secondRehitNudgeScheduledDay, isNull);
   });
 }

@@ -16,4 +16,75 @@ void main() {
     final now = DateTime(2026, 7, 15, 17);
     expect(secondRehitNudgeTime(now), isNull);
   });
+
+  group('once-per-local-day gate', () {
+    final now = DateTime(2026, 7, 15, 10);
+
+    test('disabled or ineligible always cancels', () {
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: false,
+          eligible: true,
+          now: now,
+          scheduledDay: '2026-07-15',
+        ),
+        SecondRehitNudgeSyncDecision.cancel,
+      );
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: true,
+          eligible: false,
+          now: now,
+          scheduledDay: '2026-07-15',
+        ),
+        SecondRehitNudgeSyncDecision.cancel,
+      );
+    });
+
+    test('an existing marker for today keeps the pending state untouched', () {
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: true,
+          eligible: true,
+          now: now,
+          scheduledDay: '2026-07-15',
+        ),
+        SecondRehitNudgeSyncDecision.keep,
+      );
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: true,
+          eligible: true,
+          now: DateTime(2026, 7, 15, 18),
+          scheduledDay: '2026-07-15',
+        ),
+        SecondRehitNudgeSyncDecision.keep,
+        reason: 'reopening after delivery must not create a second reminder',
+      );
+    });
+
+    test('a prior-day marker allows one new schedule today', () {
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: true,
+          eligible: true,
+          now: now,
+          scheduledDay: '2026-07-14',
+        ),
+        SecondRehitNudgeSyncDecision.schedule,
+      );
+    });
+
+    test('a first sync at 17:00 cancels instead of scheduling too late', () {
+      expect(
+        secondRehitNudgeSyncDecision(
+          enabled: true,
+          eligible: true,
+          now: DateTime(2026, 7, 15, 17),
+          scheduledDay: '2026-07-14',
+        ),
+        SecondRehitNudgeSyncDecision.cancel,
+      );
+    });
+  });
 }

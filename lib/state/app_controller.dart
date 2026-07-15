@@ -42,6 +42,8 @@ class AppController extends ChangeNotifier {
   /// the same workout twice or advance the queue twice.
   bool _completionInFlight = false;
   bool _travelModeChangeInFlight = false;
+  Future<void>? _notificationSyncTask;
+  bool _notificationSyncQueued = false;
   bool get travelModeChanging => _travelModeChangeInFlight;
 
   /// Sessions logged in the trailing 3 days, so the UI can reflect what's
@@ -375,7 +377,11 @@ class AppController extends ChangeNotifier {
 
   Future<void> saveSettings(UserSettings newSettings) async {
     final travelModeChanged = settings.travelMode != newSettings.travelMode;
-    settings = newSettings;
+    // The REHIT day marker is internal state, not an editable preference.
+    // Preserve a marker written while a settings screen held an older copy.
+    settings = newSettings.copyWith(
+      secondRehitNudgeScheduledDay: settings.secondRehitNudgeScheduledDay,
+    );
     await repo.saveSettings(settings);
     unawaited(syncNotifications());
     if (travelModeChanged && todayTrace != null && !sessionLoggedToday) {
@@ -418,17 +424,45 @@ class AppController extends ChangeNotifier {
 
   /// §3.1 + §12: (re)schedule the wake-window nudge and cutoff reminder.
   /// Best-effort - never blocks or throws.
-  Future<void> syncNotifications() async {
-    await NotificationService.sync(
-      enabled: settings.notificationsEnabled,
-      wakeWindow: settings.wakeWindow,
-      cutoffHour: settings.checkInCutoffHour,
-      checkedInToday: todayTrace != null,
-    );
-    await NotificationService.syncSecondRehitNudge(
-      enabled: settings.notificationsEnabled,
-      eligible: canOfferSecondRehit,
-    );
+  Future<void> syncNotifications() {
+    _notificationSyncQueued = true;
+    return _notificationSyncTask ??= _drainNotificationSyncs();
+  }
+
+  Future<void> _drainNotificationSyncs() async {
+    try {
+      while (_notificationSyncQueued) {
+        _notificationSyncQueued = false;
+        await _syncNotificationsOnce();
+      }
+    } finally {
+      _notificationSyncTask = null;
+    }
+  }
+
+  Future<void> _syncNotificationsOnce() async {
+    try {
+      await NotificationService.sync(
+        enabled: settings.notificationsEnabled,
+        wakeWindow: settings.wakeWindow,
+        cutoffHour: settings.checkInCutoffHour,
+        checkedInToday: todayTrace != null,
+      );
+      final scheduledDay = await NotificationService.syncSecondRehitNudge(
+        enabled: settings.notificationsEnabled,
+        eligible: canOfferSecondRehit,
+        scheduledDay: settings.secondRehitNudgeScheduledDay,
+      );
+      if (scheduledDay != null &&
+          scheduledDay != settings.secondRehitNudgeScheduledDay) {
+        settings = settings.copyWith(
+          secondRehitNudgeScheduledDay: scheduledDay,
+        );
+        await repo.saveSettings(settings);
+      }
+    } catch (_) {
+      // best-effort only
+    }
   }
 
   Future<DecisionTrace> submitCheckIn({

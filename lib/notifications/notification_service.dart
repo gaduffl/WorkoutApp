@@ -12,6 +12,31 @@ DateTime? secondRehitNudgeTime(DateTime now) {
   return target.isBefore(cutoff) ? target : null;
 }
 
+String _secondRehitNudgeDay(DateTime now) =>
+    '${now.year.toString().padLeft(4, '0')}-'
+    '${now.month.toString().padLeft(2, '0')}-'
+    '${now.day.toString().padLeft(2, '0')}';
+
+enum SecondRehitNudgeSyncDecision { cancel, keep, schedule }
+
+/// Pure once-per-local-day gate used before touching the notification
+/// plugin. Cancellation always wins when the feature is disabled or no
+/// longer eligible.
+SecondRehitNudgeSyncDecision secondRehitNudgeSyncDecision({
+  required bool enabled,
+  required bool eligible,
+  required DateTime now,
+  required String? scheduledDay,
+}) {
+  if (!enabled || !eligible) return SecondRehitNudgeSyncDecision.cancel;
+  if (scheduledDay == _secondRehitNudgeDay(now)) {
+    return SecondRehitNudgeSyncDecision.keep;
+  }
+  return secondRehitNudgeTime(now) == null
+      ? SecondRehitNudgeSyncDecision.cancel
+      : SecondRehitNudgeSyncDecision.schedule;
+}
+
 /// §3.1 wake-window nudge ("Ready to plan today?") and §12 no-check-in
 /// cutoff ("No plan yet - tap for a 20-min default").
 ///
@@ -151,18 +176,26 @@ class NotificationService {
 
   /// Keeps one optional second-session REHIT nudge in sync with the current
   /// log state. This is a single inexact notification, never a daily alarm.
-  static Future<void> syncSecondRehitNudge({
+  static Future<String?> syncSecondRehitNudge({
     required bool enabled,
     required bool eligible,
+    required String? scheduledDay,
     DateTime? now,
   }) async {
-    if (!await _init()) return;
+    final reference = now ?? DateTime.now();
+    final decision = secondRehitNudgeSyncDecision(
+      enabled: enabled,
+      eligible: eligible,
+      now: reference,
+      scheduledDay: scheduledDay,
+    );
+    if (decision == SecondRehitNudgeSyncDecision.keep) return null;
+    if (!await _init()) return null;
     try {
       await _plugin.cancel(_secondRehitId);
-      if (!enabled || !eligible) return;
+      if (decision != SecondRehitNudgeSyncDecision.schedule) return null;
 
-      final target = secondRehitNudgeTime(now ?? DateTime.now());
-      if (target == null) return;
+      final target = secondRehitNudgeTime(reference)!;
       _setLocalLocationFromOffset();
       final localTarget = tz.TZDateTime(
         tz.local,
@@ -182,8 +215,10 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
+      return _secondRehitNudgeDay(reference);
     } catch (_) {
       // best-effort only
+      return null;
     }
   }
 }

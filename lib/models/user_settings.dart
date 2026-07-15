@@ -34,6 +34,10 @@ class UserSettings {
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
 
+  /// Internal local-day marker for the optional second-session REHIT nudge.
+  /// Persisting it prevents app restarts from scheduling the same nudge twice.
+  final String? secondRehitNudgeScheduledDay;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -51,6 +55,7 @@ class UserSettings {
     this.checkInCutoffHour = 10,
     this.travelMode = false,
     this.notificationsEnabled = false,
+    this.secondRehitNudgeScheduledDay,
   });
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
@@ -72,6 +77,7 @@ class UserSettings {
     int? checkInCutoffHour,
     bool? travelMode,
     bool? notificationsEnabled,
+    String? secondRehitNudgeScheduledDay,
   }) {
     return UserSettings(
       equipment: equipment ?? this.equipment,
@@ -90,6 +96,8 @@ class UserSettings {
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      secondRehitNudgeScheduledDay:
+          secondRehitNudgeScheduledDay ?? this.secondRehitNudgeScheduledDay,
     );
   }
 }

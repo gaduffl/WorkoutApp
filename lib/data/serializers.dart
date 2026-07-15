@@ -274,6 +274,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'checkInCutoffHour': u.checkInCutoffHour,
       'travelMode': u.travelMode,
       'notificationsEnabled': u.notificationsEnabled,
+      'secondRehitNudgeScheduledDay': u.secondRehitNudgeScheduledDay,
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -293,6 +294,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
+      secondRehitNudgeScheduledDay: j['secondRehitNudgeScheduledDay'] as String?,
     );
 
 Map<String, dynamic> firedRuleToJson(FiredRule r) => {
