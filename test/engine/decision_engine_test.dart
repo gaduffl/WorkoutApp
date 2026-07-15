@@ -6,6 +6,7 @@ import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
@@ -433,17 +434,18 @@ void main() {
     final output = decisionEngine.decide(input);
     final ex = output.trace.plan!.exercises;
 
+    expect(ex.first.trackKey, 'warmup:s1');
+    expect(ex.first.isWarmup, isTrue);
+    expect(ex.first.metric, ExerciseMetric.minutes);
     // squat (goblet, single-DB, 24 lb): ramp rounds down on the single-DB set
-    expect(ex[0].isWarmup, isTrue);
-    expect(ex[0].loadTotal, 9); // 40% of 24 = 9.6 -> 9
-    expect(ex[1].loadTotal, 12); // 60% = 14.4 -> 12
-    expect(ex[2].loadTotal, 18); // 80% = 19.2 -> 18
-    expect(ex[3].pattern, MovementPattern.squat);
-    expect(ex[3].isWarmup, isFalse);
+    final ramp = ex.where((e) => e.isWarmup && e.name.contains('Goblet squat')).toList();
+    expect(ramp.map((e) => e.loadTotal), [9, 12, 18]);
+    final squatIdx = ex.indexWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
+    expect(squatIdx, greaterThan(0));
     // hinge (2-DB, 90 lb): one 60% feeder -> 54 rounds down to 50 matched
-    expect(ex[4].isWarmup, isTrue);
-    expect(ex[4].loadTotal, 50);
-    expect(ex[5].pattern, MovementPattern.hinge);
+    final hingeIdx = ex.indexWhere((e) => e.pattern == MovementPattern.hinge && !e.isWarmup);
+    expect(ex[hingeIdx - 1].isWarmup, isTrue);
+    expect(ex[hingeIdx - 1].loadTotal, 50);
     // warm-ups never count toward the §8 completion denominator
     expect(output.trace.plan!.plannedWorkSets, 6);
   });
@@ -551,8 +553,11 @@ void main() {
     expect(work.every((e) => !e.progressionEligible), isTrue);
     expect(s1.trace.plan!.travelMode, isTrue);
     expect(s1.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
-    // no percent-load warm-ups without loads
-    expect(s1.trace.plan!.exercises.any((e) => e.isWarmup), isFalse);
+    // no percent-load ramp without loads, but movement prep remains explicit
+    final travelWarmups = s1.trace.plan!.exercises.where((e) => e.isWarmup).toList();
+    expect(travelWarmups, hasLength(1));
+    expect(travelWarmups.single.trackKey, 'warmup:s1');
+    expect(s1.trace.plan!.plannedWorkSets, 6);
 
     final s2 = decisionEngine.decide(buildInput(
       time: 35,
@@ -845,8 +850,74 @@ void main() {
 
     final work = output.trace.plan!.exercises.where((exercise) => !exercise.isWarmup).toList();
     expect(work, isNotEmpty);
-    expect(work.any((exercise) => exercise.name == 'Plank / hollow hold'), isTrue);
+    final hold = work.firstWhere((exercise) => exercise.name == 'Plank / hollow hold');
+    expect(hold.metric, ExerciseMetric.seconds);
+    expect(hold.targetRange, (20, 45));
     expect(output.trace.plan!.plannedWorkSets, greaterThan(0));
+  });
+
+  test('home core holds use seconds while wrist curls remain rep-based', () {
+    final plankOutput = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s5),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    final plank = plankOutput.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
+    );
+    expect(plank.metric, ExerciseMetric.seconds);
+    expect(plank.targetRange, (20, 45));
+    expect(plank.targetLabel, '20-45 seconds');
+
+    final states = baseStates()
+      ..['coreGrip'] = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 4,
+        currentLoad: 12,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+    final curlOutput = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s5),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    ));
+    final wristCurl = curlOutput.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.name == 'Wrist curls' && !exercise.isWarmup,
+    );
+    expect(wristCurl.metric, ExerciseMetric.reps);
+    expect(wristCurl.targetRange, (8, 15));
+    expect(wristCurl.targetLabel, '8-15 reps');
+  });
+
+  test('every hold step has an explicit seconds prescription', () {
+    final coreSteps = ladders[MovementPattern.coreGrip]!.steps;
+    for (final name in ['Plank', 'L-sit progression', 'Hanging', 'Weighted hanging']) {
+      final step = coreSteps.firstWhere((candidate) => candidate.name == name);
+      expect(step.metric, ExerciseMetric.seconds, reason: name);
+      expect(step.targetRange, isNotNull, reason: name);
+      expect(step.targetRange!.$1, greaterThan(0), reason: name);
+      expect(step.targetRange!.$2, greaterThan(step.targetRange!.$1), reason: name);
+    }
+    final wristCurl = coreSteps.firstWhere((step) => step.name == 'Wrist curls');
+    expect(wristCurl.metric, ExerciseMetric.reps);
   });
 
   test('a strength template with no pain-free work returns a no-plan outcome', () {
@@ -1021,6 +1092,27 @@ void main() {
     expect(s3.trace.plan!.estimatedDurationMin, 35);
     expect(s7.trace.plan!.estimatedDurationMin, 10);
     expect(s7.trace.plan!.grantsQueueCredit, isFalse);
+  });
+
+  test('cardio plans contain no app-added warm-up exercises', () {
+    for (final id in [SessionTypeId.s3, SessionTypeId.s6, SessionTypeId.s7]) {
+      final output = decisionEngine.decide(buildInput(
+        time: 60,
+        subjective: 4,
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        recoveryHistory: normalHrvHistory(),
+        sessionLogs: floorSatisfiedLogs(),
+        forcedSessionId: id,
+      ));
+      final plan = output.trace.plan!;
+      expect(plan.exercises, isEmpty, reason: id.name);
+      expect(plan.plannedWorkSets, 0, reason: id.name);
+    }
   });
 
   test('CAP_LADDER_JUMP follows awaitingUndershootCheck, not detraining regression', () {

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/engine/progression_engine.dart';
 import 'package:morningcoach/models/equipment.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
@@ -17,12 +18,70 @@ void main() {
         pattern: MovementPattern.hinge,
         exerciseName: 'DB RDL',
         weight: weight,
-        reps: reps,
+        value: reps,
         rir: rir,
         timestamp: today,
       );
 
   group('§6.2.5 middle zone', () {
+    test('timed holds evaluate seconds against their per-step target', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+      );
+      final result = engine.evaluateSession(
+        state,
+        [
+          SetLog(
+            trackKey: 'coreGrip',
+            pattern: MovementPattern.coreGrip,
+            exerciseName: 'Plank',
+            weight: 0,
+            metric: ExerciseMetric.seconds,
+            value: 45,
+            rir: Rir.rir2,
+            timestamp: today,
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(engine.metricFor(state), ExerciseMetric.seconds);
+      expect(engine.targetRangeFor(state), (20, 45));
+      expect(result.microStepStage, 1);
+    });
+
+    test('warm-up logs never drive progression', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 60,
+        ladderStepIndex: 2,
+      );
+      final result = engine.evaluateSession(
+        state,
+        [
+          SetLog(
+            trackKey: 'hinge',
+            pattern: MovementPattern.hinge,
+            exerciseName: 'DB RDL - warm-up 80%',
+            weight: 50,
+            value: 10,
+            rir: Rir.rir4plus,
+            isWarmup: true,
+            timestamp: today,
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentLoad, 60);
+      expect(result.lastTrainedDate, isNull);
+      expect(result.microStepStage, 0);
+    });
+
     test('reps inside range with no RIR-0 set never progresses or holds', () {
       final state = ExerciseState(trackKey: 'hinge', pattern: MovementPattern.hinge, currentLoad: 60, ladderStepIndex: 2);
       final result = engine.evaluateSession(
@@ -67,7 +126,7 @@ void main() {
         pattern: MovementPattern.pushHorizontal,
         exerciseName: 'Push-up',
         weight: 25,
-        reps: 8,
+        value: 8,
         rir: Rir.rir1,
         timestamp: today,
       );
@@ -137,7 +196,7 @@ void main() {
             pattern: MovementPattern.pushVertical,
             exerciseName: 'Standing DB press',
             weight: 30,
-            reps: 10,
+            value: 10,
             rir: Rir.rir2,
             timestamp: today,
           );
@@ -264,7 +323,7 @@ void main() {
             pattern: dbCurl.pattern,
             exerciseName: dbCurl.name,
             weight: 24,
-            reps: 15,
+            value: 15,
             rir: Rir.rir2,
             timestamp: today,
           );
@@ -291,7 +350,7 @@ void main() {
             pattern: dbCurl.pattern,
             exerciseName: dbCurl.name,
             weight: 50,
-            reps: 15,
+            value: 15,
             rir: Rir.rir2,
             timestamp: today,
           );

@@ -1,10 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:morningcoach/data/serializers.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/set_log.dart';
+import 'package:morningcoach/models/user_settings.dart';
 
 void main() {
   test('travel context round-trips on plans and session logs', () {
@@ -43,5 +47,68 @@ void main() {
     ))..remove('travelMode');
 
     expect(sessionPlanFromJson(planJson).travelMode, isFalse);
+  });
+
+  test('timed set metrics and values round-trip', () {
+    final logged = SetLog(
+      trackKey: 'coreGrip',
+      pattern: MovementPattern.coreGrip,
+      exerciseName: 'Plank',
+      weight: 0,
+      metric: ExerciseMetric.seconds,
+      value: 35,
+      rir: Rir.rir2,
+      timestamp: DateTime(2026, 7, 15),
+    );
+
+    final restored = setLogFromJson(setLogToJson(logged));
+    expect(restored.metric, ExerciseMetric.seconds);
+    expect(restored.value, 35);
+  });
+
+  test('legacy rep-only sets and plans remain readable', () {
+    final legacySet = setLogToJson(SetLog(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      exerciseName: 'Goblet squat',
+      weight: 24,
+      value: 10,
+      rir: Rir.rir2,
+      timestamp: DateTime(2026, 7, 15),
+    ))
+      ..remove('metric')
+      ..remove('value');
+    final restoredSet = setLogFromJson(legacySet);
+    expect(restoredSet.metric, ExerciseMetric.reps);
+    expect(restoredSet.value, 10);
+
+    final legacyPlan = plannedExerciseToJson(const PlannedExercise(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      name: 'Goblet squat',
+      sets: 3,
+      targetRange: (6, 10),
+      rirTarget: Rir.rir2,
+    ))
+      ..remove('metric')
+      ..remove('targetRangeLow')
+      ..remove('targetRangeHigh');
+    final restoredPlan = plannedExerciseFromJson(legacyPlan);
+    expect(restoredPlan.metric, ExerciseMetric.reps);
+    expect(restoredPlan.targetRange, (6, 10));
+  });
+
+  test('REHIT nudge day round-trips and older settings default to null', () {
+    const settings = UserSettings(
+      secondRehitNudgeScheduledDay: '2026-07-15',
+    );
+    final json = userSettingsToJson(settings);
+    expect(
+      userSettingsFromJson(json).secondRehitNudgeScheduledDay,
+      '2026-07-15',
+    );
+
+    json.remove('secondRehitNudgeScheduledDay');
+    expect(userSettingsFromJson(json).secondRehitNudgeScheduledDay, isNull);
   });
 }

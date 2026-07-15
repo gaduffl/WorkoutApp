@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../models/equipment.dart';
+import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/ladders.dart';
 import '../models/movement_pattern.dart';
@@ -36,10 +37,15 @@ class ProgressionEngine {
 
   static const EquipmentEngine equipment = EquipmentEngine();
 
-  (int, int) repRangeFor(ExerciseState state) {
+  ExerciseMetric metricFor(ExerciseState state) => ladderStepFor(state).metric;
+
+  (int, int) targetRangeFor(ExerciseState state) {
     if (state.trackKey.startsWith('sub:')) return (8, 15); // §7.1 ONBOARD_SUBSTITUTE
-    return state.pattern.repRange;
+    final step = ladderStepFor(state);
+    return step.targetRange ?? state.pattern.repRange;
   }
+
+  (int, int) repRangeFor(ExerciseState state) => targetRangeFor(state);
 
   LadderStep ladderStepFor(ExerciseState state) {
     // Named exercises (§7.1 substitutes, S5 accessories) carry their own
@@ -73,7 +79,10 @@ class ProgressionEngine {
     required EquipmentConfig equipmentConfig,
     required DateTime sessionDate,
   }) {
-    if (workSets.isEmpty) return state;
+    // Callers normally pre-filter these, but keeping the state machine
+    // defensive guarantees prep/ramp entries can never drive progression.
+    final eligibleSets = workSets.where((set) => !set.isWarmup).toList();
+    if (eligibleSets.isEmpty) return state;
     final next = state.clone();
     next.lastTrainedDate = sessionDate;
 
@@ -95,6 +104,12 @@ class ProgressionEngine {
       return _handleDeloadSession(next, equipmentConfig);
     }
 
+    final expectedMetric = metricFor(next);
+    final metricSets = eligibleSets.where((set) => set.metric == expectedMetric).toList();
+    // A mismatched legacy/new metric must not accidentally advance a state.
+    // Stamp recency above, but otherwise leave the prescription unchanged.
+    if (metricSets.isEmpty) return next;
+
     // The logger is authoritative for a regular session's working load. A
     // user may adjust the prescription before or between sets, so progression
     // must start from the most recently completed work set rather than stale
@@ -102,19 +117,19 @@ class ProgressionEngine {
     // backpack-loaded steps are intentionally free-entry.
     final step = ladderStepFor(next);
     if (step.backpackLoaded || _achievableSet(step, equipmentConfig) != null) {
-      next.currentLoad = workSets.last.weight;
+      next.currentLoad = metricSets.last.weight;
     }
 
-    final (low, high) = repRangeFor(next);
-    final anyBelowRange = workSets.any((s) => s.reps < low);
-    final anyRir0 = workSets.any((s) => s.rir == Rir.rir0);
-    final allAtTopHighRir = workSets.every((s) =>
-        s.reps >= high &&
+    final (low, high) = targetRangeFor(next);
+    final anyBelowRange = metricSets.any((s) => s.value < low);
+    final anyRir0 = metricSets.any((s) => s.rir == Rir.rir0);
+    final allAtTopHighRir = metricSets.every((s) =>
+        s.value >= high &&
         (s.rir == Rir.rir2 || s.rir == Rir.rir3plus || s.rir == Rir.rir4plus));
 
     if (next.awaitingUndershootCheck) {
       next.awaitingUndershootCheck = false;
-      if (workSets.every((s) => s.rir == Rir.rir3plus || s.rir == Rir.rir4plus)) {
+      if (metricSets.every((s) => s.rir == Rir.rir3plus || s.rir == Rir.rir4plus)) {
         _applyOneIncrement(next, equipmentConfig);
         next.status = ExerciseStatus.progress;
         next.consecutiveHoldCount = 0;

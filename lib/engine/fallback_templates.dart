@@ -80,7 +80,7 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
     case RuleKey.travelModeActive:
       return lang == AppLanguage.de
           ? 'Reisemodus ist aktiv: keine Geräte, Fortschritt über Wiederholungen, Tempo oder Bewegungsumfang; die Laststeigerung pausiert.'
-          : 'Travel mode is active: no equipment, progress through reps, tempo, or range of motion; load progression is paused.';
+          : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.painSubMild:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: leichter Schmerz - Last reduziert und Bewegungsradius angepasst.'

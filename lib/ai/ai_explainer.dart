@@ -56,7 +56,7 @@ class AiExplainer {
       case RuleKey.timeCompress35_20:
         return 'compressed to a 20-minute first-superset-only session';
       case RuleKey.travelModeActive:
-        return 'no-equipment travel mode active; use reps, tempo, or range of motion while load progression stays paused';
+        return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:
@@ -130,7 +130,7 @@ class AiExplainer {
     final planLine = trace.plan == null
         ? 'Outcome: ${trace.restReason ?? "rest day"}.'
         : 'Plan: ${trace.plan!.sessionName} (${trace.plan!.tier.name} tier), '
-            '${trace.plan!.exercises.map((e) => '${e.name} ${e.sets}x${e.repRange.$1}-${e.repRange.$2}').join(', ')}.';
+            '${trace.plan!.exercises.map((e) => '${e.name} ${e.sets}x${e.targetLabel}').join(', ')}.';
 
     final prompt = '''
 You are the "why" narrator for a deterministic workout-recommendation engine. You never decide anything - you only explain, in $langName, why today's plan is what it is.

@@ -15,7 +15,7 @@ void main() {
         pattern: p,
         name: key,
         sets: sets,
-        repRange: (6, 10),
+        targetRange: (6, 10),
         loadTotal: load,
         loadSteps: singleDb,
         rirTarget: Rir.rir2,
