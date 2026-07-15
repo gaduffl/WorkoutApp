@@ -1,3 +1,4 @@
+import 'cardio_protocol.dart';
 import 'exercise_metric.dart';
 import 'movement_pattern.dart';
 import 'session_type.dart';
@@ -98,6 +99,10 @@ class SessionPlan {
   final List<PlannedExercise> exercises;
   final int estimatedDurationMin;
 
+  /// Exact cardio dose for cardio-only plans. Null keeps legacy strength and
+  /// not-yet-migrated cardio plans fully backward compatible.
+  final CardioPrescription? cardioPrescription;
+
   /// §2.1/§5 Step 6: readiness swaps (RED technique session) leave the
   /// original queue item pending — completing them grants no queue credit.
   final bool grantsQueueCredit;
@@ -113,6 +118,7 @@ class SessionPlan {
     required this.tier,
     required this.exercises,
     required this.estimatedDurationMin,
+    this.cardioPrescription,
     this.grantsQueueCredit = true,
     this.travelMode = false,
   });

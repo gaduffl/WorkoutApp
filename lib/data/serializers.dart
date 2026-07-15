@@ -1,3 +1,4 @@
+import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
@@ -14,6 +15,8 @@ import '../models/rule_key.dart';
 import '../models/session_log.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
+import '../models/training_status.dart';
+import '../models/training_targets.dart';
 import '../models/user_settings.dart';
 import '../engine/queue_engine.dart';
 
@@ -166,16 +169,91 @@ SetLog setLogFromJson(Map<String, dynamic> j) => SetLog(
       timestamp: DateTime.parse(j['timestamp'] as String),
     );
 
+Map<String, dynamic> cardioProtocolToJson(CardioProtocol protocol) => {
+      'type': protocol.type.name,
+      'name': protocol.name,
+    };
+
+CardioProtocol cardioProtocolFromJson(Map<String, dynamic> j) =>
+    CardioProtocol(
+      type: CardioProtocolType.values.byName(j['type'] as String),
+      name: j['name'] as String,
+    );
+
+Map<String, dynamic> cardioPrescriptionToJson(
+  CardioPrescription prescription,
+) =>
+    {
+      'protocol': cardioProtocolToJson(prescription.protocol),
+      'plannedWorkIntervals': prescription.plannedWorkIntervals,
+      'plannedWorkSeconds': prescription.plannedWorkSeconds,
+      'plannedRecoveryIntervals': prescription.plannedRecoveryIntervals,
+      'plannedRecoverySeconds': prescription.plannedRecoverySeconds,
+      'plannedDurationSeconds': prescription.plannedDurationSeconds,
+      'targetHeartRateMinBpm': prescription.targetHeartRateMinBpm,
+      'targetHeartRateMaxBpm': prescription.targetHeartRateMaxBpm,
+      'targetRpeMin': prescription.targetRpeMin,
+      'targetRpeMax': prescription.targetRpeMax,
+    };
+
+CardioPrescription cardioPrescriptionFromJson(Map<String, dynamic> j) =>
+    CardioPrescription(
+      protocol:
+          cardioProtocolFromJson(j['protocol'] as Map<String, dynamic>),
+      plannedWorkIntervals: j['plannedWorkIntervals'] as int,
+      plannedWorkSeconds: j['plannedWorkSeconds'] as int,
+      plannedRecoveryIntervals: j['plannedRecoveryIntervals'] as int,
+      plannedRecoverySeconds: j['plannedRecoverySeconds'] as int,
+      plannedDurationSeconds: j['plannedDurationSeconds'] as int,
+      targetHeartRateMinBpm:
+          (j['targetHeartRateMinBpm'] as num?)?.toDouble(),
+      targetHeartRateMaxBpm:
+          (j['targetHeartRateMaxBpm'] as num?)?.toDouble(),
+      targetRpeMin: (j['targetRpeMin'] as num?)?.toDouble(),
+      targetRpeMax: (j['targetRpeMax'] as num?)?.toDouble(),
+    );
+
+Map<String, dynamic> cardioCompletionToJson(CardioCompletion completion) => {
+      'protocol': cardioProtocolToJson(completion.protocol),
+      'completedWorkIntervals': completion.completedWorkIntervals,
+      'completedWorkSeconds': completion.completedWorkSeconds,
+      'completedRecoveryIntervals': completion.completedRecoveryIntervals,
+      'completedRecoverySeconds': completion.completedRecoverySeconds,
+      'completedDurationSeconds': completion.completedDurationSeconds,
+      'averageHeartRateBpm': completion.averageHeartRateBpm,
+      'peakHeartRateBpm': completion.peakHeartRateBpm,
+      'rpe': completion.rpe,
+    };
+
+CardioCompletion cardioCompletionFromJson(Map<String, dynamic> j) =>
+    CardioCompletion(
+      protocol:
+          cardioProtocolFromJson(j['protocol'] as Map<String, dynamic>),
+      completedWorkIntervals: j['completedWorkIntervals'] as int,
+      completedWorkSeconds: j['completedWorkSeconds'] as int,
+      completedRecoveryIntervals: j['completedRecoveryIntervals'] as int,
+      completedRecoverySeconds: j['completedRecoverySeconds'] as int,
+      completedDurationSeconds: j['completedDurationSeconds'] as int,
+      averageHeartRateBpm:
+          (j['averageHeartRateBpm'] as num?)?.toDouble(),
+      peakHeartRateBpm: (j['peakHeartRateBpm'] as num?)?.toDouble(),
+      rpe: (j['rpe'] as num?)?.toDouble(),
+    );
+
 Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'id': l.id,
       'templateId': l.templateId.name,
       'tier': l.tier.name,
       'date': _dateStr(l.date),
+      'completedAt': l.completedAt.toIso8601String(),
       'setLogs': l.setLogs.map(setLogToJson).toList(),
       'plannedWorkSets': l.plannedWorkSets,
       'completedWorkSets': l.completedWorkSets,
       'durationMinutes': l.durationMinutes,
       'notes': l.notes,
+      'cardioCompletion': l.cardioCompletion == null
+          ? null
+          : cardioCompletionToJson(l.cardioCompletion!),
       'countsAs': l.countsAs.map((c) => c.name).toList(),
       'rehitFinisherCompleted': l.rehitFinisherCompleted,
       'travelMode': l.travelMode,
@@ -186,11 +264,19 @@ SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
       templateId: SessionTypeId.values.byName(j['templateId'] as String),
       tier: SessionTier.values.byName(j['tier'] as String),
       date: _parseDate(j['date'] as String),
+      completedAt: DateTime.parse(
+        (j['completedAt'] ?? j['date']) as String,
+      ),
       setLogs: (j['setLogs'] as List).map((e) => setLogFromJson(e as Map<String, dynamic>)).toList(),
       plannedWorkSets: j['plannedWorkSets'] as int,
       completedWorkSets: j['completedWorkSets'] as int,
       durationMinutes: j['durationMinutes'] as int,
       notes: j['notes'] as String?,
+      cardioCompletion: j['cardioCompletion'] == null
+          ? null
+          : cardioCompletionFromJson(
+              j['cardioCompletion'] as Map<String, dynamic>,
+            ),
       countsAs: (j['countsAs'] as List).map((c) => FloorCategory.values.byName(c as String)).toSet(),
       rehitFinisherCompleted: j['rehitFinisherCompleted'] as bool? ?? false,
       travelMode: j['travelMode'] as bool? ?? false,
@@ -362,6 +448,9 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
       'tier': p.tier.name,
       'exercises': p.exercises.map(plannedExerciseToJson).toList(),
       'estimatedDurationMin': p.estimatedDurationMin,
+      'cardioPrescription': p.cardioPrescription == null
+          ? null
+          : cardioPrescriptionToJson(p.cardioPrescription!),
       'grantsQueueCredit': p.grantsQueueCredit,
       'travelMode': p.travelMode,
     };
@@ -372,8 +461,189 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
       tier: SessionTier.values.byName(j['tier'] as String),
       exercises: (j['exercises'] as List).map((e) => plannedExerciseFromJson(e as Map<String, dynamic>)).toList(),
       estimatedDurationMin: j['estimatedDurationMin'] as int,
+      cardioPrescription: j['cardioPrescription'] == null
+          ? null
+          : cardioPrescriptionFromJson(
+              j['cardioPrescription'] as Map<String, dynamic>,
+            ),
       grantsQueueCredit: j['grantsQueueCredit'] as bool? ?? true,
       travelMode: j['travelMode'] as bool? ?? false,
+    );
+
+Map<String, dynamic> effectiveSetTargetBandToJson(
+  EffectiveSetTargetBand band,
+) =>
+    {
+      'minimum': band.minimum,
+      'center': band.center,
+      'maximum': band.maximum,
+    };
+
+EffectiveSetTargetBand effectiveSetTargetBandFromJson(
+  Map<String, dynamic> j,
+) =>
+    EffectiveSetTargetBand(
+      minimum: (j['minimum'] as num).toDouble(),
+      center: (j['center'] as num).toDouble(),
+      maximum: (j['maximum'] as num).toDouble(),
+    );
+
+Map<String, dynamic> trainingTargetsToJson(TrainingTargets targets) => {
+      'hardTimeWindowsMinutes': targets.hardTimeWindowsMinutes,
+      'hypertrophyTargetBands': targets.hypertrophyTargetBands.map(
+        (group, band) => MapEntry(
+          group.name,
+          effectiveSetTargetBandToJson(band),
+        ),
+      ),
+      'hypertrophyEvaluationWindowDays':
+          targets.hypertrophyEvaluationWindowDays,
+      'intensityRollingWindowDays': targets.intensityRollingWindowDays,
+      'preferredNorwegian4x4Exposures':
+          targets.preferredNorwegian4x4Exposures,
+      'fallbackRehitExposures': targets.fallbackRehitExposures,
+      'fallbackRehitRequiresSeparateDays':
+          targets.fallbackRehitRequiresSeparateDays,
+      'baseAerobicRollingWindowDays':
+          targets.baseAerobicRollingWindowDays,
+      'baseLongExposureCount': targets.baseLongExposureCount,
+      'baseLongExposureMinutes': targets.baseLongExposureMinutes,
+      'baseShortExposureCount': targets.baseShortExposureCount,
+      'baseShortExposureMinutes': targets.baseShortExposureMinutes,
+    };
+
+TrainingTargets trainingTargetsFromJson(Map<String, dynamic> j) {
+  final defaults = TrainingTargets();
+  final bandsJson = j['hypertrophyTargetBands'] as Map?;
+  final bands = <MajorMuscleGroup, EffectiveSetTargetBand>{
+    ...defaults.hypertrophyTargetBands,
+    if (bandsJson != null)
+      ...bandsJson.map(
+        (key, value) => MapEntry(
+          MajorMuscleGroup.values.byName(key as String),
+          effectiveSetTargetBandFromJson(
+            (value as Map).cast<String, dynamic>(),
+          ),
+        ),
+      ),
+  };
+
+  return TrainingTargets(
+    hardTimeWindowsMinutes:
+        (j['hardTimeWindowsMinutes'] as List?)?.cast<int>() ??
+            defaults.hardTimeWindowsMinutes,
+    hypertrophyTargetBands: bands,
+    hypertrophyEvaluationWindowDays:
+        j['hypertrophyEvaluationWindowDays'] as int? ??
+            defaults.hypertrophyEvaluationWindowDays,
+    intensityRollingWindowDays:
+        j['intensityRollingWindowDays'] as int? ??
+            defaults.intensityRollingWindowDays,
+    preferredNorwegian4x4Exposures:
+        j['preferredNorwegian4x4Exposures'] as int? ??
+            defaults.preferredNorwegian4x4Exposures,
+    fallbackRehitExposures: j['fallbackRehitExposures'] as int? ??
+        defaults.fallbackRehitExposures,
+    fallbackRehitRequiresSeparateDays:
+        j['fallbackRehitRequiresSeparateDays'] as bool? ??
+            defaults.fallbackRehitRequiresSeparateDays,
+    baseAerobicRollingWindowDays:
+        j['baseAerobicRollingWindowDays'] as int? ??
+            defaults.baseAerobicRollingWindowDays,
+    baseLongExposureCount: j['baseLongExposureCount'] as int? ??
+        defaults.baseLongExposureCount,
+    baseLongExposureMinutes: j['baseLongExposureMinutes'] as int? ??
+        defaults.baseLongExposureMinutes,
+    baseShortExposureCount: j['baseShortExposureCount'] as int? ??
+        defaults.baseShortExposureCount,
+    baseShortExposureMinutes:
+        (j['baseShortExposureMinutes'] as List?)?.cast<int>() ??
+            defaults.baseShortExposureMinutes,
+  );
+}
+
+Map<String, dynamic> muscleTrainingStatusToJson(
+  MuscleTrainingStatus status,
+) =>
+    {
+      'muscleGroup': status.muscleGroup.name,
+      'completedEffectiveSets': status.completedEffectiveSets,
+      'minimumTargetEffectiveSets': status.minimumTargetEffectiveSets,
+      'centerTargetEffectiveSets': status.centerTargetEffectiveSets,
+      'maximumTargetEffectiveSets': status.maximumTargetEffectiveSets,
+      'deficitToMinimumEffectiveSets':
+          status.deficitToMinimumEffectiveSets,
+    };
+
+MuscleTrainingStatus muscleTrainingStatusFromJson(Map<String, dynamic> j) =>
+    MuscleTrainingStatus(
+      muscleGroup:
+          MajorMuscleGroup.values.byName(j['muscleGroup'] as String),
+      completedEffectiveSets:
+          (j['completedEffectiveSets'] as num).toDouble(),
+      minimumTargetEffectiveSets:
+          (j['minimumTargetEffectiveSets'] as num).toDouble(),
+      centerTargetEffectiveSets:
+          (j['centerTargetEffectiveSets'] as num).toDouble(),
+      maximumTargetEffectiveSets:
+          (j['maximumTargetEffectiveSets'] as num).toDouble(),
+      deficitToMinimumEffectiveSets:
+          (j['deficitToMinimumEffectiveSets'] as num).toDouble(),
+    );
+
+Map<String, dynamic> aerobicTrainingStatusToJson(
+  AerobicTrainingStatus status,
+) =>
+    {
+      'target': status.target.name,
+      'rollingWindowDays': status.rollingWindowDays,
+      'completedExposures': status.completedExposures,
+      'targetExposures': status.targetExposures,
+      'exposureDeficit': status.exposureDeficit,
+      'completedDistinctDays': status.completedDistinctDays,
+      'targetDistinctDays': status.targetDistinctDays,
+      'distinctDayDeficit': status.distinctDayDeficit,
+    };
+
+AerobicTrainingStatus aerobicTrainingStatusFromJson(
+  Map<String, dynamic> j,
+) =>
+    AerobicTrainingStatus(
+      target: AerobicTargetKind.values.byName(j['target'] as String),
+      rollingWindowDays: j['rollingWindowDays'] as int,
+      completedExposures: j['completedExposures'] as int,
+      targetExposures: j['targetExposures'] as int,
+      exposureDeficit: j['exposureDeficit'] as int,
+      completedDistinctDays: j['completedDistinctDays'] as int? ?? 0,
+      targetDistinctDays: j['targetDistinctDays'] as int? ?? 0,
+      distinctDayDeficit: j['distinctDayDeficit'] as int? ?? 0,
+    );
+
+Map<String, dynamic> trainingStatusToJson(TrainingStatus status) => {
+      'asOf': status.asOf.toIso8601String(),
+      'muscleEvaluationWindowDays': status.muscleEvaluationWindowDays,
+      'muscle': status.muscle.map(muscleTrainingStatusToJson).toList(),
+      'aerobic': status.aerobic.map(aerobicTrainingStatusToJson).toList(),
+    };
+
+TrainingStatus trainingStatusFromJson(Map<String, dynamic> j) =>
+    TrainingStatus(
+      asOf: DateTime.parse(j['asOf'] as String),
+      muscleEvaluationWindowDays: j['muscleEvaluationWindowDays'] as int,
+      muscle: (j['muscle'] as List)
+          .map(
+            (item) => muscleTrainingStatusFromJson(
+              (item as Map).cast<String, dynamic>(),
+            ),
+          )
+          .toList(),
+      aerobic: (j['aerobic'] as List)
+          .map(
+            (item) => aerobicTrainingStatusFromJson(
+              (item as Map).cast<String, dynamic>(),
+            ),
+          )
+          .toList(),
     );
 
 Map<String, dynamic> decisionTraceToJson(DecisionTrace t) => {
