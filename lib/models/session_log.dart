@@ -34,8 +34,8 @@ class SessionLog {
   /// legacy cardio logs that predate structured cardio logging.
   final CardioCompletion? cardioCompletion;
 
-  /// Whether a structured primary-cardio attempt completed the exact dose in
-  /// the plan that was actually shown. This is intentionally independent of
+  /// Whether a structured cardio attempt completed the exact dose in the
+  /// prescription used to validate it. This is intentionally independent of
   /// category/queue credit. Null identifies legacy rows written before the
   /// app persisted prescription adherence explicitly.
   final bool? cardioCompletedAsPrescribed;
@@ -44,6 +44,15 @@ class SessionLog {
   /// (only if the REHIT finisher was actually done, §2.1).
   final Set<FloorCategory> countsAs;
   final bool rehitFinisherCompleted;
+
+  /// Additional work logged outside today's primary prescription. It still
+  /// contributes its real dose to stimulus and recovery accounting, but it
+  /// cannot complete or lock the primary plan.
+  final bool isSupplemental;
+
+  /// True only for work entered retrospectively without a prospective app
+  /// recommendation. Every unplanned log is necessarily supplemental.
+  final bool isUnplanned;
   final bool travelMode;
   final bool endedEarly;
 
@@ -62,10 +71,14 @@ class SessionLog {
     this.cardioCompletion,
     this.cardioCompletedAsPrescribed,
     this.rehitFinisherCompleted = false,
+    bool isSupplemental = false,
+    this.isUnplanned = false,
     this.travelMode = false,
     this.endedEarly = false,
     this.notes,
-  })  : completedAt = completedAt ?? date,
+  })  : assert(!isUnplanned || isSupplemental),
+        isSupplemental = isSupplemental || isUnplanned,
+        completedAt = completedAt ?? date,
         completedAtPrecision = completedAtPrecision ??
             (completedAt == null
                 ? CompletionTimePrecision.dateOnlyInferred
@@ -106,6 +119,7 @@ class SessionLog {
   /// Legacy records retain their historical counted-session behavior because
   /// their original plan prescription is no longer available for comparison.
   bool get completesTodaysPlan {
+    if (isSupplemental) return false;
     if (_isCardioOnlyTemplate && cardioCompletion != null) {
       return cardioCompletedAsPrescribed ?? countsTowardQueueAndFloor;
     }

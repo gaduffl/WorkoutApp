@@ -278,6 +278,8 @@ Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'cardioCompletedAsPrescribed': l.cardioCompletedAsPrescribed,
       'countsAs': l.countsAs.map((c) => c.name).toList(),
       'rehitFinisherCompleted': l.rehitFinisherCompleted,
+      'isSupplemental': l.isSupplemental,
+      'isUnplanned': l.isUnplanned,
       'travelMode': l.travelMode,
       'endedEarly': l.endedEarly,
     };
@@ -327,6 +329,9 @@ SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
           j['cardioCompletedAsPrescribed'] as bool?,
       countsAs: (j['countsAs'] as List).map((c) => FloorCategory.values.byName(c as String)).toSet(),
       rehitFinisherCompleted: j['rehitFinisherCompleted'] as bool? ?? false,
+      isSupplemental: (j['isSupplemental'] as bool? ?? false) ||
+          (j['isUnplanned'] as bool? ?? false),
+      isUnplanned: j['isUnplanned'] as bool? ?? false,
       travelMode: j['travelMode'] as bool? ?? false,
       endedEarly: j['endedEarly'] as bool? ?? false,
     );

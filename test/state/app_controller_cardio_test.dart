@@ -401,6 +401,177 @@ void main() {
       (log) => log.templateId == SessionTypeId.s7,
     );
     expect(rehitLog.countsAs, contains(FloorCategory.intensity));
+    expect(rehitLog.isSupplemental, isTrue);
+    expect(rehitLog.isUnplanned, isFalse);
+    expect(rehitLog.completesTodaysPlan, isFalse);
+  });
+
+  test(
+      'retrospective REHIT bypasses prospective gates and preserves partial/full dose semantics',
+      () async {
+    final repo = Repository(_MemoryDatabase());
+    final controller = AppController(repo)
+      ..settings = const UserSettings(travelMode: true)
+      ..queueState = const QueueState(
+        pointer: SessionTypeId.s3,
+        served: {SessionTypeId.s1},
+      );
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: 9,
+      heartRateMaxBpm: controller.settings.hrMax,
+    );
+    final partial = cardio.completionFromEntry(
+      prescription: prescription,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 5,
+    );
+    final full = cardio.completionFromEntry(
+      prescription: prescription,
+      completedWorkIntervals: 2,
+      completedDurationMinutes: 5,
+    );
+
+    expect(controller.secondRehitEligibility.eligible, isFalse);
+    await expectLater(
+      controller.logCardioSession(
+        SessionTypeId.s7,
+        completion: partial,
+      ),
+      throwsStateError,
+    );
+
+    await controller.logUnplannedRehit(completion: partial);
+    await controller.logUnplannedRehit(completion: full);
+
+    final logs = await repo.loadSessionLogsSince(DateTime(2000));
+    expect(logs, hasLength(2));
+    final partialLog = logs.singleWhere(
+      (log) => !log.cardioCompletion!.meetsCreditableDose,
+    );
+    final fullLog = logs.singleWhere(
+      (log) => log.cardioCompletion!.meetsCreditableDose,
+    );
+    expect(partialLog.countsAs, isEmpty);
+    expect(recoveryPolicy.isRecoveryRelevant(partialLog), isTrue);
+    expect(fullLog.countsAs, {FloorCategory.intensity});
+    expect(
+      logs,
+      everyElement(
+        isA<SessionLog>()
+            .having((log) => log.isSupplemental, 'supplemental', isTrue)
+            .having((log) => log.isUnplanned, 'unplanned', isTrue)
+            .having(
+              (log) => log.completesTodaysPlan,
+              'primary completion',
+              isFalse,
+            ),
+      ),
+    );
+    expect(controller.sessionLoggedToday, isFalse);
+    expect(controller.sessionDoneToday, isFalse);
+    expect(controller.queueState.pointer, SessionTypeId.s3);
+    expect(controller.queueState.served, {SessionTypeId.s1});
+  });
+
+  test('persisted supplemental-only work leaves every primary action unlocked',
+      () async {
+    final repo = Repository(_MemoryDatabase());
+    final writer = AppController(repo);
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: 9,
+      heartRateMaxBpm: writer.settings.hrMax,
+    );
+    final partial = cardio.completionFromEntry(
+      prescription: prescription,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 5,
+    );
+    await writer.logUnplannedRehit(completion: partial);
+
+    // Start from an empty in-memory cache to exercise the persistence merge,
+    // not merely the writer controller's newly appended log.
+    final controller = AppController(repo);
+    final submitted = await controller.submitCheckIn(
+      timeMinutes: 35,
+      subjective: 4,
+    );
+    expect(controller.sessionLoggedToday, isFalse);
+    expect(controller.sessionDoneToday, isFalse);
+    expect(
+      controller.rehitEligibilityAt(DateTime.now()).closedReasons,
+      contains(RehitClosedReason.intensityWithinTrailing48Hours),
+    );
+
+    final swapped = await controller.swapToSession(SessionTypeId.s1);
+    expect(swapped.plan!.sessionId, SessionTypeId.s1);
+    await controller.resetToday();
+    expect(controller.todayTrace, isNull);
+
+    final primaryPlan = strengthPlan();
+    controller.todayTrace = traceFor(DateTime.now(), primaryPlan);
+    await controller.completeSession(
+      primaryPlan,
+      workSets(4),
+      durationMinutes: 35,
+    );
+
+    final logs = await repo.loadSessionLogsSince(DateTime(2000));
+    expect(logs, hasLength(2));
+    expect(logs.where((log) => log.isSupplemental), hasLength(1));
+    expect(logs.where((log) => !log.isSupplemental), hasLength(1));
+    expect(controller.sessionLoggedToday, isTrue);
+    expect(controller.sessionDoneToday, isTrue);
+    expect(submitted.date, controller.today());
+  });
+
+  test('retrospective REHIT bypasses an existing primary lock without queue credit',
+      () async {
+    final controller = await controllerAfterStrength();
+    final pointerBefore = controller.queueState.pointer;
+    final servedBefore = controller.queueState.served;
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: 9,
+      heartRateMaxBpm: controller.settings.hrMax,
+    );
+    final completion = cardio.completionFromEntry(
+      prescription: prescription,
+      completedWorkIntervals: 2,
+      completedDurationMinutes: 5,
+    );
+
+    await controller.logUnplannedRehit(completion: completion);
+
+    final logs = await controller.repo.loadSessionLogsSince(DateTime(2000));
+    expect(logs, hasLength(2));
+    final unplanned = logs.singleWhere((log) => log.isUnplanned);
+    expect(unplanned.isSupplemental, isTrue);
+    expect(unplanned.countsAs, {FloorCategory.intensity});
+    expect(controller.queueState.pointer, pointerBefore);
+    expect(controller.queueState.served, servedBefore);
+  });
+
+  test('retrospective REHIT rejects a non-REHIT completion', () async {
+    final repo = Repository(_MemoryDatabase());
+    final controller = AppController(repo);
+    final zone2Prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s6,
+      durationMinutes: 20,
+      heartRateMaxBpm: controller.settings.hrMax,
+    );
+    final zone2 = cardio.completionFromEntry(
+      prescription: zone2Prescription,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 20,
+    );
+
+    await expectLater(
+      controller.logUnplannedRehit(completion: zone2),
+      throwsArgumentError,
+    );
+    expect(await repo.loadSessionLogsSince(DateTime(2000)), isEmpty);
   });
 
   test('high intensity requires an authoritative current GREEN trace', () {
