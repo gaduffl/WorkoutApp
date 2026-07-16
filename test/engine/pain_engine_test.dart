@@ -51,6 +51,106 @@ void main() {
   });
 
   group('§7.2 flag lifecycle', () {
+    test('daily sharp re-taps retain the original escalation clock', () {
+      var state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+      );
+      for (var day = 0; day <= 8; day++) {
+        final date = today.add(Duration(days: day));
+        state = engine.advanceFlagState(
+          state,
+          activeFlag: PainFlag(
+            region: BodyRegion.lowerBack,
+            severity: PainSeverity.sharp,
+            flaggedDate: date,
+          ),
+          patternScheduledToday: false,
+          sessionRanPainFree: false,
+          today: date,
+        );
+      }
+
+      expect(state.painFlaggedDate, today);
+      expect(
+        engine.isEscalated(
+          PainFlag(
+            region: state.painRegion!,
+            severity: state.painSeverity!,
+            flaggedDate: state.painFlaggedDate!,
+            tags: state.painTags,
+          ),
+          today.add(const Duration(days: 8)),
+        ),
+        isTrue,
+      );
+    });
+
+    test('mild to sharp starts the sharp clock on the escalation date', () {
+      var state = ExerciseState(
+        trackKey: 'squat',
+        pattern: MovementPattern.squat,
+      );
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: PainFlag(
+          region: BodyRegion.kneeLeft,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+        ),
+        patternScheduledToday: false,
+        sessionRanPainFree: false,
+        today: today,
+      );
+      final escalationDate = today.add(const Duration(days: 3));
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: PainFlag(
+          region: BodyRegion.kneeLeft,
+          severity: PainSeverity.sharp,
+          flaggedDate: escalationDate,
+        ),
+        patternScheduledToday: false,
+        sessionRanPainFree: false,
+        today: escalationDate,
+      );
+
+      expect(state.painSeverity, PainSeverity.sharp);
+      expect(state.painFlaggedDate, escalationDate);
+    });
+
+    test('sharp to mild retains sharp severity and its original date', () {
+      var state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+      );
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+        patternScheduledToday: false,
+        sessionRanPainFree: false,
+        today: today,
+      );
+      state = engine.advanceFlagState(
+        state,
+        activeFlag: PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.mild,
+          flaggedDate: today.add(const Duration(days: 1)),
+        ),
+        patternScheduledToday: false,
+        sessionRanPainFree: false,
+        today: today.add(const Duration(days: 1)),
+      );
+
+      expect(state.painSeverity, PainSeverity.sharp);
+      expect(state.painFlaggedDate, today);
+    });
+
     test('sharp flag offers the re-entry test only after 2 scheduled sessions', () {
       var state = ExerciseState(trackKey: 'hinge', pattern: MovementPattern.hinge, currentLoad: 90);
       final flag = PainFlag(region: BodyRegion.lowerBack, severity: PainSeverity.sharp, flaggedDate: today);

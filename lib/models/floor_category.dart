@@ -1,3 +1,3 @@
-/// §2.2 weekly floor categories. Aerobic (S6) is desirable but explicitly
-/// the most skippable element and has no floor requirement of its own.
+/// Legacy v1 category flags retained on logs/settings for compatibility.
+/// Decision Engine v2 derives dose from the stimulus ledger instead.
 enum FloorCategory { strength, intensity, aerobic }

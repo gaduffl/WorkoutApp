@@ -57,6 +57,10 @@ class Repository {
     }
   }
 
+  Future<void> deleteExerciseState(String trackKey) async {
+    await db.delete('exercise_states', 'trackKey', trackKey);
+  }
+
   Future<List<CheckIn>> loadCheckInsSince(DateTime since) async {
     final rows = await db.getJsonSince('check_ins', 'date', since);
     return rows.map(checkInFromJson).toList();

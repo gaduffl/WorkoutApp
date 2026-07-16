@@ -2,15 +2,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Picks today's one-time second-session REHIT nudge. The nudge is never
-/// allowed to land at or after 20:00 local time.
-DateTime? secondRehitNudgeTime(DateTime now) {
-  final atThree = DateTime(now.year, now.month, now.day, 15);
-  final threeHoursLater = now.add(const Duration(hours: 3));
-  final target = threeHoursLater.isAfter(atThree) ? threeHoursLater : atThree;
-  final cutoff = DateTime(now.year, now.month, now.day, 20);
-  return target.isBefore(cutoff) ? target : null;
-}
+import '../engine/rehit_eligibility_engine.dart';
+
+const secondRehitNudgeTitle = 'Still up for CAROL REHIT Intense?';
+const secondRehitNudgeBody =
+    'The bike-guided CAROL REHIT Intense preset can add one short high-intensity exposure today.';
 
 String _secondRehitNudgeDay(DateTime now) =>
     '${now.year.toString().padLeft(4, '0')}-'
@@ -19,22 +15,100 @@ String _secondRehitNudgeDay(DateTime now) =>
 
 enum SecondRehitNudgeSyncDecision { cancel, keep, schedule }
 
+/// Explicit marker mutation returned by the best-effort platform sync. A
+/// nullable day alone cannot distinguish "keep the current marker" from
+/// "clear it after cancellation".
+class SecondRehitNudgeSyncOutcome {
+  final bool stateChanged;
+  final String? scheduledDay;
+  final DateTime? scheduledFor;
+
+  const SecondRehitNudgeSyncOutcome({
+    required this.stateChanged,
+    required this.scheduledDay,
+    required this.scheduledFor,
+  });
+}
+
 /// Pure once-per-local-day gate used before touching the notification
 /// plugin. Cancellation always wins when the feature is disabled or no
 /// longer eligible.
 SecondRehitNudgeSyncDecision secondRehitNudgeSyncDecision({
   required bool enabled,
-  required bool eligible,
-  required DateTime now,
+  required RehitEligibilityResult eligibility,
   required String? scheduledDay,
 }) {
-  if (!enabled || !eligible) return SecondRehitNudgeSyncDecision.cancel;
-  if (scheduledDay == _secondRehitNudgeDay(now)) {
+  if (!enabled || !eligibility.eligible) {
+    return SecondRehitNudgeSyncDecision.cancel;
+  }
+  if (scheduledDay == _secondRehitNudgeDay(eligibility.observedAt)) {
     return SecondRehitNudgeSyncDecision.keep;
   }
-  return secondRehitNudgeTime(now) == null
+  return eligibility.suggestedNudgeTime == null
       ? SecondRehitNudgeSyncDecision.cancel
       : SecondRehitNudgeSyncDecision.schedule;
+}
+
+/// Pure marker transition paired with [secondRehitNudgeSyncDecision]. A
+/// successful cancellation clears the marker, allowing a genuinely eligible
+/// result later the same day to schedule once again. A failed platform
+/// operation keeps the old marker so an existing notification cannot become
+/// untracked or be duplicated.
+SecondRehitNudgeSyncOutcome secondRehitNudgeMarkerTransition({
+  required SecondRehitNudgeSyncDecision decision,
+  required RehitEligibilityResult eligibility,
+  required String? scheduledDay,
+  required DateTime? scheduledFor,
+  bool operationSucceeded = true,
+}) {
+  switch (decision) {
+    case SecondRehitNudgeSyncDecision.cancel:
+      if (!operationSucceeded) {
+        return SecondRehitNudgeSyncOutcome(
+          stateChanged: false,
+          scheduledDay: scheduledDay,
+          scheduledFor: scheduledFor,
+        );
+      }
+      final observedDay = _secondRehitNudgeDay(eligibility.observedAt);
+      final targetMayHaveFired = scheduledDay == observedDay &&
+          (scheduledFor == null ||
+              !eligibility.observedAt.isBefore(scheduledFor));
+      if (targetMayHaveFired) {
+        return SecondRehitNudgeSyncOutcome(
+          stateChanged: false,
+          scheduledDay: scheduledDay,
+          scheduledFor: scheduledFor,
+        );
+      }
+      return SecondRehitNudgeSyncOutcome(
+        stateChanged: scheduledDay != null || scheduledFor != null,
+        scheduledDay: null,
+        scheduledFor: null,
+      );
+    case SecondRehitNudgeSyncDecision.keep:
+      return SecondRehitNudgeSyncOutcome(
+        stateChanged: false,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+      );
+    case SecondRehitNudgeSyncDecision.schedule:
+      if (!operationSucceeded) {
+        return SecondRehitNudgeSyncOutcome(
+          stateChanged: false,
+          scheduledDay: scheduledDay,
+          scheduledFor: scheduledFor,
+        );
+      }
+      final nextDay = _secondRehitNudgeDay(eligibility.observedAt);
+      final nextTarget = eligibility.suggestedNudgeTime;
+      return SecondRehitNudgeSyncOutcome(
+        stateChanged:
+            scheduledDay != nextDay || scheduledFor != nextTarget,
+        scheduledDay: nextDay,
+        scheduledFor: nextTarget,
+      );
+  }
 }
 
 /// §3.1 wake-window nudge ("Ready to plan today?") and §12 no-check-in
@@ -176,26 +250,46 @@ class NotificationService {
 
   /// Keeps one optional second-session REHIT nudge in sync with the current
   /// log state. This is a single inexact notification, never a daily alarm.
-  static Future<String?> syncSecondRehitNudge({
+  static Future<SecondRehitNudgeSyncOutcome> syncSecondRehitNudge({
     required bool enabled,
-    required bool eligible,
+    required RehitEligibilityResult eligibility,
     required String? scheduledDay,
-    DateTime? now,
+    required DateTime? scheduledFor,
   }) async {
-    final reference = now ?? DateTime.now();
     final decision = secondRehitNudgeSyncDecision(
       enabled: enabled,
-      eligible: eligible,
-      now: reference,
+      eligibility: eligibility,
       scheduledDay: scheduledDay,
     );
-    if (decision == SecondRehitNudgeSyncDecision.keep) return null;
-    if (!await _init()) return null;
+    if (decision == SecondRehitNudgeSyncDecision.keep) {
+      return secondRehitNudgeMarkerTransition(
+        decision: decision,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+      );
+    }
+    if (!await _init()) {
+      return secondRehitNudgeMarkerTransition(
+        decision: decision,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+        operationSucceeded: false,
+      );
+    }
     try {
       await _plugin.cancel(_secondRehitId);
-      if (decision != SecondRehitNudgeSyncDecision.schedule) return null;
+      if (decision != SecondRehitNudgeSyncDecision.schedule) {
+        return secondRehitNudgeMarkerTransition(
+          decision: decision,
+          eligibility: eligibility,
+          scheduledDay: scheduledDay,
+          scheduledFor: scheduledFor,
+        );
+      }
 
-      final target = secondRehitNudgeTime(reference)!;
+      final target = eligibility.suggestedNudgeTime!;
       _setLocalLocationFromOffset();
       final localTarget = tz.TZDateTime(
         tz.local,
@@ -208,17 +302,28 @@ class NotificationService {
       );
       await _plugin.zonedSchedule(
         _secondRehitId,
-        'Still up for a quick REHIT?',
-        'An 8-minute bike session can cover today\'s intensity work.',
+        secondRehitNudgeTitle,
+        secondRehitNudgeBody,
         localTarget,
         _trainingNudgeDetails,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
-      return _secondRehitNudgeDay(reference);
+      return secondRehitNudgeMarkerTransition(
+        decision: decision,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+      );
     } catch (_) {
       // best-effort only
-      return null;
+      return secondRehitNudgeMarkerTransition(
+        decision: decision,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+        operationSucceeded: false,
+      );
     }
   }
 }

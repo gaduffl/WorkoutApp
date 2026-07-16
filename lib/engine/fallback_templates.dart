@@ -15,6 +15,46 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? 'Zwei RED-Tage in Folge - volle Ruhe (oder ein lockerer 20-30 Min. Spaziergang) empfohlen.'
           : 'Two RED days in a row - full rest (or a light 20-30 min walk) recommended.';
+    case RuleKey.norwegian4x4Due:
+      return lang == AppLanguage.de
+          ? 'Im rollierenden 7-Tage-Fenster fehlt der bevorzugte 4x4-Reiz, daher hat er heute Vorrang.'
+          : 'The preferred 4x4 stimulus is missing from the rolling 7-day window, so it takes priority today.';
+    case RuleKey.rehitFallbackDue:
+      return lang == AppLanguage.de
+          ? 'Für 4x4 reicht die Zeit heute nicht; das vom CAROL-Bike geführte Preset CAROL REHIT Intense ergänzt den vorübergehenden Ersatz an einem separaten Tag.'
+          : 'Today is too short for 4x4, so the bike-guided CAROL REHIT Intense preset advances the temporary fallback on a separate day.';
+    case RuleKey.baseLongDeficit:
+      return lang == AppLanguage.de
+          ? 'Die lange 60-Minuten-Grundlageneinheit fehlt im rollierenden 7-Tage-Fenster.'
+          : 'The 60-minute base exposure is missing from the rolling 7-day window.';
+    case RuleKey.baseShortDeficit:
+      return lang == AppLanguage.de
+          ? 'Nach Zuordnung der langen Einheit fehlt noch eine separate 30+-Minuten-Grundlageneinheit.'
+          : 'After allocating the long session, a separate 30+ minute base exposure is still missing.';
+    case RuleKey.muscleStimulusDeficit:
+      return lang == AppLanguage.de
+          ? 'Der Plan schließt den größten wirksamen Satzrückstand bei ${p['muscles'] ?? 'den Zielmuskeln'}.'
+          : 'This plan closes the largest effective-set deficit for ${p['muscles'] ?? 'the target muscles'}.';
+    case RuleKey.muscleRecoveryDemotion:
+      return lang == AppLanguage.de
+          ? 'Kürzlich belastete Muskeln wurden niedriger gewichtet, damit die Erholung berücksichtigt bleibt.'
+          : 'Recently trained muscles were weighted down to preserve recovery.';
+    case RuleKey.muscleOverMaxDemotion:
+      return lang == AppLanguage.de
+          ? 'Arbeit oberhalb des 7-Tage- oder 28-Tage-Maximums wurde niedriger gewichtet.'
+          : 'Work crossing a muscle\'s 7-day or 28-day maximum was weighted down.';
+    case RuleKey.recoverySwapEasyCardio:
+      return lang == AppLanguage.de
+          ? 'Hohe Intensität hat die heutige Erholungs- und Sicherheitsprüfung nicht bestanden; Intervalle wurden im selben Zeitfenster durch lockere kontinuierliche Bewegung ersetzt.'
+          : 'High intensity did not pass today\'s recovery and safety gate, so intervals were replaced with easy continuous movement inside the same time window.';
+    case RuleKey.easyRecoveryCardio:
+      return lang == AppLanguage.de
+          ? 'Lockeres kontinuierliches Ausdauertraining passt heute als ermüdungsarme Wahl; kein aktuelles Grundlagendefizit hat die Empfehlung ausgelöst.'
+          : 'Easy continuous cardio fits as a low-fatigue choice; no current base-aerobic deficit drove the recommendation.';
+    case RuleKey.manualSessionOverride:
+      return lang == AppLanguage.de
+          ? 'Du hast ${p['session'] ?? 'diese Einheit'} heute bewusst als Alternative gewählt; Zeit- und Sicherheitsanpassungen gelten weiterhin.'
+          : 'You explicitly chose ${p['session'] ?? 'this session'} as today\'s alternative; normal time and safety adjustments still apply.';
     case RuleKey.floorForceStrength:
       return lang == AppLanguage.de
           ? 'Kraft liegt hinter dem Wochenziel, daher deckt die heutige Wahl das zuerst ab.'
@@ -47,20 +87,20 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : "It's the weekend with a free 30+ min slot, so Zone 2 moved to the top.";
     case RuleKey.s7TimeSub:
       return lang == AppLanguage.de
-          ? '4x4 wurde wegen der Zeit durch ein 8-Minuten-REHIT ersetzt.'
-          : '4x4 swapped for an 8-min REHIT due to time.';
+          ? '4x4 wurde wegen der Zeit durch das vom CAROL-Bike geführte Preset CAROL REHIT Intense ersetzt.'
+          : '4x4 was swapped for the bike-guided CAROL REHIT Intense preset due to time.';
     case RuleKey.s7SecondSessionOffer:
       return lang == AppLanguage.de
-          ? 'Seit 48h keine Intensitätseinheit - optional ein 8-Minuten-REHIT als zweite Einheit heute.'
-          : 'No intensity in the last 48h - add an 8-min REHIT as a second session today.';
+          ? 'Seit 48h keine Intensitätseinheit - optional das vom CAROL-Bike geführte Preset CAROL REHIT Intense als zweite Einheit heute.'
+          : 'No intensity in the last 48h - optionally add the bike-guided CAROL REHIT Intense preset as a second session today.';
     case RuleKey.yellowVolumeCut:
       return lang == AppLanguage.de
-          ? 'Erholung ist mittelmäßig, daher heute rund 25% weniger Arbeitssätze.'
-          : 'Recovery is middling, so work sets are cut about 25% today.';
+          ? 'Erholung ist mittelmäßig, daher ist das Trainingsvolumen heute reduziert.'
+          : 'Recovery is middling, so training volume is reduced today.';
     case RuleKey.yellow4x4ToRehit:
       return lang == AppLanguage.de
-          ? 'Erholung ist mittelmäßig, daher ersetzt ein 8-Minuten-REHIT das 4x4 heute.'
-          : 'Recovery is middling, so an 8-min REHIT replaces the 4x4 today.';
+          ? 'Erholung ist mittelmäßig, daher ersetzt das vom CAROL-Bike geführte Preset CAROL REHIT Intense heute das 4x4.'
+          : 'Recovery is middling, so the bike-guided CAROL REHIT Intense preset replaces the 4x4 today.';
     case RuleKey.redSwapTechnique:
       return lang == AppLanguage.de
           ? 'Erholung ist niedrig - heute als Technik-Einheit: 60% Last, halbe Satzzahl, RIR>=4.'
@@ -71,12 +111,12 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Recovery is low, so Zone 2 / mobility is the safe choice today.';
     case RuleKey.timeCompress60_35:
       return lang == AppLanguage.de
-          ? '60 -> 35 Min: Zusatzübungen und/oder REHIT-Finisher gestrichen, Hauptsupersätze bleiben.'
-          : '60 -> 35 min: accessory work and/or the REHIT finisher dropped, primary supersets kept.';
+          ? '60 -> 35 Min: Zusatzübungen und/oder das Preset CAROL REHIT Intense als Finisher gestrichen, Hauptsupersätze bleiben.'
+          : '60 -> 35 min: accessory work and/or the CAROL REHIT Intense preset finisher dropped, primary supersets kept.';
     case RuleKey.timeCompress35_20:
       return lang == AppLanguage.de
-          ? '35 -> 20 Min: nur das erste Supersatz-Paar, 2 harte Sätze je Übung.'
-          : '35 -> 20 min: just the first superset pair, 2 hard sets each.';
+          ? '35 -> 20 Min: nur das aktuell wichtigste Paar, 2 harte Sätze je Übung.'
+          : '35 -> 20 min: just the highest-need pair, 2 hard sets each.';
     case RuleKey.travelModeActive:
       return lang == AppLanguage.de
           ? 'Reisemodus ist aktiv: keine Geräte, Fortschritt über Wiederholungen, Tempo oder Bewegungsumfang; die Laststeigerung pausiert.'
@@ -87,8 +127,8 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : "${pat('pattern')} pain is mild - load eased back and reduced ROM used today.";
     case RuleKey.painSubSharp:
       return lang == AppLanguage.de
-          ? '${pat('pattern')}: starker Schmerz - ${p['substitute'] ?? 'Ersatzübung'} statt der üblichen Übung, bewusst leicht.'
-          : "${pat('pattern')} pain is sharp - ${p['substitute'] ?? 'a substitute'} used instead, with lighter, pain-free loading.";
+          ? '${pat('pattern')}: Starker Schmerz hat die feste Schmerzregel aktiviert; die übliche Bewegung oder Einheit wurde angepasst, ersetzt oder entfernt.'
+          : '${pat('pattern')}: Sharp pain activated the fixed pain rule; the usual movement or session was modified, replaced, or removed.';
     case RuleKey.painFreeze:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: Fortschritt pausiert, solange Schmerz gemeldet ist.'

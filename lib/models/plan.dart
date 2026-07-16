@@ -21,9 +21,10 @@ class PlannedExercise {
   final bool isWarmup;
   final String? instruction;
 
-  /// §6.6: detraining-adjusted loads become the new working load once the
-  /// session is actually completed (otherwise the ramp would snap back to
-  /// the pre-break load the very next day).
+  /// §6.6: after real positive work, a detraining-adjusted prescription
+  /// becomes the safe baseline (otherwise stamping recency after a partial
+  /// comeback would snap the next plan back to the harder pre-break state).
+  /// Full prescribed work is still required for normal progression.
   final bool persistLoadOnCompletion;
 
   /// Whether completing this work is allowed to advance the exercise state.
@@ -45,6 +46,22 @@ class PlannedExercise {
   /// never grouped.
   final int? supersetGroup;
 
+  /// True only when this entry fills a primary compound slot in the session
+  /// template. This is explicit because named accessories can reuse a
+  /// compound movement-pattern bucket for pain mapping without needing a
+  /// compound load ramp or compound minimum-set protection.
+  final bool isCompoundWork;
+
+  /// Marks the single 60%-load feeder before a later loaded compound. The
+  /// duration budgeter may remove these only after accessory and work-set
+  /// reductions; the first compound's load ramp is never a feeder.
+  final bool isFeederWarmup;
+
+  /// This exact work entry is the formal pain re-entry test generated from a
+  /// pending frozen state. Legacy or merely similar-looking work must never
+  /// clear the freeze.
+  final bool isPainReentryTest;
+
   const PlannedExercise({
     required this.trackKey,
     required this.pattern,
@@ -63,6 +80,9 @@ class PlannedExercise {
     this.isTravel = false,
     this.loadSteps,
     this.supersetGroup,
+    this.isCompoundWork = false,
+    this.isFeederWarmup = false,
+    this.isPainReentryTest = false,
   });
 
   /// Compatibility alias for existing callers and persisted plan consumers.
@@ -71,11 +91,15 @@ class PlannedExercise {
 
   String get targetLabel => metric.formatRange(targetRange);
 
-  PlannedExercise copyWith({int? supersetGroup}) => PlannedExercise(
+  PlannedExercise copyWith({
+    int? sets,
+    int? supersetGroup,
+  }) =>
+      PlannedExercise(
         trackKey: trackKey,
         pattern: pattern,
         name: name,
-        sets: sets,
+        sets: sets ?? this.sets,
         targetRange: targetRange,
         metric: metric,
         loadTotal: loadTotal,
@@ -89,6 +113,9 @@ class PlannedExercise {
         isTravel: isTravel,
         loadSteps: loadSteps,
         supersetGroup: supersetGroup ?? this.supersetGroup,
+        isCompoundWork: isCompoundWork,
+        isFeederWarmup: isFeederWarmup,
+        isPainReentryTest: isPainReentryTest,
       );
 }
 
@@ -112,6 +139,12 @@ class SessionPlan {
   /// plans and historical logs retain the correct context too.
   final bool travelMode;
 
+  /// The conservative 9-minute upper bound of CAROL's REHIT Intense preset
+  /// was explicitly withheld from this strength plan after all
+  /// recommendation-time hard gates passed. A later safety change cannot
+  /// create an unbudgeted finisher.
+  final bool optionalRehitFinisherReserved;
+
   const SessionPlan({
     required this.sessionId,
     required this.sessionName,
@@ -121,6 +154,7 @@ class SessionPlan {
     this.cardioPrescription,
     this.grantsQueueCredit = true,
     this.travelMode = false,
+    this.optionalRehitFinisherReserved = false,
   });
 
   int get plannedWorkSets =>

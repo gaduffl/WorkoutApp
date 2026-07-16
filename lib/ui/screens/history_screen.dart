@@ -1,41 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/repository.dart';
-import '../../models/floor_category.dart';
+import '../../models/history_data.dart';
 import '../../models/movement_pattern.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../models/session_log.dart';
+import '../../models/session_type.dart';
+import '../../models/training_status.dart';
 import '../../state/app_controller.dart';
+import '../view_models/history_feedback_view_model.dart';
 
-/// §11.4 History: calendar heat, floor-compliance ring (rolling 7 days),
-/// per-pattern progression sparklines, HRV overlay, session list.
-class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key});
+/// §11.4 History: personal dose targets, calendar heat, per-pattern
+/// progression sparklines, HRV overlay, and session list.
+typedef HistoryDataLoader = Future<HistoryData> Function(
+  AppController controller,
+);
+
+class HistoryScreen extends StatefulWidget {
+  final HistoryDataLoader? loadData;
+
+  const HistoryScreen({super.key, this.loadData});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  Future<HistoryData>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loadData != widget.loadData) _future = _load();
+  }
+
+  Future<HistoryData> _load() {
+    final controller = context.read<AppController>();
+    return widget.loadData?.call(controller) ?? controller.loadHistoryData();
+  }
+
+  void _retry() {
+    setState(() => _future = _load());
+  }
 
   @override
   Widget build(BuildContext context) {
-    final repo = context.read<Repository>();
-    final controller = context.read<AppController>();
-    final today = controller.today();
-
     return Scaffold(
       appBar: AppBar(title: const Text('History')),
-      body: FutureBuilder<(List<SessionLog>, List<RecoverySnapshot>)>(
-        future: () async {
-          final logs = await repo.loadSessionLogsSince(today.subtract(const Duration(days: 84)));
-          final snaps = await repo.loadRecoverySnapshotsSince(today.subtract(const Duration(days: 28)));
-          return (logs, snaps);
-        }(),
+      body: FutureBuilder<HistoryData>(
+        future: _future,
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final (logs, snaps) = snap.data!;
+          if (snap.connectionState == ConnectionState.waiting &&
+              !snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return _HistoryLoadError(onRetry: _retry);
+          }
+          if (!snap.hasData) {
+            return _HistoryLoadError(onRetry: _retry);
+          }
+          final data = snap.data!;
+          final logs = data.logs.toList();
+          final snaps = data.recoverySnapshots;
           logs.sort((a, b) => a.date.compareTo(b.date));
+          final today = DateTime(
+            data.asOf.year,
+            data.asOf.month,
+            data.asOf.day,
+          );
+          final feedback = HistoryFeedbackViewModel.fromStatus(
+            targets: data.targets,
+            ledger: data.ledger,
+            status: data.trainingStatus,
+          );
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _FloorRingCard(logs: logs, today: today),
+              TrainingTargetDashboard(viewModel: feedback),
               const SizedBox(height: 12),
               _CalendarHeatCard(logs: logs, today: today),
               const SizedBox(height: 12),
@@ -53,8 +102,8 @@ class HistoryScreen extends StatelessWidget {
                       title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'
                           '${l.travelMode ? ' · travel' : ''}'),
                       subtitle: Text(
-                        '${_d(l.date)} - ${l.completedWorkSets}/${l.plannedWorkSets} sets - ${l.durationMinutes} min'
-                        '${l.countsTowardQueueAndFloor ? '' : ' (partial)'}',
+                        '${_d(l.date)} - ${historySessionDoseSummary(l)}'
+                        '${_sessionCompletionSuffix(l)}',
                       ),
                     ),
                   )),
@@ -66,82 +115,319 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-String _d(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+class _HistoryLoadError extends StatelessWidget {
+  final VoidCallback onRetry;
 
-bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  const _HistoryLoadError({required this.onRetry});
 
-// ---------- rolling 7-day floor ring ----------
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.history_toggle_off_outlined, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                'Could not load history.',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+}
 
-class _FloorRingCard extends StatelessWidget {
-  final List<SessionLog> logs;
-  final DateTime today;
+/// Personal stimulus/target feedback. This is intentionally read-only; the
+/// recommendation engine remains the sole owner of workout selection.
+class TrainingTargetDashboard extends StatelessWidget {
+  final HistoryFeedbackViewModel viewModel;
 
-  const _FloorRingCard({required this.logs, required this.today});
+  const TrainingTargetDashboard({
+    super.key,
+    required this.viewModel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          _MuscleTargetsCard(rows: viewModel.muscles),
+          const SizedBox(height: 12),
+          _CardioTargetsCard(rows: viewModel.cardio),
+        ],
+      );
+}
+
+class _MuscleTargetsCard extends StatelessWidget {
+  final List<MuscleTargetRowModel> rows;
+
+  const _MuscleTargetsCard({required this.rows});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Muscle targets',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Targets: 8–12/week (center 10) · 32–48/28d (center 40)',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              const _MuscleHeaderRow(),
+              const Divider(height: 12),
+              for (final row in rows) _MuscleTargetRow(row: row),
+            ],
+          ),
+        ),
+      );
+}
+
+class _MuscleHeaderRow extends StatelessWidget {
+  const _MuscleHeaderRow();
 
   @override
   Widget build(BuildContext context) {
-    final controller = context.read<AppController>();
-    final last7 = today.subtract(const Duration(days: 7));
-    int count(FloorCategory c) => logs
-        .where((l) => l.countsAs.contains(c) && l.countsTowardQueueAndFloor && !l.date.isBefore(last7))
-        .length;
-    final strength = count(FloorCategory.strength);
-    final intensity = count(FloorCategory.intensity);
-    final strengthReq = controller.settings.weeklyFloor[FloorCategory.strength] ?? 2;
-    final intensityReq = controller.settings.weeklyFloor[FloorCategory.intensity] ?? 1;
-    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall;
+    return Row(
+      children: [
+        Expanded(flex: 3, child: Text('Muscle', style: style)),
+        Expanded(
+          flex: 2,
+          child: Text(
+            '7d\n8–12',
+            textAlign: TextAlign.end,
+            style: style,
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            '28d total\n32–48',
+            textAlign: TextAlign.end,
+            style: style,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-    Widget ring(String label, int done, int req, Color color) {
-      final ok = done >= req;
-      return Expanded(
-        child: Column(
+class _MuscleTargetRow extends StatelessWidget {
+  final MuscleTargetRowModel row;
+
+  const _MuscleTargetRow({required this.row});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
           children: [
-            SizedBox(
-              width: 76,
-              height: 76,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 76,
-                    height: 76,
-                    child: CircularProgressIndicator(
-                      value: req == 0 ? 1 : (done / req).clamp(0.0, 1.0),
-                      strokeWidth: 7,
-                      backgroundColor: scheme.surfaceContainerHighest,
-                      color: color,
-                      strokeCap: StrokeCap.round,
-                    ),
-                  ),
-                  Text('$done/$req', style: Theme.of(context).textTheme.titleMedium),
-                ],
+            Expanded(flex: 3, child: Text(row.label)),
+            Expanded(
+              flex: 2,
+              child: _TargetDoseCell(
+                muscle: row.label,
+                horizon: '7 days',
+                value: row.effectiveSets7d,
+                bandState: row.bandState7d,
               ),
             ),
-            const SizedBox(height: 6),
-            Text('$label ${ok ? '✓' : ''}', style: Theme.of(context).textTheme.bodySmall),
+            Expanded(
+              flex: 3,
+              child: Tooltip(
+                message:
+                    '${_sets(row.weeklyEquivalent28d)} sets/week equivalent',
+                child: _TargetDoseCell(
+                  muscle: row.label,
+                  horizon: '28 days',
+                  value: row.effectiveSets28d,
+                  bandState: row.bandState28d,
+                ),
+              ),
+            ),
           ],
         ),
       );
-    }
+}
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Rolling 7-day floor', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            Row(children: [
-              ring('Strength', strength, strengthReq, scheme.primary),
-              ring('Intensity', intensity, intensityReq, scheme.tertiary),
-            ]),
-          ],
+class _TargetDoseCell extends StatelessWidget {
+  final String muscle;
+  final String horizon;
+  final double value;
+  final MuscleTargetBandState bandState;
+
+  const _TargetDoseCell({
+    required this.muscle,
+    required this.horizon,
+    required this.value,
+    required this.bandState,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (label, color, foreground) = switch (bandState) {
+      MuscleTargetBandState.belowMinimum => (
+          'Below',
+          scheme.errorContainer,
+          scheme.onErrorContainer,
+        ),
+      MuscleTargetBandState.inBand => (
+          'In band',
+          scheme.primaryContainer,
+          scheme.onPrimaryContainer,
+        ),
+      MuscleTargetBandState.aboveMaximum => (
+          'Above',
+          scheme.tertiaryContainer,
+          scheme.onTertiaryContainer,
+        ),
+    };
+    return Semantics(
+      label: '$muscle, $horizon: ${_sets(value)} sets, $label target band',
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _sets(value),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: foreground,
+                    ),
+              ),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: foreground,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+class _CardioTargetsCard extends StatelessWidget {
+  final List<CardioTargetRowModel> rows;
+
+  const _CardioTargetsCard({required this.rows});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cardio targets',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Trailing windows · high intensity is covered by the 4×4 anchor or its REHIT fallback',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              for (final row in rows) _CardioTargetRow(row: row),
+            ],
+          ),
+        ),
+      );
+}
+
+class _CardioTargetRow extends StatelessWidget {
+  final CardioTargetRowModel row;
+
+  const _CardioTargetRow({required this.row});
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = switch (row.target) {
+      AerobicTargetKind.norwegian4x4Anchor =>
+        '${row.completedExposures}/${row.targetExposures} in trailing ${row.rollingWindowDays}d',
+      AerobicTargetKind.rehitSeparateDayFallback =>
+        '${row.completedExposures}/${row.targetExposures} exposures · '
+            '${row.completedDistinctDays}/${row.targetDistinctDays} distinct days',
+      AerobicTargetKind.longBaseExposure ||
+      AerobicTargetKind.shortBaseExposure =>
+        '${row.completedExposures}/${row.targetExposures} in trailing ${row.rollingWindowDays}d',
+    };
+    final note = switch (row.target) {
+      AerobicTargetKind.norwegian4x4Anchor => !row.applicable
+          ? 'Not currently needed — REHIT fallback met'
+          : row.met
+              ? 'Anchor met'
+              : '${row.exposureDeficit} anchor remaining',
+      AerobicTargetKind.rehitSeparateDayFallback => !row.applicable
+          ? 'Not needed — 4×4 anchor met'
+          : row.met
+              ? 'Fallback met — weekly high-intensity target covered for now · remains separate from 4×4 and base work'
+              : 'Temporary fallback only · does not equal 4×4 or base work',
+      AerobicTargetKind.longBaseExposure ||
+      AerobicTargetKind.shortBaseExposure => row.met
+          ? 'Exposure met'
+          : '${row.exposureDeficit} exposure remaining',
+    };
+    final icon = switch (row.state) {
+      CardioTargetState.notNeeded => Icons.remove_circle_outline,
+      CardioTargetState.met => Icons.check_circle,
+      CardioTargetState.deficit => Icons.radio_button_unchecked,
+    };
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        icon,
+        color: row.state == CardioTargetState.met
+            ? Theme.of(context).colorScheme.primary
+            : null,
+      ),
+      title: Text(row.label),
+      subtitle: Text('$detail\n$note'),
+      isThreeLine: true,
+    );
+  }
+}
+
+String _sets(double value) =>
+    (value - value.roundToDouble()).abs() < 0.001
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+
+String _d(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+String _sessionCompletionSuffix(SessionLog log) {
+  if (log.templateId == SessionTypeId.s6 &&
+      log.cardioCompletedAsPrescribed == true &&
+      !log.cardioDoseQualifies) {
+    return ' (completed recovery · no base credit)';
+  }
+  return log.completesTodaysPlan ? '' : ' (partial)';
+}
+
+bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 // ---------- calendar heat (12 weeks, sequential single hue) ----------
 

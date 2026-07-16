@@ -41,7 +41,10 @@ class SessionTemplateDef {
     this.isCardioOnly = false,
   });
 
-  /// (pattern, isCompound, namedExercise?) slots surviving at [tier].
+  /// (pattern, usesCompoundSetCount, namedExercise?) slots surviving at
+  /// [tier]. The boolean controls set-count bookkeeping only. A compressed
+  /// named accessory may use the compound count without becoming a genuine
+  /// compound for warm-up or duration-budget purposes.
   ///
   /// [dropAccessories] implements §5 Step 7's "60 → 35" compression for
   /// natively-60-minute sessions (S2/S4) running in a 35-minute slot:
@@ -64,8 +67,10 @@ class SessionTemplateDef {
     return [...compounds, ...named, ...accessories];
   }
 
-  int setsFor(bool isCompound, SessionTier tier) {
-    return isCompound ? compoundSetsByTier[tier]! : accessorySetsByTier[tier]!;
+  int setsFor(bool usesCompoundSetCount, SessionTier tier) {
+    return usesCompoundSetCount
+        ? compoundSetsByTier[tier]!
+        : accessorySetsByTier[tier]!;
   }
 }
 
@@ -101,7 +106,7 @@ final Map<SessionTypeId, SessionTemplateDef> sessionTemplates = {
     id: SessionTypeId.s5,
     // §2.1: "Flex / Pump (arms, shoulders, core)" - direct arm work plus
     // the core/grip ladder, not the push/pull proxies used before.
-    namedAccessories: [dbCurl, lateralRaise, overheadTriceps],
+    namedAccessories: s5NamedAccessories,
     accessoryPatterns: [MovementPattern.coreGrip],
   ),
   SessionTypeId.s6: const SessionTemplateDef(id: SessionTypeId.s6, isCardioOnly: true),

@@ -81,7 +81,9 @@ class ProgressionEngine {
   }) {
     // Callers normally pre-filter these, but keeping the state machine
     // defensive guarantees prep/ramp entries can never drive progression.
-    final eligibleSets = workSets.where((set) => !set.isWarmup).toList();
+    final eligibleSets = workSets
+        .where((setLog) => !setLog.isWarmup && setLog.value > 0)
+        .toList();
     if (eligibleSets.isEmpty) return state;
     final next = state.clone();
     next.lastTrainedDate = sessionDate;
@@ -105,7 +107,9 @@ class ProgressionEngine {
     }
 
     final expectedMetric = metricFor(next);
-    final metricSets = eligibleSets.where((set) => set.metric == expectedMetric).toList();
+    final metricSets = eligibleSets
+        .where((setLog) => setLog.metric == expectedMetric)
+        .toList();
     // A mismatched legacy/new metric must not accidentally advance a state.
     // Stamp recency above, but otherwise leave the prescription unchanged.
     if (metricSets.isEmpty) return next;
@@ -129,7 +133,9 @@ class ProgressionEngine {
 
     if (next.awaitingUndershootCheck) {
       next.awaitingUndershootCheck = false;
-      if (metricSets.every((s) => s.rir == Rir.rir3plus || s.rir == Rir.rir4plus)) {
+      if (metricSets.every((s) =>
+          s.value >= low &&
+          (s.rir == Rir.rir3plus || s.rir == Rir.rir4plus))) {
         _applyOneIncrement(next, equipmentConfig);
         next.status = ExerciseStatus.progress;
         next.consecutiveHoldCount = 0;
@@ -234,14 +240,45 @@ class ProgressionEngine {
 
   void _applyRegression(ExerciseState s, EquipmentConfig cfg, DateTime date) {
     s.regressionDates.add(date);
+    _stepPrescriptionBack(s, cfg);
+  }
+
+  /// Moves a prescription back by one real step without classifying why.
+  /// Failure regressions record their date before calling this helper;
+  /// scheduled deload exits deliberately do not.
+  void _stepPrescriptionBack(ExerciseState s, EquipmentConfig cfg) {
+    s.awaitingUndershootCheck = false;
     final step = ladderStepFor(s);
     if (step.backpackLoaded) {
       s.currentLoad = math.max(0, s.currentLoad - 5);
       return;
     }
     final achievable = _achievableSet(step, cfg);
-    if (achievable == null) return;
-    s.currentLoad = equipment.nextAchievableBelow(s.currentLoad, achievable);
+    if (achievable == null) {
+      if (s.microStepStage > 0) {
+        s.microStepStage -= 1;
+        return;
+      }
+      // Named substitutes/accessories have no independent movement ladder.
+      // Keep a capped named exercise capped rather than mutating the index of
+      // an unrelated pattern ladder.
+      if (!substituteRegistry.containsKey(s.trackKey) &&
+          s.ladderStepIndex > 0) {
+        s.ladderStepIndex -= 1;
+        // A ladder is advanced only after all three micro stages are used.
+        // Therefore the immediately preceding prescription is the prior
+        // ladder step at its final micro stage, not its unmodified form.
+        s.microStepStage = 3;
+      }
+      return;
+    }
+    final lowerLoad = equipment.nextAchievableBelow(s.currentLoad, achievable);
+    if (lowerLoad < s.currentLoad) {
+      s.currentLoad = lowerLoad;
+    } else if (s.microStepStage > 0) {
+      // At the equipment floor, remove one active tempo/pause/ROM modifier.
+      s.microStepStage -= 1;
+    }
   }
 
   void _enterDeload(ExerciseState s) {
@@ -257,16 +294,16 @@ class ProgressionEngine {
 
   /// §6.5: deload parameters (60% load, 50% sets, RIR>=4) are applied by the
   /// plan-assembly step; here we just count down the 2-session window and
-  /// auto-return "at the pre-deload prescription minus one micro-step".
+  /// auto-return after restoring the saved ladder/load and then moving back
+  /// one actual prescription step (load, backpack load, micro stage, or
+  /// bodyweight/timed ladder stage). This is planned recovery, not a failure
+  /// regression, so it never adds a regression date.
   ExerciseState _handleDeloadSession(ExerciseState s, EquipmentConfig cfg) {
     s.deloadSessionsRemaining -= 1;
     if (s.deloadSessionsRemaining <= 0) {
-      final preLoad = s.preDeloadLoad ?? s.currentLoad;
-      final step = ladderStepFor(s);
-      final achievable = _achievableSet(step, cfg);
-      s.currentLoad = achievable == null
-          ? preLoad
-          : equipment.nextAchievableBelow(preLoad, achievable);
+      s.ladderStepIndex = s.preDeloadLadderStepIndex ?? s.ladderStepIndex;
+      s.currentLoad = s.preDeloadLoad ?? s.currentLoad;
+      _stepPrescriptionBack(s, cfg);
       s.status = ExerciseStatus.progress;
       s.deloadSessionsRemaining = 0;
       s.preDeloadLoad = null;
@@ -275,15 +312,53 @@ class ProgressionEngine {
     return s;
   }
 
-  /// Global deload trigger (§6.3): >=3 RED days in 7, or a manual "feeling
-  /// beat up" trigger. Applies to every non-frozen pattern.
-  List<ExerciseState> forceGlobalDeload(List<ExerciseState> states) {
+  List<ExerciseState> _forceGlobalDeload(List<ExerciseState> states) {
     return states.map((s) {
       if (s.painFrozen || s.status == ExerciseStatus.deload) return s;
       final next = s.clone();
       _enterDeload(next);
       return next;
     }).toList();
+  }
+
+  /// Materializes every built-in progression track before applying a global
+  /// deload. This includes each plan-backed movement ladder (but not the
+  /// non-progressing knee-health warm-up block) and S5's normal named
+  /// accessories. Pain-only substitutes and unknown/imported tracks are
+  /// retained unchanged: the app cannot guarantee that either will be
+  /// scheduled again to consume a two-touch deload.
+  ///
+  /// Keeping this as the single global-deload entry point prevents an empty
+  /// or sparsely trained state map from limiting the deload to exercises the
+  /// user happened to have touched already. Existing normal-plan state
+  /// objects flow through the transition below, which preserves active
+  /// deload countdowns and all pain-freeze metadata; newly materialized
+  /// normal tracks begin the next-two-touch deload.
+  Map<String, ExerciseState> forceGlobalDeloadForBuiltInTracks(
+    Map<String, ExerciseState> states,
+  ) {
+    final normalPlanSeeds = <ExerciseState>[];
+    for (final pattern in ladders.keys) {
+      if (pattern.patternClass == PatternClass.kneeHealth) continue;
+      normalPlanSeeds.add(
+        ExerciseState(trackKey: pattern.name, pattern: pattern),
+      );
+    }
+    for (final named in s5NamedAccessories) {
+      normalPlanSeeds.add(
+        ExerciseState(
+          trackKey: named.trackKey,
+          pattern: named.pattern,
+        ),
+      );
+    }
+
+    final result = Map<String, ExerciseState>.from(states);
+    for (final seed in normalPlanSeeds) {
+      final current = result[seed.trackKey] ?? seed;
+      result[seed.trackKey] = _forceGlobalDeload([current]).single;
+    }
+    return result;
   }
 
   /// §6.6 detraining adjustment, with §7.2 pain-reentry precedence: if a
@@ -304,6 +379,14 @@ class ProgressionEngine {
       final testLoad = achievable == null ? base * 0.5 : equipment.roundDownToAchievable(base * 0.5, achievable);
       final next = state.clone()..currentLoad = testLoad;
       return PrescriptionResolution(next, painReentryTestFired: true);
+    }
+
+    // A missing training date means this is an onboarding prescription, not
+    // a comeback after a very long layoff. Keep the untouched state here;
+    // plan assembly will still round a zero starting load to the equipment's
+    // minimum achievable load.
+    if (state.lastTrainedDate == null) {
+      return PrescriptionResolution(state);
     }
 
     final days = state.daysUntrained(today);

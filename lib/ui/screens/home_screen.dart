@@ -7,6 +7,27 @@ import 'history_screen.dart';
 import 'settings_screen.dart';
 import 'today_screen.dart';
 
+String homeTodayStatus({
+  required bool hasTrace,
+  required bool sessionLogged,
+  required bool sessionDone,
+}) {
+  if (!hasTrace) return 'No check-in yet today.';
+  if (sessionDone) return "Today's session is done ✅";
+  if (sessionLogged) return "Today's workout attempt is saved.";
+  return "Today's plan is ready.";
+}
+
+String homeTodayActionLabel({
+  required bool hasTrace,
+  required bool sessionLogged,
+  required bool sessionDone,
+}) {
+  if (!hasTrace) return 'Morning check-in';
+  if (sessionDone || sessionLogged) return "View today's summary";
+  return "View today's plan";
+}
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -79,14 +100,18 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (controller.sessionDoneToday)
-                    const Icon(Icons.check_circle, color: Colors.green, size: 48),
+                  if (controller.sessionDoneToday || controller.sessionLoggedToday)
+                    Icon(
+                      controller.sessionDoneToday ? Icons.check_circle : Icons.check_circle_outline,
+                      color: Colors.green,
+                      size: 48,
+                    ),
                   Text(
-                    controller.todayTrace == null
-                        ? 'No check-in yet today.'
-                        : controller.sessionDoneToday
-                            ? "Today's session is done ✅"
-                            : "Today's plan is ready.",
+                    homeTodayStatus(
+                      hasTrace: controller.todayTrace != null,
+                      sessionLogged: controller.sessionLoggedToday,
+                      sessionDone: controller.sessionDoneToday,
+                    ),
                     style: Theme.of(context).textTheme.titleMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -100,11 +125,13 @@ class HomeScreen extends StatelessWidget {
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CheckInScreen()));
                       }
                     },
-                    child: Text(controller.todayTrace == null
-                        ? 'Morning check-in'
-                        : controller.sessionDoneToday
-                            ? "View today's summary"
-                            : "View today's plan"),
+                    child: Text(
+                      homeTodayActionLabel(
+                        hasTrace: controller.todayTrace != null,
+                        sessionLogged: controller.sessionLoggedToday,
+                        sessionDone: controller.sessionDoneToday,
+                      ),
+                    ),
                   ),
                 ],
               ),

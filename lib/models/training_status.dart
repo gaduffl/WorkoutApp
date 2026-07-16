@@ -65,10 +65,10 @@ class AerobicTrainingStatus {
         assert(distinctDayDeficit >= 0);
 }
 
-/// Read-only training-dose snapshot produced by a future status engine.
+/// Read-only training-dose snapshot consumed by Decision Engine v2.
 ///
-/// This file intentionally contains data only. It does not decide whether a
-/// session qualifies or calculate any deficits.
+/// This file intentionally contains data only. Qualification and deficit
+/// calculations remain in the pure ledger/status engines.
 class TrainingStatus {
   final DateTime asOf;
   final int muscleEvaluationWindowDays;

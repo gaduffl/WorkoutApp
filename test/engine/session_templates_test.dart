@@ -3,6 +3,30 @@ import 'package:morningcoach/engine/session_templates.dart';
 import 'package:morningcoach/models/session_type.dart';
 
 void main() {
+  test('all strength families are feasible in the hard 20-minute window', () {
+    for (final id in [
+      SessionTypeId.s1,
+      SessionTypeId.s2,
+      SessionTypeId.s4,
+      SessionTypeId.s5,
+    ]) {
+      expect(sessionTypes[id]!.minDurationMin, lessThanOrEqualTo(20));
+    }
+  });
+
+  test('duration metadata matches executable hard-window contracts', () {
+    expect(sessionTypes[SessionTypeId.s5]!.minDurationMin, 20);
+    expect(sessionTypes[SessionTypeId.s3]!.fullDurationMin, 30);
+    expect(sessionTypes[SessionTypeId.s3]!.minDurationMin, isNull);
+    expect(sessionTypes[SessionTypeId.s7]!.fullDurationMin, 9);
+    expect(sessionTypes[SessionTypeId.s7]!.minDurationMin, 5);
+    expect(
+      sessionTypes[SessionTypeId.s6]!.minDurationMin,
+      30,
+      reason: 'S6 metadata is its base-credit threshold; 20m is recovery only',
+    );
+  });
+
   test('every template with a compressed tier prescribes actual work sets', () {
     for (final entry in sessionTemplates.entries) {
       final template = entry.value;

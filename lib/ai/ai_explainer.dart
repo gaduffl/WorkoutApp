@@ -17,12 +17,33 @@ class AiExplainer {
   static const _model = 'claude-haiku-4-5-20251001';
   static const _endpoint = 'https://api.anthropic.com/v1/messages';
 
-  String _glossary(RuleKey key) {
+  String _glossary(FiredRule rule) {
+    final key = rule.key;
     switch (key) {
       case RuleKey.restTimeZero:
         return 'no time slot today';
       case RuleKey.restDoubleRed:
         return 'second RED recovery day in a row';
+      case RuleKey.norwegian4x4Due:
+        return 'preferred 4x4 stimulus is missing from the rolling 7-day window';
+      case RuleKey.rehitFallbackDue:
+        return '20-minute slot advances the two-separate-day fallback with the bike-guided CAROL REHIT Intense preset while 4x4 remains due';
+      case RuleKey.baseLongDeficit:
+        return 'the allocated 60-minute base exposure is missing';
+      case RuleKey.baseShortDeficit:
+        return 'a separate 30+ minute base exposure is missing after long-session allocation';
+      case RuleKey.muscleStimulusDeficit:
+        return 'projected explicit muscle credit closes weekly and 28-day effective-set deficits';
+      case RuleKey.muscleRecoveryDemotion:
+        return 'muscles trained today or yesterday were demoted for recovery';
+      case RuleKey.muscleOverMaxDemotion:
+        return 'projected work crossing a muscle\'s 7-day or 28-day maximum was penalized';
+      case RuleKey.recoverySwapEasyCardio:
+        return 'high intensity did not pass today\'s recovery and safety gate, so it was replaced by easy continuous movement in the same time window';
+      case RuleKey.easyRecoveryCardio:
+        return 'easy continuous cardio fits as a low-fatigue choice; no current base-aerobic deficit drove the recommendation';
+      case RuleKey.manualSessionOverride:
+        return 'the user explicitly selected ${rule.params['session'] ?? 'today\'s alternative'}; normal time and safety adjustments still apply';
       case RuleKey.floorForceStrength:
         return 'weekly strength floor is behind and about to age out';
       case RuleKey.floorForceIntensity:
@@ -40,13 +61,13 @@ class AiExplainer {
       case RuleKey.s6WeekendRule:
         return 'weekend with a free slot, Zone 2 prioritized';
       case RuleKey.s7TimeSub:
-        return 'not enough time for the 4x4, so REHIT substituted';
+        return 'not enough time for the 4x4, so the bike-guided CAROL REHIT Intense preset was substituted';
       case RuleKey.s7SecondSessionOffer:
-        return 'no intensity work in 48h, REHIT offered as a bonus second session';
+        return 'no intensity work in 48h, so the bike-guided CAROL REHIT Intense preset was offered as a bonus second session';
       case RuleKey.yellowVolumeCut:
-        return 'recovery is middling, sets cut about 25%';
+        return 'recovery is middling, so training volume was reduced';
       case RuleKey.yellow4x4ToRehit:
-        return 'recovery is middling, 4x4 swapped for REHIT';
+        return 'recovery is middling, so 4x4 was swapped for the bike-guided CAROL REHIT Intense preset';
       case RuleKey.redSwapTechnique:
         return 'recovery is low, running a light technique session instead';
       case RuleKey.redSwapZ2:
@@ -54,13 +75,13 @@ class AiExplainer {
       case RuleKey.timeCompress60_35:
         return 'compressed from 60 to 35 minutes';
       case RuleKey.timeCompress35_20:
-        return 'compressed to a 20-minute first-superset-only session';
+        return 'compressed to the highest-need pair that fits 20 minutes';
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:
-        return 'sharp pain flagged, exercise substituted for a pain-free one';
+        return 'sharp pain activated the deterministic pain rule, so the usual movement or session was modified, replaced, or removed';
       case RuleKey.painFreeze:
         return 'progression paused on this pattern while pain is flagged';
       case RuleKey.painMedicalEscalation:
@@ -88,10 +109,14 @@ class AiExplainer {
     if (trace.plan == null) {
       return trace.firedRules.map((r) => fallbackText(r, lang)).join(' ');
     }
-    final rules = trace.firedRules.isEmpty
-        ? [FiredRule(RuleKey.queueNext, params: {'session': trace.plan!.sessionName})]
-        : trace.firedRules;
-    return rules.map((r) => fallbackText(r, lang)).join(' ');
+    if (trace.firedRules.isEmpty) {
+      // Old saved traces can predate explicit selection rationales. Do not
+      // fabricate queue membership merely to fill the narration surface.
+      return lang == AppLanguage.de
+          ? 'Für diesen gespeicherten Plan wurde kein Entscheidungsgrund aufgezeichnet.'
+          : 'No decision rationale was recorded for this saved plan.';
+    }
+    return trace.firedRules.map((r) => fallbackText(r, lang)).join(' ');
   }
 
   String _painAdvisory(DecisionTrace trace) {
@@ -125,7 +150,9 @@ class AiExplainer {
   }
 
   Future<String?> _callApi(DecisionTrace trace, UserSettings settings, String apiKey) async {
-    final glossaryLines = trace.firedRules.map((r) => '- ${r.code}: ${_glossary(r.key)}').join('\n');
+    final glossaryLines = trace.firedRules
+        .map((rule) => '- ${rule.code}: ${_glossary(rule)}')
+        .join('\n');
     final langName = settings.language == AppLanguage.de ? 'German' : 'English';
     final planLine = trace.plan == null
         ? 'Outcome: ${trace.restReason ?? "rest day"}.'

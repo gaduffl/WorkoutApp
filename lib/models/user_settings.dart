@@ -7,9 +7,12 @@ enum Units { lb, kg }
 
 enum AppLanguage { en, de }
 
-/// §2.4 User entity + §2.2 weekly floor config + §10 Oura/AI settings.
+/// User settings plus legacy v1 weekly-floor persistence and integrations.
 class UserSettings {
   final EquipmentConfig equipment;
+
+  /// Retained only so existing backups/settings round-trip. Decision Engine
+  /// v2 uses TrainingTargets and never reads this map.
   final Map<FloorCategory, int> weeklyFloor;
   final Units units;
   final Units storageUnit; // equipment's native unit; storage stays lb per §2.5
@@ -38,6 +41,11 @@ class UserSettings {
   /// Persisting it prevents app restarts from scheduling the same nudge twice.
   final String? secondRehitNudgeScheduledDay;
 
+  /// Exact local target paired with [secondRehitNudgeScheduledDay]. Legacy
+  /// settings have only the day marker and are treated as already used for
+  /// that day rather than risking a duplicate notification.
+  final DateTime? secondRehitNudgeScheduledFor;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -56,11 +64,14 @@ class UserSettings {
     this.travelMode = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeScheduledDay,
+    this.secondRehitNudgeScheduledFor,
   });
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
   double get hrMax => hrMaxOverride ?? (208 - 0.7 * age);
 
+  /// Nullable arguments retain their existing values. The explicit clear
+  /// flags distinguish an intentional removal from an omitted update.
   UserSettings copyWith({
     EquipmentConfig? equipment,
     Map<FloorCategory, int>? weeklyFloor,
@@ -78,6 +89,10 @@ class UserSettings {
     bool? travelMode,
     bool? notificationsEnabled,
     String? secondRehitNudgeScheduledDay,
+    DateTime? secondRehitNudgeScheduledFor,
+    bool clearHrMaxOverride = false,
+    bool clearAnthropicApiKey = false,
+    bool clearSecondRehitNudgeScheduledDay = false,
   }) {
     return UserSettings(
       equipment: equipment ?? this.equipment,
@@ -86,18 +101,25 @@ class UserSettings {
       storageUnit: storageUnit,
       language: language ?? this.language,
       age: age ?? this.age,
-      hrMaxOverride: hrMaxOverride ?? this.hrMaxOverride,
+      hrMaxOverride:
+          clearHrMaxOverride ? null : hrMaxOverride ?? this.hrMaxOverride,
       oura: oura ?? this.oura,
       oneDrive: oneDrive ?? this.oneDrive,
-      anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
+      anthropicApiKey: clearAnthropicApiKey
+          ? null
+          : anthropicApiKey ?? this.anthropicApiKey,
       aiExplanationsEnabled: aiExplanationsEnabled ?? this.aiExplanationsEnabled,
       aiTone: aiTone ?? this.aiTone,
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-      secondRehitNudgeScheduledDay:
-          secondRehitNudgeScheduledDay ?? this.secondRehitNudgeScheduledDay,
+      secondRehitNudgeScheduledDay: clearSecondRehitNudgeScheduledDay
+          ? null
+          : secondRehitNudgeScheduledDay ?? this.secondRehitNudgeScheduledDay,
+      secondRehitNudgeScheduledFor: clearSecondRehitNudgeScheduledDay
+          ? null
+          : secondRehitNudgeScheduledFor ?? this.secondRehitNudgeScheduledFor,
     );
   }
 }

@@ -3,6 +3,11 @@ import 'plan.dart';
 import 'rule_key.dart';
 import 'session_type.dart';
 
+/// Candidate score-term wire key for a strength template whose normal emitted
+/// slots contain no pain-safe work. The trace retains such candidates for
+/// audit, while interactive alternative lists must not offer them.
+const painNoSafeWorkScoreTerm = 'painNoSafeWork';
+
 enum ReadinessBucket { green, yellow, red }
 
 /// §4.2 recovery summary embedded in the trace.
