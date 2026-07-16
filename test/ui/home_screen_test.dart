@@ -210,7 +210,7 @@ void main() {
     expect(
       tester
           .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Log unplanned REHIT'),
+            find.byKey(const Key('home-log-unplanned-rehit')),
           )
           .onPressed,
       isNull,
