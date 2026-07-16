@@ -105,19 +105,37 @@ class ExerciseMuscleMap {
   };
 
   Map<MajorMuscleGroup, double> contributionFor(SetLog set) {
-    if (set.trackKey.startsWith('warmup:') || set.trackKey == 'atg_block') {
+    if (set.isWarmup) return const {};
+    return contributionForExercise(
+      trackKey: set.trackKey,
+      pattern: set.pattern,
+      exerciseName: set.exerciseName,
+    );
+  }
+
+  /// Returns the same explicit profile used for completed sets without
+  /// requiring recommendation scoring to manufacture a synthetic SetLog.
+  Map<MajorMuscleGroup, double> contributionForExercise({
+    required String trackKey,
+    required MovementPattern pattern,
+    String? exerciseName,
+  }) {
+    if (trackKey.startsWith('warmup:') || trackKey == 'atg_block') {
       return const {};
     }
 
-    final named = _namedTracks[set.trackKey] ??
-        _legacyNamedExercises[set.exerciseName.trim().toLowerCase()];
+    final normalizedName = exerciseName?.trim().toLowerCase();
+    final named = _namedTracks[trackKey] ??
+        (normalizedName == null
+            ? null
+            : _legacyNamedExercises[normalizedName]);
     if (named != null) return named.effectiveSets;
 
     // An unknown named/substitute track is safer left uncredited than treated
     // as the broad pain-management pattern it happens to use.
-    if (set.trackKey.startsWith('sub:')) return const {};
+    if (trackKey.startsWith('sub:')) return const {};
 
-    return _patterns[set.pattern]!.effectiveSets;
+    return _patterns[pattern]!.effectiveSets;
   }
 }
 
@@ -167,6 +185,14 @@ class SessionLogStimulusAdapter {
   });
 
   Iterable<MuscleStimulusEvent> strengthEvents(SessionLog log) sync* {
+    const strengthTemplates = {
+      SessionTypeId.s1,
+      SessionTypeId.s2,
+      SessionTypeId.s4,
+      SessionTypeId.s5,
+    };
+    if (!strengthTemplates.contains(log.templateId)) return;
+
     for (var index = 0; index < log.setLogs.length; index++) {
       final set = log.setLogs[index];
       if (!effortPolicy.qualifies(set)) continue;
@@ -183,6 +209,8 @@ class SessionLogStimulusAdapter {
   Iterable<AerobicStimulusEvent> aerobicEvents(SessionLog log) sync* {
     final structured = log.cardioCompletion;
     if (structured != null) {
+      final expectedProtocol = _expectedStructuredProtocol(log);
+      if (structured.protocol.type != expectedProtocol) return;
       final durationMinutes = structured.completedDurationSeconds ~/ 60;
       if (_qualifiesStructuredCardio(structured)) {
         yield AerobicStimulusEvent(
@@ -209,6 +237,25 @@ class SessionLogStimulusAdapter {
         CardioProtocolType.zone2Base =>
           completion.completedDurationSeconds >= 1800,
       };
+
+  CardioProtocolType? _expectedStructuredProtocol(SessionLog log) {
+    switch (log.templateId) {
+      case SessionTypeId.s3:
+        return CardioProtocolType.norwegian4x4;
+      case SessionTypeId.s6:
+        return CardioProtocolType.zone2Base;
+      case SessionTypeId.s7:
+        return CardioProtocolType.rehit;
+      case SessionTypeId.s2:
+        return log.tier == SessionTier.extended
+            ? CardioProtocolType.rehit
+            : null;
+      case SessionTypeId.s1:
+      case SessionTypeId.s4:
+      case SessionTypeId.s5:
+        return null;
+    }
+  }
 
   Iterable<AerobicStimulusEvent> _legacyAerobicEvents(
     SessionLog log,

@@ -13,14 +13,29 @@ import '../models/rule_key.dart';
 import '../models/session_log.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
+import '../models/stimulus_ledger.dart';
+import '../models/training_status.dart';
+import '../models/training_targets.dart';
 import '../models/user_settings.dart';
+import 'cardio_engine.dart';
 import 'equipment_engine.dart';
-import 'floor_engine.dart';
+import 'intensity_recovery_policy.dart';
 import 'pain_engine.dart';
 import 'progression_engine.dart';
 import 'queue_engine.dart';
 import 'readiness_engine.dart';
 import 'session_templates.dart';
+import 'strength_duration_engine.dart';
+import 'stimulus_ledger_engine.dart';
+import 'training_status_engine.dart';
+
+/// Why a caller asked the engine to preserve or choose a specific session.
+/// Internal recomputations must not masquerade as an explicit user swap in
+/// the persisted decision trace.
+enum ForcedSessionProvenance {
+  manualOverride,
+  internalRefresh,
+}
 
 class DecisionEngineInput {
   final CheckIn checkin;
@@ -33,12 +48,25 @@ class DecisionEngineInput {
   final UserSettings settings;
   final DateTime today;
 
+  /// Optional personal optimization targets. The default remains immutable
+  /// and app-owned; callers only need to pass this when evaluating a target
+  /// variant in a deterministic simulation.
+  final TrainingTargets? trainingTargets;
+
   /// §11's "swap session": when set, Step 5 picks this candidate instead
   /// of the natural highest scorer (it must still be one of the ranked
   /// candidates - the caller offers only real alternatives). Every other
   /// step (readiness modulation, time compression, pain substitution,
-  /// load resolution) still runs normally against it.
+  /// load resolution) still runs normally against it. A forced strength
+  /// template that has no pain-safe work can never override the hard medical
+  /// gate; the engine selects the highest-ranked pain-feasible strength
+  /// alternative instead.
   final SessionTypeId? forcedSessionId;
+
+  /// Defaults to the public/manual behavior for backwards compatibility.
+  /// Callers that merely preserve a plan during an internal refresh must opt
+  /// into [ForcedSessionProvenance.internalRefresh].
+  final ForcedSessionProvenance forcedSessionProvenance;
 
   const DecisionEngineInput({
     required this.checkin,
@@ -50,7 +78,9 @@ class DecisionEngineInput {
     required this.queueState,
     required this.settings,
     required this.today,
+    this.trainingTargets,
     this.forcedSessionId,
+    this.forcedSessionProvenance = ForcedSessionProvenance.manualOverride,
   });
 }
 
@@ -70,14 +100,29 @@ class DecisionEngineOutput {
 class DecisionEngine {
   const DecisionEngine();
 
+  static const _hardTimeWindows = {0, 20, 35, 60};
+  static const _fourByFourAvailabilityWindowMin = 35;
+
   static const readinessEngine = ReadinessEngine();
-  static const floorEngine = FloorEngine();
+  static const cardioEngine = CardioEngine();
   static const queueEngine = QueueEngine();
   static const painEngine = PainEngine();
   static const progressionEngine = ProgressionEngine();
   static const equipmentEngine = EquipmentEngine();
+  static const intensityRecoveryPolicy = IntensityRecoveryPolicy();
+  static const stimulusLedgerEngine = StimulusLedgerEngine();
+  static const trainingStatusEngine = TrainingStatusEngine();
+  static const exerciseMuscleMap = ExerciseMuscleMap();
+  static const strengthDurationBudgeter = StrengthDurationBudgeter();
 
   DecisionEngineOutput decide(DecisionEngineInput input) {
+    if (!_hardTimeWindows.contains(input.checkin.timeMinutes)) {
+      throw ArgumentError.value(
+        input.checkin.timeMinutes,
+        'checkin.timeMinutes',
+        'Must be one of the immutable 0, 20, 35, or 60 minute windows',
+      );
+    }
     final fired = <FiredRule>[];
     final today = input.today;
     final checkin = input.checkin;
@@ -109,18 +154,45 @@ class DecisionEngine {
     // once we know which patterns were actually scheduled.
     var patchedStates = Map<String, ExerciseState>.from(input.exerciseStates);
 
-    // §6.3 automatic global deload: the current readiness day participates
-    // in the rolling seven-day window. Apply this before any rest short
-    // circuit so a third RED day still persists the deload state even when it
-    // is also the second consecutive RED day.
+    // §6.3 automatic global deload is one episode per threshold crossing,
+    // not a level-trigger that resets completed tracks on every evaluation
+    // while the same RED cluster remains in the rolling window. Apply the
+    // crossing before any rest short circuit so the current third RED still
+    // persists the episode even when it is also the second consecutive RED.
+    final redDaysToday =
+        _redDaysInRollingWindow(input, recovery.bucket, today);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final redDaysYesterday = _redDaysInRollingWindow(
+      input,
+      _bucketForDate(input, yesterday),
+      yesterday,
+    );
     final automaticGlobalDeload =
-        _redDaysInRollingWindow(input, recovery.bucket, today) >= 3;
+        redDaysToday >= 3 && redDaysYesterday < 3;
     if (automaticGlobalDeload) {
-      patchedStates = {
-        for (final state in progressionEngine.forceGlobalDeload(patchedStates.values.toList()))
-          state.trackKey: state,
-      };
+      patchedStates = progressionEngine.forceGlobalDeloadForBuiltInTracks(
+        patchedStates,
+      );
     }
+
+    // A pain tap is check-in state, not plan state. Persist it before either
+    // Step-1 rest return and before session selection so a rest/cardio day or
+    // a pain-driven session swap cannot make the flag disappear tomorrow.
+    // Only normal plan-backed tracks are eligible here: the seven progressing
+    // pattern ladders plus S5's three named accessories. Pain-only substitute
+    // tracks are materialized later, and only when actually prescribed.
+    patchedStates = _persistCurrentCheckInPain(
+      patchedStates,
+      checkin.pain,
+      today,
+    );
+    final sharpHipPainActive = painEngine.hipSharpActive(checkin.pain) ||
+        patchedStates.values.any(
+          (state) =>
+              state.painFrozen &&
+              state.painSeverity == PainSeverity.sharp &&
+              state.painRegion == BodyRegion.hip,
+        );
 
     // --- Step 1: rest-day short-circuit ---
     if (checkin.timeMinutes == 0) {
@@ -140,7 +212,6 @@ class DecisionEngine {
       );
     }
 
-    final yesterday = today.subtract(const Duration(days: 1));
     final yesterdayBucket = _bucketForDate(input, yesterday);
     if (recovery.bucket == ReadinessBucket.red && yesterdayBucket == ReadinessBucket.red) {
       fired.add(const FiredRule(RuleKey.restDoubleRed));
@@ -159,108 +230,188 @@ class DecisionEngine {
       );
     }
 
-    // --- Step 2: candidate filtering by time ---
-    final feasible = _feasibleCandidates(checkin.timeMinutes);
-
-    // --- Step 3: weekly-floor pressure ---
-    final strengthReq = input.settings.weeklyFloor[FloorCategory.strength] ?? 2;
-    final intensityReq = input.settings.weeklyFloor[FloorCategory.intensity] ?? 1;
-    final strengthPressure = floorEngine.pressureFor(
-      category: FloorCategory.strength,
+    // --- Step 2: candidate filtering and target-status calculation ---
+    final feasible = _feasibleCandidates(checkin.timeMinutes)
+        .where(
+          (id) =>
+              !input.settings.travelMode ||
+              (id != SessionTypeId.s3 && id != SessionTypeId.s7),
+        )
+        .toList();
+    final targets = input.trainingTargets ?? TrainingTargets();
+    final ledgerAsOf = _isSameDate(checkin.timestamp, today)
+        ? checkin.timestamp
+        : today;
+    final ledger = stimulusLedgerEngine.buildFromSessionLogs(
       logs: input.sessionLogs,
-      requirement: strengthReq,
-      today: today,
+      asOf: ledgerAsOf,
     );
-    final intensityPressure = floorEngine.pressureFor(
-      category: FloorCategory.intensity,
+    final trainingStatus = trainingStatusEngine.build(
+      targets: targets,
+      ledger: ledger,
+    );
+    final fourByFour = _aerobicStatus(
+      trainingStatus,
+      AerobicTargetKind.norwegian4x4Anchor,
+    );
+    final rehitFallback = _aerobicStatus(
+      trainingStatus,
+      AerobicTargetKind.rehitSeparateDayFallback,
+    );
+    final longBase = _aerobicStatus(
+      trainingStatus,
+      AerobicTargetKind.longBaseExposure,
+    );
+    final shortBase = _aerobicStatus(
+      trainingStatus,
+      AerobicTargetKind.shortBaseExposure,
+    );
+    final fourByFourDue = fourByFour.exposureDeficit > 0;
+    final rehitFallbackDue = targets.fallbackRehitRequiresSeparateDays
+        ? rehitFallback.distinctDayDeficit > 0
+        : rehitFallback.exposureDeficit > 0;
+    // The weekly high-intensity target is disjunctive: one qualifying 4x4 is
+    // preferred, while the configured REHIT dose is its fallback. Once either
+    // path is complete, natural planning must not add the other as surplus
+    // intensity. Protocol-specific history remains separate in the ledger.
+    final naturalHighIntensityTargetDue =
+        fourByFourDue && rehitFallbackDue;
+    final highIntensitySafety =
+        intensityRecoveryPolicy.evaluateHighIntensitySafety(
       logs: input.sessionLogs,
-      requirement: intensityReq,
-      today: today,
+      asOf: ledgerAsOf,
+      checkInPain: checkin.pain,
+      exerciseStates: input.exerciseStates.values,
+      automaticGlobalDeload: automaticGlobalDeload,
+      travelMode: input.settings.travelMode,
     );
-    final bothHardForced =
-        strengthPressure.level == FloorPressureLevel.hard && intensityPressure.level == FloorPressureLevel.hard;
-    if (bothHardForced) fired.add(const FiredRule(RuleKey.s7SecondSessionOffer));
+    final canAdvanceFourByFour = naturalHighIntensityTargetDue &&
+        checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
+        !highIntensitySafety.blocked;
+    final strengthStimulusMultiplier = automaticGlobalDeload
+        ? 0.0
+        : switch (recovery.bucket) {
+            ReadinessBucket.green => 1.0,
+            ReadinessBucket.yellow => 0.75,
+            // RED technique work runs at RIR 4+ and is deliberately
+            // nonqualifying under TargetEffortPolicy.
+            ReadinessBucket.red => 0.0,
+          };
 
-    // --- Step 4: candidate scoring ---
+    // --- Step 3: target-dose scoring ---
     final yesterdayLegHeavy = input.sessionLogs.any((l) =>
         _isSameDate(l.date, yesterday) && l.countsTowardQueueAndFloor && sessionTypes[l.templateId]!.legHeavy);
-    final s6ConditionMet = _s6ConditionMet(input, today, strengthPressure, intensityPressure);
-    final mostOverdue = _mostOverduePattern(input.exerciseStates, today);
 
     final scored = <_Scored>[];
     for (final id in feasible) {
       final def = sessionTypes[id]!;
-      final tier = id == SessionTypeId.s3 ? SessionTier.full : tierForTime(checkin.timeMinutes);
+      final tier = id == SessionTypeId.s3 || id == SessionTypeId.s7
+          ? SessionTier.full
+          : tierForTime(checkin.timeMinutes);
       final terms = <String, int>{};
 
-      int base;
+      // The queue remains useful as a deterministic rotation/tie-breaker,
+      // but its maximum five-point effect cannot outweigh an actual target
+      // deficit.
+      terms['base'] = 10;
       if (cycleOrder.contains(id)) {
         final dist = queueEngine.cycleDistance(id, input.queueState);
-        base = 50 - 10 * dist;
-      } else if (id == SessionTypeId.s6) {
-        base = 10;
-        if (s6ConditionMet) terms['weekendPriority'] = 50;
-      } else {
-        base = 10; // S7
+        terms['queueTieBreak'] = cycleOrder.length - dist;
       }
-      terms['base'] = base;
+
+      if (id == SessionTypeId.s3 && canAdvanceFourByFour) {
+        // The preferred VO2-max anchor is always the first target in any
+        // slot that can actually hold it.
+        terms['norwegian4x4Due'] = 20000;
+      }
+
+      final canAdvanceRehitFallback = naturalHighIntensityTargetDue &&
+          checkin.timeMinutes == 20 &&
+          !highIntensitySafety.blocked;
+      if (id == SessionTypeId.s7 && canAdvanceRehitFallback) {
+        terms['rehitFallbackDue'] = 20000;
+      }
+      final surplusOrRecoveryBlockedFourByFour =
+          id == SessionTypeId.s3 && !canAdvanceFourByFour;
+      final surplusRehit =
+          id == SessionTypeId.s7 && !canAdvanceRehitFallback;
+      final unadvanceableConceptualS3 = id == SessionTypeId.s3 &&
+          checkin.timeMinutes == 20 &&
+          !canAdvanceRehitFallback;
+      if (surplusOrRecoveryBlockedFourByFour ||
+          surplusRehit ||
+          unadvanceableConceptualS3) {
+        // Natural recommendations never add surplus high intensity. A forced
+        // surplus selection remains an explicit personal override only when
+        // every hard recovery/safety gate below passes.
+        terms['surplusIntensitySuppressed'] = -100000;
+      }
+
+      if (id == SessionTypeId.s6) {
+        if (checkin.timeMinutes >= targets.baseLongExposureMinutes &&
+            longBase.exposureDeficit > 0) {
+          terms['baseLongDeficit'] = 15000;
+        } else if (checkin.timeMinutes >=
+                targets.baseShortExposureMinutes.reduce(
+                  (current, next) => current < next ? current : next,
+                ) &&
+            shortBase.exposureDeficit > 0) {
+          terms['baseShortDeficit'] = 12000;
+        }
+      }
 
       if (def.countsAs.contains(FloorCategory.strength)) {
-        if (bothHardForced) {
-          terms['floorForceStrength'] = 100;
-        } else if (strengthPressure.level == FloorPressureLevel.hard) {
-          terms['floorForceStrength'] = 100;
-        } else if (strengthPressure.level == FloorPressureLevel.soft) {
-          terms['floorSoftBoost'] = 10;
+        final workSlots = _workSlotsForSession(
+          sessionId: id,
+          tier: tier,
+          ledger: ledger,
+          targets: targets,
+          stimulusSetMultiplier: strengthStimulusMultiplier,
+          travelMode: input.settings.travelMode,
+        );
+        final painAdjusted = _painAdjustedStrengthProjection(
+          workSlots,
+          template: sessionTemplates[id]!,
+          tier: tier,
+          input: input,
+          states: patchedStates,
+        );
+        if (!painAdjusted.hasPainSafeWork) {
+          // Retain the candidate in the audit trace, but make its hard
+          // unavailability explicit for selection and UI alternative lists.
+          terms[painNoSafeWorkScoreTerm] = 0;
         }
-      }
-      if (def.countsAs.contains(FloorCategory.intensity) && !bothHardForced) {
-        if (intensityPressure.level == FloorPressureLevel.hard) {
-          terms['floorForceIntensity'] = 100;
-        } else if (intensityPressure.level == FloorPressureLevel.soft) {
-          terms['floorSoftBoost'] = 10;
-        }
+        terms.addAll(_strengthScoreTerms(
+          slots: painAdjusted.stimulusSlots,
+          template: sessionTemplates[id]!,
+          tier: tier,
+          ledger: ledger,
+          targets: targets,
+          stimulusSetMultiplier: strengthStimulusMultiplier,
+        ));
       }
 
       if (def.legHeavy && yesterdayLegHeavy) {
         terms['legHeavyDemoted'] = -30;
       }
 
-      if (mostOverdue != null && sessionTemplates[id] != null) {
-        final tmpl = sessionTemplates[id]!;
-        if (tmpl.compoundPatterns.contains(mostOverdue) || tmpl.accessoryPatterns.contains(mostOverdue)) {
-          terms['recencyBoostCandidate'] = 0; // marked; +15 applied to the single best one below
-        }
-      }
-
       final score = terms.values.fold(0, (a, b) => a + b);
       scored.add(_Scored(id, tier, score, terms, def));
     }
 
-    // Apply the single +15 recency boost to the best-priority eligible candidate.
-    if (mostOverdue != null) {
-      final eligible = scored.where((s) => s.terms.containsKey('recencyBoostCandidate')).toList();
-      if (eligible.isNotEmpty) {
-        eligible.sort((a, b) {
-          final byScore = b.score.compareTo(a.score);
-          if (byScore != 0) return byScore;
-          return cycleOrder.contains(a.id) && cycleOrder.contains(b.id)
-              ? queueEngine.cycleDistance(a.id, input.queueState).compareTo(queueEngine.cycleDistance(b.id, input.queueState))
-              : 0;
-        });
-        final winner = eligible.first;
-        winner.terms.remove('recencyBoostCandidate');
-        winner.terms['recencyBoost'] = 15;
-        winner.score += 15;
-      }
-      for (final s in scored) {
-        s.terms.remove('recencyBoostCandidate');
-      }
-    }
-
     // --- Step 5: selection ---
-    scored.sort((a, b) {
-      final byScore = b.score.compareTo(a.score);
+    int compareCandidates(
+      _Scored a,
+      _Scored b, {
+      bool ignoreLegHeavyDemotion = false,
+    }) {
+      final aScore = ignoreLegHeavyDemotion
+          ? a.score - (a.terms['legHeavyDemoted'] ?? 0)
+          : a.score;
+      final bScore = ignoreLegHeavyDemotion
+          ? b.score - (b.terms['legHeavyDemoted'] ?? 0)
+          : b.score;
+      final byScore = bScore.compareTo(aScore);
       if (byScore != 0) return byScore;
       final aCycle = cycleOrder.contains(a.id);
       final bCycle = cycleOrder.contains(b.id);
@@ -269,45 +420,131 @@ class DecisionEngine {
       if (a.id == SessionTypeId.s7 && b.id == SessionTypeId.s6) return -1;
       if (a.id == SessionTypeId.s6 && b.id == SessionTypeId.s7) return 1;
       return 0;
-    });
+    }
+
+    scored.sort((a, b) => compareCandidates(a, b));
+    final winnerWithoutLegHeavyDemotion = yesterdayLegHeavy
+        ? (scored.toList()
+              ..sort(
+                (a, b) => compareCandidates(
+                  a,
+                  b,
+                  ignoreLegHeavyDemotion: true,
+                ),
+              ))
+            .first
+        : scored.first;
 
     final candidatesTrace = scored
         .map((s) => ScoredCandidate(sessionId: s.id, tier: s.tier, score: s.score, scoreTerms: s.terms))
         .toList();
 
-    var winner = input.forcedSessionId == null
-        ? scored.first
-        : scored.firstWhere((s) => s.id == input.forcedSessionId, orElse: () => scored.first);
-    var volumeCutForLegHeavyEscape = false;
-    if (winner.def.legHeavy && yesterdayLegHeavy) {
-      final allFeasibleLegHeavy = scored.every((s) => s.def.legHeavy);
-      if (allFeasibleLegHeavy) {
-        volumeCutForLegHeavyEscape = true;
-        fired.add(const FiredRule(RuleKey.legheavyBacktobackVolumecut));
-      } else {
-        fired.add(const FiredRule(RuleKey.legheavyDemoted));
+    _Scored? forcedCandidate;
+    if (input.forcedSessionId != null) {
+      for (final candidate in scored) {
+        if (candidate.id == input.forcedSessionId) {
+          forcedCandidate = candidate;
+          break;
+        }
       }
     }
+    final winner = forcedCandidate ?? scored.first;
 
-    // §7.1: sharp hip pain forces a swap away from a leg-heavy winner,
-    // including a manually forced leg-heavy alternative.
+    // §7.1: sharp hip pain swaps to the highest-ranked feasible upper-body
+    // strength session. Cycling is also contraindicated, so this applies to
+    // intensity/base-cardio winners as well as leg-heavy strength choices.
+    // Only if no upper-strength option exists do we fall back to any other
+    // non-leg-heavy candidate and let the shared safety gate resolve it.
     var chosen = winner;
-    if (painEngine.hipSharpActive(checkin.pain) && chosen.def.legHeavy) {
-      final alt = scored.firstWhere((s) => !s.def.legHeavy, orElse: () => chosen);
+    if (sharpHipPainActive) {
+      final alt = scored.firstWhere(
+        (candidate) =>
+            !candidate.def.legHeavy &&
+            candidate.def.countsAs.contains(FloorCategory.strength),
+        orElse: () => scored.firstWhere(
+          (candidate) => !candidate.def.legHeavy,
+          orElse: () => chosen,
+        ),
+      );
       if (!identical(alt, chosen)) {
         chosen = alt;
         fired.add(const FiredRule(RuleKey.painSubSharp, pattern: 'HIP_SESSION_SWAP'));
       }
     }
-    if (input.forcedSessionId == null &&
-        winner.id == SessionTypeId.s6 &&
-        s6ConditionMet) {
-      fired.add(const FiredRule(RuleKey.s6WeekendRule));
+
+    // Pattern-level medical escalation is evaluated before committing to a
+    // strength template. If every work slot that the normal assembler would
+    // emit is escalated or removed, a forced choice cannot bypass that hard
+    // gate. Stay within the strength candidates and retain their established
+    // score/order; cardio must not become a generic escape from a viable
+    // pain-safe strength session. If none exists, keep the selected template
+    // so normal assembly returns the existing explicit no-work/rest outcome.
+    final slotStimulusMultiplier = switch (recovery.bucket) {
+      ReadinessBucket.green => 1.0,
+      ReadinessBucket.yellow => 0.75,
+      ReadinessBucket.red => 0.0,
+    };
+    var chosenHasPainSafeWork = true;
+    if (chosen.def.countsAs.contains(FloorCategory.strength)) {
+      chosenHasPainSafeWork = _hasPainSafeStrengthWork(
+        chosen,
+        input: input,
+        states: patchedStates,
+        ledger: ledger,
+        targets: targets,
+        slotStimulusMultiplier: slotStimulusMultiplier,
+      );
     }
-    if (chosen.terms.containsKey('recencyBoost') && mostOverdue != null) {
-      fired.add(FiredRule(RuleKey.recencyBoost, pattern: mostOverdue.name));
+    if (!chosenHasPainSafeWork) {
+      for (final candidate in scored) {
+        if (!candidate.def.countsAs.contains(FloorCategory.strength)) {
+          continue;
+        }
+        if (sharpHipPainActive && candidate.def.legHeavy) continue;
+        if (_hasPainSafeStrengthWork(
+          candidate,
+          input: input,
+          states: patchedStates,
+          ledger: ledger,
+          targets: targets,
+          slotStimulusMultiplier: slotStimulusMultiplier,
+        )) {
+          chosen = candidate;
+          chosenHasPainSafeWork = true;
+          break;
+        }
+      }
     }
 
+    // A manual-override trace describes the final manual choice only. If a
+    // hard pain gate rejects that choice, claiming it was selected would make
+    // the explanation and persisted provenance false.
+    if (forcedCandidate != null &&
+        identical(chosen, forcedCandidate) &&
+        chosenHasPainSafeWork &&
+        input.forcedSessionProvenance ==
+            ForcedSessionProvenance.manualOverride) {
+      fired.add(FiredRule(
+        RuleKey.manualSessionOverride,
+        params: {'session': forcedCandidate.def.name},
+      ));
+    }
+
+    var volumeCutForLegHeavyEscape = false;
+    if (forcedCandidate == null &&
+        identical(chosen, winner) &&
+        yesterdayLegHeavy &&
+        winner.id != winnerWithoutLegHeavyDemotion.id &&
+        winnerWithoutLegHeavyDemotion.def.legHeavy) {
+      fired.add(const FiredRule(RuleKey.legheavyDemoted));
+    }
+    if (chosen.def.legHeavy && yesterdayLegHeavy) {
+      final allFeasibleLegHeavy = scored.every((s) => s.def.legHeavy);
+      if (allFeasibleLegHeavy) {
+        volumeCutForLegHeavyEscape = true;
+        fired.add(const FiredRule(RuleKey.legheavyBacktobackVolumecut));
+      }
+    }
     // --- Step 6/7: readiness modulation + time compression (baseline first) ---
     var effectiveSessionId = chosen.id;
     var tier = chosen.tier;
@@ -327,26 +564,48 @@ class DecisionEngine {
       fired.add(const FiredRule(RuleKey.timeCompress35_20));
     }
 
-    if (effectiveSessionId == SessionTypeId.s3 && checkin.timeMinutes < 35) {
+    if (effectiveSessionId == SessionTypeId.s3 &&
+        checkin.timeMinutes < _fourByFourAvailabilityWindowMin) {
       effectiveSessionId = SessionTypeId.s7;
-      fired.add(const FiredRule(RuleKey.s7TimeSub));
+      if (!highIntensitySafety.blocked) {
+        fired.add(const FiredRule(RuleKey.s7TimeSub));
+      }
     }
 
-    // Readiness modulation evaluates the time-adjusted effective type. In
-    // particular, RED S3@20 first becomes S7 for feasibility, then becomes
-    // S6 because high-intensity REHIT is not a RED-day prescription.
+    // Target surplus can be chosen explicitly, but recovery, active deload,
+    // contraindicating pain/escalation, and travel equipment are hard safety
+    // gates. A forced or restored intensity choice must use recovery-safe
+    // continuous work without claiming the 4x4/REHIT target rationale.
+    if (highIntensitySafety.blocked &&
+        (effectiveSessionId == SessionTypeId.s3 ||
+            effectiveSessionId == SessionTypeId.s7)) {
+      effectiveSessionId = SessionTypeId.s6;
+      progressionEligible = false;
+      fired.add(const FiredRule(RuleKey.recoverySwapEasyCardio));
+    }
+
+    // Readiness modulation evaluates the time-adjusted effective type. Both
+    // intensity protocols are GREEN-only; YELLOW/RED use easy continuous
+    // work that fits the same hard time window. A 20-minute version is
+    // explicitly recovery work and cannot qualify as the 30+ minute base
+    // exposure tracked by the ledger.
     if (recovery.bucket == ReadinessBucket.yellow) {
       if (effectiveSessionId == SessionTypeId.s1 ||
           effectiveSessionId == SessionTypeId.s2 ||
           effectiveSessionId == SessionTypeId.s4 ||
           effectiveSessionId == SessionTypeId.s5) {
+        // Integer set prescriptions are reduced deterministically below;
+        // avoid narrating a fixed percentage because 3 -> 2 and 2 -> 1 are
+        // materially different reductions.
         setMultiplier = 0.75;
         rirFloor = Rir.rir2;
         progressionEligible = false;
         fired.add(const FiredRule(RuleKey.yellowVolumeCut));
-      } else if (effectiveSessionId == SessionTypeId.s3) {
-        effectiveSessionId = SessionTypeId.s7;
-        fired.add(const FiredRule(RuleKey.yellow4x4ToRehit));
+      } else if (effectiveSessionId == SessionTypeId.s3 ||
+          effectiveSessionId == SessionTypeId.s7) {
+        effectiveSessionId = SessionTypeId.s6;
+        progressionEligible = false;
+        fired.add(const FiredRule(RuleKey.recoverySwapEasyCardio));
       }
     } else if (recovery.bucket == ReadinessBucket.red) {
       if (effectiveSessionId == SessionTypeId.s3 || effectiveSessionId == SessionTypeId.s7) {
@@ -366,37 +625,55 @@ class DecisionEngine {
       }
     }
 
+    // CAROL interval presets are fixed bike programs. Availability can swap
+    // S3 to S7, but neither preset is represented as a compressed or extended
+    // app-authored tier.
+    if (effectiveSessionId == SessionTypeId.s3 ||
+        effectiveSessionId == SessionTypeId.s7) {
+      tier = SessionTier.full;
+    }
+
     if (volumeCutForLegHeavyEscape) {
       setMultiplier *= 0.8;
     }
 
-    // Selection rationale must describe the plan that survives forced
-    // selection, pain protection, and readiness/time substitutions. Pressure
-    // still contributes to every candidate's score even when its rule is not
-    // emitted for the final plan.
-    final effectiveCountsAs = sessionTypes[effectiveSessionId]!.countsAs;
-    if (strengthPressure.level == FloorPressureLevel.hard &&
-        effectiveCountsAs.contains(FloorCategory.strength)) {
-      fired.add(const FiredRule(RuleKey.floorForceStrength));
+    // Target rationale describes only the final protocol/session. A target
+    // that caused a GREEN intensity candidate to become recovery cardio stays
+    // open and is deliberately not claimed as completed here.
+    if (effectiveSessionId == SessionTypeId.s3 &&
+        chosen.terms.containsKey('norwegian4x4Due')) {
+      fired.add(const FiredRule(RuleKey.norwegian4x4Due));
     }
-    if (!bothHardForced &&
-        intensityPressure.level == FloorPressureLevel.hard &&
-        effectiveCountsAs.contains(FloorCategory.intensity)) {
-      fired.add(const FiredRule(RuleKey.floorForceIntensity));
+    if (effectiveSessionId == SessionTypeId.s7 &&
+        chosen.terms.containsKey('rehitFallbackDue')) {
+      fired.add(const FiredRule(RuleKey.rehitFallbackDue));
     }
-    if (strengthPressure.level == FloorPressureLevel.soft &&
-        effectiveCountsAs.contains(FloorCategory.strength)) {
-      fired.add(const FiredRule(
-        RuleKey.floorSoftBoost,
-        params: {'category': 'strength'},
-      ));
+    if (effectiveSessionId == SessionTypeId.s6 &&
+        chosen.terms.containsKey('baseLongDeficit')) {
+      fired.add(const FiredRule(RuleKey.baseLongDeficit));
     }
-    if (intensityPressure.level == FloorPressureLevel.soft &&
-        effectiveCountsAs.contains(FloorCategory.intensity)) {
-      fired.add(const FiredRule(
-        RuleKey.floorSoftBoost,
-        params: {'category': 'intensity'},
-      ));
+    if (effectiveSessionId == SessionTypeId.s6 &&
+        chosen.terms.containsKey('baseShortDeficit')) {
+      fired.add(const FiredRule(RuleKey.baseShortDeficit));
+    }
+    if (effectiveSessionId == SessionTypeId.s6 &&
+        !chosen.terms.containsKey('baseLongDeficit') &&
+        !chosen.terms.containsKey('baseShortDeficit') &&
+        !fired.any(
+          (rule) =>
+              rule.key == RuleKey.recoverySwapEasyCardio ||
+              rule.key == RuleKey.redSwapZ2,
+        )) {
+      // S6 is also a useful low-fatigue/recovery choice when every tracked
+      // base target is already filled. Keep that rationale explicit instead
+      // of implying queue membership or inventing a base-target deficit.
+      fired.add(const FiredRule(RuleKey.easyRecoveryCardio));
+    }
+    if (chosen.terms.containsKey('muscleRecoveryDemotion')) {
+      fired.add(const FiredRule(RuleKey.muscleRecoveryDemotion));
+    }
+    if (chosen.terms.containsKey('muscleOverMaxDemotion')) {
+      fired.add(const FiredRule(RuleKey.muscleOverMaxDemotion));
     }
     // QUEUE_NEXT only describes an unchanged, credit-bearing natural cycle
     // pick. Forced, pain-swapped, readiness-swapped, and time-substituted
@@ -405,9 +682,7 @@ class DecisionEngine {
         chosen.id == input.queueState.pointer &&
         chosen.id == effectiveSessionId &&
         !redTechnique &&
-        cycleOrder.contains(chosen.id) &&
-        strengthPressure.level != FloorPressureLevel.hard &&
-        intensityPressure.level != FloorPressureLevel.hard) {
+        cycleOrder.contains(chosen.id)) {
       fired.add(FiredRule(
         RuleKey.queueNext,
         params: {'session': chosen.def.name},
@@ -415,86 +690,86 @@ class DecisionEngine {
     }
 
     // --- Plan assembly (Steps 7-9) ---
+    // Keep the post-global-deload baseline so duration trimming can undo
+    // pain-scheduling bookkeeping for work that is not ultimately emitted.
+    final planAssemblyStateBaseline = {
+      for (final entry in patchedStates.entries) entry.key: entry.value.clone(),
+    };
     final template = sessionTemplates[effectiveSessionId];
-    final scheduledPatterns = <MovementPattern>{};
     final exercises = <PlannedExercise>[];
 
     if (template != null && !template.isCardioOnly) {
-      // §2.5: when the ATG/knee-health block is present it runs first and
-      // replaces the general warm-up (the 40/60/80 ramp); every lift still
-      // gets its 60% feeder set below.
-      var rampDone = false;
+      final prepPainAware = _prepPainActive(input, template);
+      final kneePainActive = _activeKneePain(input);
+      // S4's ATG block replaces general movement prep, not the first loaded
+      // compound's percent-load ramp.
+      var loadedCompoundRampDone = false;
       if (template.hasKneeHealthBlock) {
+        final atgMinutes =
+            StrengthPrepPolicy.atgMinutes(checkin.timeMinutes);
+        final String prepName;
+        final String prepInstruction;
+        if (kneePainActive) {
+          prepName = 'Pain-aware general + upper/scapular prep';
+          prepInstruction =
+              'Within $atgMinutes min: use easy pain-free whole-body movement, breathing/bracing, and non-reproducing upper/scapular motion. Skip backward treadmill and every flagged or pain-provoking knee movement.';
+        } else if (prepPainAware) {
+          prepName = 'Pain-aware movement prep';
+          prepInstruction =
+              'Within $atgMinutes min: use only pain-free movement, breathing/bracing, and non-reproducing lower-body or scapular rehearsal. Skip every flagged or pain-provoking movement.';
+        } else {
+          prepName = input.settings.travelMode
+              ? 'Travel ATG + upper prep: backward walking, wall tibialis/calf raises, shoulder circles, scapular push-ups'
+              : atgMinutes == 3
+                  ? 'ATG + upper prep: backward treadmill 1 min, tibialis/calf raises, shoulder circles, scapular push-ups'
+                  : 'ATG + upper prep: backward treadmill 2-3 min, tibialis/calf raises, shoulder circles, scapular push-ups';
+          prepInstruction = input.settings.travelMode
+              ? atgMinutes == 3
+                  ? 'Within 3 min: safe backward walking, lower-leg work, then shoulder/scapular rehearsal. No equipment; replaces general movement prep.'
+                  : 'Within 5 min: safe backward walking, lower-leg work, then shoulder/scapular rehearsal. No equipment; replaces general movement prep.'
+              : atgMinutes == 3
+                  ? 'Within 3 min: 1 min backward treadmill, 1 min tibialis/calf work, 1 min shoulder/scapular rehearsal. Replaces general movement prep.'
+                  : 'Within 5 min: 2-3 min backward treadmill, then tibialis/calf work and shoulder/scapular rehearsal. Replaces general movement prep.';
+        }
         exercises.add(PlannedExercise(
           trackKey: 'atg_block',
           pattern: MovementPattern.kneeHealth,
-          name: input.settings.travelMode
-              ? 'Travel knee-health: backward walking, wall tibialis raises, calf raises'
-              : 'ATG block: backward treadmill 3-4 min, tibialis raises, slant-board calf raises',
+          name: prepName,
           sets: 1,
           metric: ExerciseMetric.minutes,
-          targetRange: const (5, 7),
+          targetRange: (atgMinutes, atgMinutes),
           rirTarget: Rir.rir3plus,
           isWarmup: true,
-          instruction: input.settings.travelMode
-              ? 'No equipment - walk backward only where it is safe and clear'
-              : 'Runs first - replaces the general warm-up (§2.5)',
+          instruction: prepInstruction,
           progressionEligible: false,
           isTravel: input.settings.travelMode,
         ));
-        rampDone = true;
       } else {
         exercises.add(_generalWarmupEntry(
           effectiveSessionId,
+          slotMinutes: checkin.timeMinutes,
           travelMode: input.settings.travelMode,
+          painAware: prepPainAware,
         ));
       }
-      // §5 Step 7 "60 -> 35": a natively-60-minute session (S2/S4) in a
-      // 35-minute slot keeps its superset pairs but drops the accessory
-      // block - otherwise the plan physically cannot fit the slot.
-      final compress60to35 =
-          tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin >= 60;
-      var slots = template.slotsForTier(tier, dropAccessories: compress60to35);
-      if (input.settings.travelMode) {
-        var travelViable = slots
-            .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
-            .toList();
-        // S5's compressed source normally starts with two DB accessories.
-        // In travel mode keep the foundational core slot plus one
-        // equipment-free pump slot instead of dropping core entirely.
-        if (effectiveSessionId == SessionTypeId.s5 && tier == SessionTier.compressed) {
-          travelViable = [
-            for (final pattern in template.accessoryPatterns)
-              (pattern, true, null as SubstituteExercise?),
-            for (final named in template.namedAccessories)
-              (named.pattern, true, named as SubstituteExercise?),
-          ].where((slot) => _travelStepFor(slot.$1, slot.$3) != null).take(2).toList();
-        }
-        if (travelViable.isEmpty) {
-          final fallback = [
-            for (final pattern in template.compoundPatterns)
-              (pattern, true, null as SubstituteExercise?),
-            for (final pattern in template.accessoryPatterns)
-              (pattern, false, null as SubstituteExercise?),
-          ].where((slot) => _travelStepFor(slot.$1, slot.$3) != null).toList();
-          travelViable = tier == SessionTier.compressed
-              ? fallback.take(2).map((slot) => (slot.$1, true, slot.$3)).toList()
-              : fallback;
-        }
-        slots = travelViable;
-      }
-      for (final (pattern, isCompound, namedExercise) in slots) {
-        scheduledPatterns.add(pattern);
-        final baseSets = template.setsFor(isCompound, tier);
+      final slots = _workSlotsForSession(
+        sessionId: effectiveSessionId,
+        tier: tier,
+        ledger: ledger,
+        targets: targets,
+        stimulusSetMultiplier:
+            recovery.bucket == ReadinessBucket.red ? 0.0 : setMultiplier,
+        travelMode: input.settings.travelMode,
+      );
+      for (final (pattern, usesCompoundSetCount, namedExercise) in slots) {
+        final isGenuineCompound = namedExercise == null &&
+            template.compoundPatterns.contains(pattern);
+        final baseSets = template.setsFor(usesCompoundSetCount, tier);
         final cutSets = (baseSets * setMultiplier).floor().clamp(baseSets == 0 ? 0 : 1, baseSets);
 
         final trackKey = namedExercise?.trackKey ?? pattern.name;
-        final stateExisted = patchedStates.containsKey(trackKey);
         var state = patchedStates[trackKey] ??
             ExerciseState(trackKey: trackKey, pattern: pattern);
-        if (automaticGlobalDeload && !stateExisted) {
-          state = progressionEngine.forceGlobalDeload([state]).single;
-        }
 
         // Pain flag lifecycle for this pattern.
         final persistedFlag = state.painFrozen && state.painRegion != null
@@ -516,7 +791,10 @@ class DecisionEngine {
         state = painEngine.advanceFlagState(
           state,
           activeFlag: effectiveFlag,
-          patternScheduledToday: true,
+          // Check-in persistence and scheduling are separate. The counter is
+          // advanced only after duration fitting identifies the final work
+          // slots that the plan actually emits.
+          patternScheduledToday: false,
           sessionRanPainFree: false,
           today: today,
         );
@@ -573,14 +851,16 @@ class DecisionEngine {
         var persistLoad = false;
         var painReentryPrescription = false;
         var capLadderJumpFired = false;
+        var substituteIsNew = false;
+        var suppressMicroProgressionCue = input.settings.travelMode ||
+            flag != null ||
+            state.painFrozen ||
+            action.kind != PainActionKind.none;
         if (action.kind == PainActionKind.substituteNamed && action.substitute != null) {
           final sub = action.substitute!;
-          final subStateExisted = patchedStates.containsKey(sub.trackKey);
-          var subState = patchedStates[sub.trackKey] ??
+          substituteIsNew = !patchedStates.containsKey(sub.trackKey);
+          final subState = patchedStates[sub.trackKey] ??
               ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
-          if (automaticGlobalDeload && !subStateExisted) {
-            subState = progressionEngine.forceGlobalDeload([subState]).single;
-          }
           patchedStates[sub.trackKey] = subState;
           substitutedFrom = pattern.name;
           final resolution = progressionEngine.resolveTodaysPrescription(
@@ -589,12 +869,21 @@ class DecisionEngine {
             input.settings.equipment,
           );
           prescriptionState = resolution.state;
+          if (resolution.detrainFired ||
+              resolution.painReentryTestFired ||
+              resolution.deloadActive) {
+            suppressMicroProgressionCue = true;
+          }
           if (resolution.detrainFired && !input.settings.travelMode) {
             fired.add(FiredRule(
               RuleKey.detrainAdjust,
               pattern: sub.pattern.name,
             ));
-            persistLoad = loadMultiplier == 1.0;
+            // Persist the exact emitted comeback baseline after real work,
+            // even when YELLOW/RED disables normal progression. A lower
+            // readiness-modulated baseline is safer than snapping back to
+            // the harder pre-break state on the next plan.
+            persistLoad = true;
           }
           if (resolution.deloadActive) {
             exerciseLoadMultiplier *= 0.6;
@@ -610,14 +899,23 @@ class DecisionEngine {
               pattern: sub.pattern.name,
             ));
           }
-          fired.add(const FiredRule(RuleKey.onboardSubstitute));
+          if (substituteIsNew) {
+            fired.add(const FiredRule(RuleKey.onboardSubstitute));
+          }
         } else {
           final resolution = progressionEngine.resolveTodaysPrescription(state, today, input.settings.equipment);
           prescriptionState = resolution.state;
+          if (resolution.detrainFired ||
+              resolution.painReentryTestFired ||
+              resolution.deloadActive) {
+            suppressMicroProgressionCue = true;
+          }
           if (resolution.detrainFired && !input.settings.travelMode) {
             fired.add(FiredRule(RuleKey.detrainAdjust, pattern: pattern.name));
-            // §6.6: the ramp load becomes the working load once actually trained
-            persistLoad = loadMultiplier == 1.0;
+            // §6.6: the emitted comeback load/step becomes the safe working
+            // baseline once real canonical work occurs. Readiness can block
+            // advancement without restoring the harder pre-break state.
+            persistLoad = true;
           }
           if (resolution.painReentryTestFired) {
             // The graded test is a deliberately fixed light prescription
@@ -661,6 +959,15 @@ class DecisionEngine {
                 ? const (10, 10)
                 : const (8, 8)
             : null;
+        final painActionInstruction = switch (action.kind) {
+          PainActionKind.reduceLoadOne ||
+          PainActionKind.regressLadderAndReduce =>
+            'Use a pain-free range and controlled reps; stop if pain worsens.',
+          PainActionKind.substituteNamed => substituteIsNew
+              ? 'This substitute starts deliberately light. Use a pain-free range and stop if pain worsens.'
+              : 'Use a pain-free range and stop if pain worsens.',
+          PainActionKind.none || PainActionKind.removePattern => null,
+        };
         var planned = _buildPlannedExercise(
           prescriptionState,
           sets: exerciseSets,
@@ -669,13 +976,17 @@ class DecisionEngine {
           equipmentConfig: input.settings.equipment,
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
+          isCompoundWork: isGenuineCompound,
+          microProgressionCueEligible: !suppressMicroProgressionCue,
           persistLoadOnCompletion: persistLoad,
+          isPainReentryTest:
+              painReentryPrescription && !input.settings.travelMode,
           targetRangeOverride: reentryTarget,
           instruction: painReentryPrescription
               ? prescriptionStep.metric == ExerciseMetric.seconds
                   ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
                   : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
-              : null,
+              : painActionInstruction,
         );
 
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
@@ -712,26 +1023,43 @@ class DecisionEngine {
                           : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
               progressionEligible: false,
               isTravel: true,
+              isCompoundWork: planned.isCompoundWork,
             );
           }
         }
 
-        // §2.5 warm-up protocol: full ramp (40%x8 / 60%x5 / 80%x3) before the
-        // session's first compound, one 60%x5 feeder before every later
-        // loaded lift. Substitutes onboard deliberately light (§7.1) and
-        // bodyweight/backpack steps have no percent-load, so both skip it.
-        if (planned.loadTotal != null && action.kind != PainActionKind.substituteNamed) {
+        // Percent-load warm-ups belong only to genuine compound slots. Named
+        // accessories may share a compound pattern for pain mapping but must
+        // not acquire a compound ramp. Substitutes and bodyweight/backpack
+        // steps also skip percent-load warm-ups.
+        if (planned.isCompoundWork &&
+            planned.loadTotal != null &&
+            action.kind != PainActionKind.substituteNamed) {
           final step = progressionEngine.ladderStepFor(prescriptionState);
           if (step.dumbbells > 0 && !step.backpackLoaded) {
-            if (!rampDone && isCompound) {
-              rampDone = true;
-              exercises.addAll([
-                _warmupEntry(planned, step, 0.40, 8, input.settings.equipment),
-                _warmupEntry(planned, step, 0.60, 5, input.settings.equipment),
-                _warmupEntry(planned, step, 0.80, 3, input.settings.equipment),
-              ].whereType<PlannedExercise>());
+            if (!loadedCompoundRampDone) {
+              loadedCompoundRampDone = true;
+              final ramp = checkin.timeMinutes <= 20
+                  ? const [(0.50, 5), (0.75, 3)]
+                  : const [(0.40, 8), (0.60, 5), (0.80, 3)];
+              exercises.addAll(ramp
+                  .map((entry) => _warmupEntry(
+                        planned,
+                        step,
+                        entry.$1,
+                        entry.$2,
+                        input.settings.equipment,
+                      ))
+                  .whereType<PlannedExercise>());
             } else {
-              final feeder = _warmupEntry(planned, step, 0.60, 5, input.settings.equipment);
+              final feeder = _warmupEntry(
+                planned,
+                step,
+                0.60,
+                5,
+                input.settings.equipment,
+                isFeederWarmup: true,
+              );
               if (feeder != null) exercises.add(feeder);
             }
           }
@@ -753,7 +1081,7 @@ class DecisionEngine {
       final compoundWork = <int>[];
       for (var i = 0; i < exercises.length; i++) {
         final e = exercises[i];
-        if (!e.isWarmup && e.pattern.patternClass == PatternClass.compound) compoundWork.add(i);
+        if (!e.isWarmup && e.isCompoundWork) compoundWork.add(i);
       }
       for (var g = 0; g + 1 < compoundWork.length; g += 2) {
         exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(supersetGroup: g ~/ 2);
@@ -784,21 +1112,113 @@ class DecisionEngine {
         patchedStates,
       );
     }
+    final int estimatedDuration;
+    final optionalRehitFinisherReserved = template != null &&
+        template.hasOptionalRehitFinisher &&
+        effectiveSessionId == SessionTypeId.s2 &&
+        tier == SessionTier.extended &&
+        recovery.bucket == ReadinessBucket.green &&
+        !recovery.illnessGuardFired &&
+        !highIntensitySafety.blocked;
+    if (template != null && !template.isCardioOnly) {
+      final unbudgetedWork =
+          exercises.where((exercise) => !exercise.isWarmup).toList();
+      final optionalRehitReserve = optionalRehitFinisherReserved
+          ? sessionTypes[SessionTypeId.s7]!.fullDurationMin
+          : 0;
+      final budgeted = strengthDurationBudgeter.fit(
+        exercises: exercises,
+        slotMinutes: checkin.timeMinutes - optionalRehitReserve,
+      );
+      if (!budgeted.fits) {
+        patchedStates = {
+          for (final entry in planAssemblyStateBaseline.entries)
+            entry.key: entry.value.clone(),
+        };
+        return DecisionEngineOutput(
+          DecisionTrace(
+            date: today,
+            checkin: checkin,
+            recovery: recoveryTrace,
+            candidates: candidatesTrace,
+            firedRules: fired,
+            plan: null,
+            restReason:
+                'No meaningful strength prescription fits the selected time window',
+            queue: queueTraceBase,
+          ),
+          patchedStates,
+        );
+      }
+      exercises
+        ..clear()
+        ..addAll(budgeted.exercises);
+      final finalTrackKeys = exercises
+          .where((exercise) => !exercise.isWarmup)
+          .map((exercise) => exercise.trackKey)
+          .toSet();
+      final removedStateKeys = <String>{};
+      for (final exercise in unbudgetedWork) {
+        if (finalTrackKeys.contains(exercise.trackKey)) continue;
+        removedStateKeys.add(exercise.trackKey);
+        final substitutedFrom = exercise.substitutedFrom;
+        if (substitutedFrom != null) removedStateKeys.add(substitutedFrom);
+      }
+      for (final key in removedStateKeys) {
+        final baseline = planAssemblyStateBaseline[key];
+        if (baseline == null) {
+          patchedStates.remove(key);
+        } else {
+          patchedStates[key] = baseline.clone();
+        }
+      }
+      estimatedDuration = budgeted.estimatedDurationMin;
+    } else {
+      // Cardio protocols own their preparation, transitions, and cooldown.
+      // No generic strength warm-up is added and the protocol is capped at
+      // the selected hard time window.
+      estimatedDuration = planSessionDef.fullDurationMin < checkin.timeMinutes
+          ? planSessionDef.fullDurationMin
+          : checkin.timeMinutes;
+    }
+    if (template != null && !template.isCardioOnly) {
+      final targetedMuscles = _targetedMusclesForFinalExercises(
+        exercises,
+        ledger: ledger,
+        targets: targets,
+      );
+      if (targetedMuscles.isNotEmpty) {
+        fired.add(FiredRule(
+          RuleKey.muscleStimulusDeficit,
+          params: {'muscles': targetedMuscles},
+        ));
+      }
+    }
+    _advanceFinalScheduledPainStates(
+      patchedStates,
+      exercises,
+      today,
+    );
     if (exercises.any((exercise) => exercise.isTravel)) {
       fired.add(const FiredRule(RuleKey.travelModeActive));
     }
-    final estimatedDuration = template?.isCardioOnly == true &&
-            planSessionDef.fullDurationMin < checkin.timeMinutes
-        ? planSessionDef.fullDurationMin
-        : checkin.timeMinutes;
+    final cardioPrescription = template?.isCardioOnly == true
+        ? cardioEngine.prescriptionFor(
+            sessionId: effectiveSessionId,
+            durationMinutes: estimatedDuration,
+            heartRateMaxBpm: input.settings.hrMax,
+          )
+        : null;
     final plan = SessionPlan(
       sessionId: effectiveSessionId,
       sessionName: planSessionDef.name,
       tier: tier,
       exercises: exercises,
       estimatedDurationMin: estimatedDuration,
+      cardioPrescription: cardioPrescription,
       grantsQueueCredit: queueCreditType != null,
       travelMode: input.settings.travelMode,
+      optionalRehitFinisherReserved: optionalRehitFinisherReserved,
     );
 
     return DecisionEngineOutput(
@@ -817,6 +1237,117 @@ class DecisionEngine {
       ),
       patchedStates,
     );
+  }
+
+  bool _prepPainActive(
+    DecisionEngineInput input,
+    SessionTemplateDef template,
+  ) {
+    final rehearsedPatterns = <MovementPattern>{
+      ...template.compoundPatterns,
+      ...template.accessoryPatterns,
+      ...template.namedAccessories.map((exercise) => exercise.pattern),
+    };
+    final currentPain = input.checkin.pain.any(
+      (flag) => flag.region.affectedPatterns.any(rehearsedPatterns.contains),
+    );
+    final persistedPain = input.exerciseStates.values.any(
+      (state) =>
+          state.painFrozen &&
+          (rehearsedPatterns.contains(state.pattern) ||
+              (state.painRegion?.affectedPatterns
+                      .any(rehearsedPatterns.contains) ??
+                  false)),
+    );
+    return currentPain || persistedPain;
+  }
+
+  Map<String, ExerciseState> _persistCurrentCheckInPain(
+    Map<String, ExerciseState> states,
+    List<PainFlag> currentPain,
+    DateTime today,
+  ) {
+    if (currentPain.isEmpty) return states;
+
+    final normalPlanSeeds = <ExerciseState>[
+      for (final pattern in ladders.keys)
+        if (pattern.patternClass != PatternClass.kneeHealth)
+          ExerciseState(trackKey: pattern.name, pattern: pattern),
+      for (final named in s5NamedAccessories)
+        ExerciseState(trackKey: named.trackKey, pattern: named.pattern),
+    ];
+    final result = Map<String, ExerciseState>.from(states);
+
+    for (final seed in normalPlanSeeds) {
+      // This first lookup is deliberately current-check-in-only: an old
+      // freeze must not materialize unrelated tracks that were never frozen.
+      final currentFlag = _flagFor(currentPain, seed.pattern, today);
+      if (currentFlag == null) continue;
+
+      final state = result[seed.trackKey] ?? seed;
+      final persistedFlag = state.painFrozen && state.painRegion != null
+          ? PainFlag(
+              region: state.painRegion!,
+              severity: state.painSeverity ?? PainSeverity.sharp,
+              flaggedDate: state.painFlaggedDate ?? today,
+              tags: state.painTags,
+            )
+          : null;
+      // Preserve the same deterministic most-restrictive resolution used by
+      // plan assembly when multiple regions affect one movement pattern.
+      final effectiveFlag = _flagFor(
+        [
+          ...currentPain,
+          if (persistedFlag != null) persistedFlag,
+        ],
+        seed.pattern,
+        today,
+      );
+      result[seed.trackKey] = painEngine.advanceFlagState(
+        state,
+        activeFlag: effectiveFlag,
+        patternScheduledToday: false,
+        sessionRanPainFree: false,
+        today: today,
+      );
+    }
+    return result;
+  }
+
+  void _advanceFinalScheduledPainStates(
+    Map<String, ExerciseState> states,
+    List<PlannedExercise> exercises,
+    DateTime today,
+  ) {
+    final scheduledKeys = <String>{};
+    for (final exercise in exercises.where(
+      (value) => !value.isWarmup && value.sets > 0,
+    )) {
+      // A named pain substitute schedules the frozen source pattern, not the
+      // substitute's independent progression track. Normal S5 named work has
+      // no substitutedFrom value and therefore advances its own track.
+      scheduledKeys.add(exercise.substitutedFrom ?? exercise.trackKey);
+    }
+    for (final key in scheduledKeys) {
+      final state = states[key];
+      if (state == null || !state.painFrozen) continue;
+      states[key] = painEngine.advanceFlagState(
+        state,
+        activeFlag: null,
+        patternScheduledToday: true,
+        sessionRanPainFree: false,
+        today: today,
+      );
+    }
+  }
+
+  bool _activeKneePain(DecisionEngineInput input) {
+    bool isKnee(BodyRegion? region) =>
+        region == BodyRegion.kneeLeft || region == BodyRegion.kneeRight;
+    return input.checkin.pain.any((flag) => isKnee(flag.region)) ||
+        input.exerciseStates.values.any(
+          (state) => state.painFrozen && isKnee(state.painRegion),
+        );
   }
 
   LadderStep? _travelStepFor(
@@ -838,20 +1369,25 @@ class DecisionEngine {
 
   List<SessionTypeId> _feasibleCandidates(int time) {
     if (time == 20) {
-      // S3 remains a conceptual candidate so its queue priority and floor
-      // pressure are resolved first; Step 6 then substitutes the feasible
-      // short REHIT plan without granting S3 queue credit.
+      // S3 remains conceptual so a due anchor can route to the separate-day
+      // REHIT fallback. All four strength families have a real compressed
+      // pair, preventing the old 20-minute S1/S5 pattern starvation.
       return [
         SessionTypeId.s1,
+        SessionTypeId.s2,
         SessionTypeId.s3,
+        SessionTypeId.s4,
         SessionTypeId.s5,
+        SessionTypeId.s6,
         SessionTypeId.s7,
       ];
     }
     final list = <SessionTypeId>[];
     for (final t in sessionTypes.values) {
       if (t.id == SessionTypeId.s3) {
-        if (time >= t.fullDurationMin) list.add(t.id);
+        // The bike preset itself is 30 minutes, but the immutable personal
+        // availability gate remains the 35-minute check-in window.
+        if (time >= _fourByFourAvailabilityWindowMin) list.add(t.id);
         continue;
       }
       if (t.minDurationMin != null && time >= t.minDurationMin!) list.add(t.id);
@@ -859,36 +1395,482 @@ class DecisionEngine {
     return list;
   }
 
-  bool _s6ConditionMet(DecisionEngineInput input, DateTime today, FloorPressureResult strength, FloorPressureResult intensity) {
-    final weekday = today.weekday;
-    final isWeekend = weekday == DateTime.saturday || weekday == DateTime.sunday;
-    if (!isWeekend) return false;
-    if (input.checkin.timeMinutes < 30) return false;
-    final last7 = input.sessionLogs.where((l) =>
-        l.templateId == SessionTypeId.s6 &&
-        l.countsTowardQueueAndFloor &&
-        !l.date.isBefore(today.subtract(const Duration(days: 7))));
-    if (last7.isNotEmpty) return false;
-    final anyHardFloorPressure =
-        strength.level == FloorPressureLevel.hard || intensity.level == FloorPressureLevel.hard;
-    if (anyHardFloorPressure) return false;
-    return true;
+  /// Returns exactly the work slots that normal plan assembly will consider
+  /// for a strength session, including 60 -> 35 accessory removal, dynamic
+  /// compressed-pair selection, and travel-equipment filtering. Keeping this
+  /// shared with the pain-feasibility gate prevents selection from approving
+  /// a template that assembly would later reduce to zero work.
+  List<_TemplateSlot> _workSlotsForSession({
+    required SessionTypeId sessionId,
+    required SessionTier tier,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    required double stimulusSetMultiplier,
+    required bool travelMode,
+  }) {
+    final template = sessionTemplates[sessionId]!;
+    final compress60to35 = tier == SessionTier.full &&
+        sessionTypes[sessionId]!.fullDurationMin >= 60;
+    final slots = _slotsForPlan(
+      sessionId: sessionId,
+      tier: tier,
+      ledger: ledger,
+      targets: targets,
+      stimulusSetMultiplier: stimulusSetMultiplier,
+      dropAccessories: compress60to35,
+    );
+    if (!travelMode) return slots;
+
+    final travelViable = slots
+        .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
+        .toList();
+    if (travelViable.isNotEmpty) return travelViable;
+
+    final fallback = [
+      for (final pattern in template.compoundPatterns)
+        (pattern, true, null as SubstituteExercise?),
+      for (final pattern in template.accessoryPatterns)
+        (pattern, false, null as SubstituteExercise?),
+    ].where((slot) => _travelStepFor(slot.$1, slot.$3) != null).toList();
+    return tier == SessionTier.compressed
+        ? fallback.take(2).map((slot) => (slot.$1, true, slot.$3)).toList()
+        : fallback;
   }
 
-  MovementPattern? _mostOverduePattern(Map<String, ExerciseState> states, DateTime today) {
-    MovementPattern? best;
-    var bestDays = 5;
-    for (final s in states.values) {
-      if (s.trackKey.startsWith('sub:')) continue;
-      if (s.pattern.patternClass == PatternClass.kneeHealth) continue;
-      final days = s.daysUntrained(today);
-      if (days > bestDays ||
-          (days == bestDays && best != null && s.pattern.index < best.index)) {
-        bestDays = days;
-        best = s.pattern;
+  bool _hasPainSafeStrengthWork(
+    _Scored candidate, {
+    required DecisionEngineInput input,
+    required Map<String, ExerciseState> states,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    required double slotStimulusMultiplier,
+  }) {
+    final template = sessionTemplates[candidate.id]!;
+    if (template.isCardioOnly ||
+        !candidate.def.countsAs.contains(FloorCategory.strength)) {
+      return false;
+    }
+
+    final slots = _workSlotsForSession(
+      sessionId: candidate.id,
+      tier: candidate.tier,
+      ledger: ledger,
+      targets: targets,
+      stimulusSetMultiplier: slotStimulusMultiplier,
+      travelMode: input.settings.travelMode,
+    );
+    return _painAdjustedStrengthProjection(
+      slots,
+      template: template,
+      tier: candidate.tier,
+      input: input,
+      states: states,
+    ).hasPainSafeWork;
+  }
+
+  _PainAdjustedStrengthProjection _painAdjustedStrengthProjection(
+    List<_TemplateSlot> slots, {
+    required SessionTemplateDef template,
+    required SessionTier tier,
+    required DecisionEngineInput input,
+    required Map<String, ExerciseState> states,
+  }) {
+    var hasPainSafeWork = false;
+    final stimulusSlots = <_TemplateSlot>[];
+    for (final slot in slots) {
+      if (template.setsFor(slot.$2, tier) <= 0) continue;
+      final resolution = _resolvePainAdjustedSlot(
+        slot,
+        input: input,
+        states: states,
+      );
+      if (!resolution.hasWork) continue;
+      hasPainSafeWork = true;
+      final stimulusSlot = resolution.stimulusSlot;
+      if (stimulusSlot != null) stimulusSlots.add(stimulusSlot);
+    }
+    return _PainAdjustedStrengthProjection(
+      hasPainSafeWork: hasPainSafeWork,
+      stimulusSlots: stimulusSlots,
+    );
+  }
+
+  _PainAdjustedSlotResolution _resolvePainAdjustedSlot(
+    _TemplateSlot slot, {
+    required DecisionEngineInput input,
+    required Map<String, ExerciseState> states,
+  }) {
+    final (pattern, usesCompoundSetCount, namedExercise) = slot;
+    final trackKey = namedExercise?.trackKey ?? pattern.name;
+    final state = states[trackKey] ??
+        ExerciseState(trackKey: trackKey, pattern: pattern);
+    final persistedFlag = state.painFrozen && state.painRegion != null
+        ? PainFlag(
+            region: state.painRegion!,
+            severity: state.painSeverity ?? PainSeverity.sharp,
+            flaggedDate: state.painFlaggedDate ?? input.today,
+            tags: state.painTags,
+          )
+        : null;
+    var flag = _flagFor(
+      [
+        ...input.checkin.pain,
+        if (persistedFlag != null) persistedFlag,
+      ],
+      pattern,
+      input.today,
+    );
+    if (flag == null && state.painFrozen && state.painRegion != null) {
+      flag = persistedFlag;
+    }
+    if (flag != null && painEngine.isEscalated(flag, input.today)) {
+      return const _PainAdjustedSlotResolution(hasWork: false);
+    }
+
+    final reentryPending = state.painReentryTestOffered &&
+        !state.painReentryTestPassed;
+    final action = flag == null || reentryPending
+        ? const PainAction(PainActionKind.none)
+        : painEngine.resolve(flag.region, flag.severity, pattern);
+    if (action.kind == PainActionKind.removePattern) {
+      return const _PainAdjustedSlotResolution(hasWork: false);
+    }
+
+    final projectedNamedExercise =
+        action.kind == PainActionKind.substituteNamed
+            ? action.substitute
+            : namedExercise;
+    final projectedPattern = projectedNamedExercise?.pattern ?? pattern;
+    if (input.settings.travelMode &&
+        _travelStepFor(pattern, projectedNamedExercise) == null) {
+      return const _PainAdjustedSlotResolution(hasWork: false);
+    }
+
+    final prescriptionTrackKey =
+        projectedNamedExercise?.trackKey ?? trackKey;
+    final prescriptionState = states[prescriptionTrackKey] ??
+        ExerciseState(
+          trackKey: prescriptionTrackKey,
+          pattern: projectedPattern,
+        );
+    final prescription = progressionEngine.resolveTodaysPrescription(
+      prescriptionState,
+      input.today,
+      input.settings.equipment,
+    );
+    final nonqualifyingPrescription = prescription.deloadActive ||
+        prescription.painReentryTestFired ||
+        reentryPending;
+    return _PainAdjustedSlotResolution(
+      hasWork: true,
+      stimulusSlot: nonqualifyingPrescription
+          ? null
+          : (
+              projectedPattern,
+              usesCompoundSetCount,
+              projectedNamedExercise,
+            ),
+    );
+  }
+
+  AerobicTrainingStatus _aerobicStatus(
+    TrainingStatus status,
+    AerobicTargetKind target,
+  ) =>
+      status.aerobic.firstWhere((value) => value.target == target);
+
+  List<_TemplateSlot> _slotsForPlan({
+    required SessionTypeId sessionId,
+    required SessionTier tier,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    double stimulusSetMultiplier = 1.0,
+    bool dropAccessories = false,
+  }) {
+    final template = sessionTemplates[sessionId]!;
+    if (template.isCardioOnly) return const [];
+    if (tier != SessionTier.compressed) {
+      return template.slotsForTier(
+        tier,
+        dropAccessories: dropAccessories,
+      );
+    }
+
+    List<_TemplateSlot> pair(List<MovementPattern> patterns) => [
+          for (final pattern in patterns)
+            (pattern, true, null as SubstituteExercise?),
+        ];
+
+    switch (sessionId) {
+      case SessionTypeId.s1:
+        return pair(const [MovementPattern.squat, MovementPattern.hinge]);
+      case SessionTypeId.s2:
+        return _higherNeedPair(
+          [
+            pair(const [
+              MovementPattern.pushHorizontal,
+              MovementPattern.pullHorizontal,
+            ]),
+            pair(const [
+              MovementPattern.pushVertical,
+              MovementPattern.pullVertical,
+            ]),
+          ],
+          template: template,
+          tier: tier,
+          ledger: ledger,
+          targets: targets,
+          stimulusSetMultiplier: stimulusSetMultiplier,
+        );
+      case SessionTypeId.s4:
+        return _higherNeedPair(
+          [
+            pair(const [MovementPattern.squat, MovementPattern.hinge]),
+            pair(const [
+              MovementPattern.pushHorizontal,
+              MovementPattern.pullHorizontal,
+            ]),
+          ],
+          template: template,
+          tier: tier,
+          ledger: ledger,
+          targets: targets,
+          stimulusSetMultiplier: stimulusSetMultiplier,
+        );
+      case SessionTypeId.s5:
+        final candidates = <_TemplateSlot>[
+          for (final named in template.namedAccessories)
+            (named.pattern, true, named),
+          for (final pattern in template.accessoryPatterns)
+            (pattern, true, null),
+        ];
+        final ranked = <({int index, _TemplateSlot slot, int score})>[
+          for (var index = 0; index < candidates.length; index++)
+            (
+              index: index,
+              slot: candidates[index],
+              score: _slotNeedScore(
+                candidates[index],
+                template: template,
+                tier: tier,
+                ledger: ledger,
+                targets: targets,
+                stimulusSetMultiplier: stimulusSetMultiplier,
+              ),
+            ),
+        ]
+          ..sort((a, b) {
+            final byScore = b.score.compareTo(a.score);
+            return byScore != 0 ? byScore : a.index.compareTo(b.index);
+          });
+        return ranked.take(2).map((value) => value.slot).toList();
+      case SessionTypeId.s3:
+      case SessionTypeId.s6:
+      case SessionTypeId.s7:
+        return const [];
+    }
+  }
+
+  List<_TemplateSlot> _higherNeedPair(
+    List<List<_TemplateSlot>> pairs, {
+    required SessionTemplateDef template,
+    required SessionTier tier,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    required double stimulusSetMultiplier,
+  }) {
+    var bestIndex = 0;
+    var bestScore = _strengthScoreTerms(
+      slots: pairs.first,
+      template: template,
+      tier: tier,
+      ledger: ledger,
+      targets: targets,
+      stimulusSetMultiplier: stimulusSetMultiplier,
+    ).values.fold(0, (sum, value) => sum + value);
+    for (var index = 1; index < pairs.length; index++) {
+      final score = _strengthScoreTerms(
+        slots: pairs[index],
+        template: template,
+        tier: tier,
+        ledger: ledger,
+        targets: targets,
+        stimulusSetMultiplier: stimulusSetMultiplier,
+      ).values.fold(0, (sum, value) => sum + value);
+      if (score > bestScore) {
+        bestIndex = index;
+        bestScore = score;
       }
     }
-    return best;
+    return pairs[bestIndex];
+  }
+
+  int _slotNeedScore(
+    _TemplateSlot slot, {
+    required SessionTemplateDef template,
+    required SessionTier tier,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    required double stimulusSetMultiplier,
+  }) =>
+      _strengthScoreTerms(
+        slots: [slot],
+        template: template,
+        tier: tier,
+        ledger: ledger,
+        targets: targets,
+        stimulusSetMultiplier: stimulusSetMultiplier,
+      ).values.fold(0, (sum, value) => sum + value);
+
+  Map<String, int> _strengthScoreTerms({
+    required List<_TemplateSlot> slots,
+    required SessionTemplateDef template,
+    required SessionTier tier,
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+    required double stimulusSetMultiplier,
+  }) {
+    final projection = _projectedMuscleCredit(
+      slots,
+      template: template,
+      tier: tier,
+      setMultiplier: stimulusSetMultiplier,
+    );
+    double weekly = 0;
+    double minimum28d = 0;
+    double center28d = 0;
+    double overMax = 0;
+    double recovery = 0;
+
+    for (final entry in projection.entries) {
+      final observed = ledger.muscle(entry.key);
+      final band = targets.hypertrophyTargetBands[entry.key]!;
+      final projected = entry.value;
+      final weeklyDeficit = (band.minimum - observed.effectiveSets7d)
+          .clamp(0, double.infinity)
+          .toDouble();
+      final minimumDeficit28d = (band.minimumForWindow(28) -
+              observed.effectiveSets28d)
+          .clamp(0, double.infinity)
+          .toDouble();
+      final centerDeficit28d = (band.centerForWindow(28) -
+              observed.effectiveSets28d)
+          .clamp(0, double.infinity)
+          .toDouble();
+
+      weekly += projected < weeklyDeficit ? projected : weeklyDeficit;
+      minimum28d +=
+          projected < minimumDeficit28d ? projected : minimumDeficit28d;
+      center28d +=
+          projected < centerDeficit28d ? projected : centerDeficit28d;
+
+      final projectedOverWeeklyMaximum =
+          (observed.effectiveSets7d + projected - band.maximum)
+              .clamp(0, projected)
+              .toDouble();
+      final projectedOver28DayMaximum =
+          (observed.effectiveSets28d + projected -
+                  band.maximumForWindow(28))
+          .clamp(0, projected)
+          .toDouble();
+      // The same projected set can cross both rolling maxima. Penalize the
+      // larger crossing only, so one set is never counted twice.
+      overMax += projectedOverWeeklyMaximum > projectedOver28DayMaximum
+          ? projectedOverWeeklyMaximum
+          : projectedOver28DayMaximum;
+      if (observed.daysSinceLastStimulus == 0) {
+        recovery += projected * 2;
+      } else if (observed.daysSinceLastStimulus == 1) {
+        recovery += projected;
+      }
+    }
+
+    final terms = <String, int>{};
+    if (weekly > 0) {
+      terms['muscleWeeklyDeficit'] = (weekly * 120).round();
+    }
+    if (minimum28d > 0) {
+      terms['muscle28dMinimumDeficit'] = (minimum28d * 50).round();
+    }
+    if (center28d > 0) {
+      terms['muscle28dCenterDeficit'] = (center28d * 15).round();
+    }
+    if (overMax > 0) {
+      terms['muscleOverMaxDemotion'] = -(overMax * 180).round();
+    }
+    if (recovery > 0) {
+      terms['muscleRecoveryDemotion'] = -(recovery * 90).round();
+    }
+    return terms;
+  }
+
+  Map<MajorMuscleGroup, double> _projectedMuscleCredit(
+    List<_TemplateSlot> slots, {
+    required SessionTemplateDef template,
+    required SessionTier tier,
+    required double setMultiplier,
+  }) {
+    final result = <MajorMuscleGroup, double>{};
+    for (final (pattern, isCompound, named) in slots) {
+      final perSet = exerciseMuscleMap.contributionForExercise(
+        trackKey: named?.trackKey ?? pattern.name,
+        pattern: pattern,
+        exerciseName: named?.name,
+      );
+      final baseSets = template.setsFor(isCompound, tier);
+      final sets = setMultiplier <= 0 || baseSets == 0
+          ? 0
+          : (baseSets * setMultiplier)
+              .floor()
+              .clamp(1, baseSets)
+              .toInt();
+      for (final contribution in perSet.entries) {
+        result.update(
+          contribution.key,
+          (value) => value + contribution.value * sets,
+          ifAbsent: () => contribution.value * sets,
+        );
+      }
+    }
+    return result;
+  }
+
+  String _targetedMusclesForFinalExercises(
+    List<PlannedExercise> exercises, {
+    required StimulusLedgerSnapshot ledger,
+    required TrainingTargets targets,
+  }) {
+    final projection = <MajorMuscleGroup, double>{};
+    for (final exercise in exercises.where(
+      (value) =>
+          !value.isWarmup &&
+          value.sets > 0 &&
+          value.rirTarget != Rir.rir4plus,
+    )) {
+      final perSet = exerciseMuscleMap.contributionForExercise(
+        trackKey: exercise.trackKey,
+        pattern: exercise.pattern,
+        exerciseName: exercise.name,
+      );
+      for (final contribution in perSet.entries) {
+        projection.update(
+          contribution.key,
+          (value) => value + contribution.value * exercise.sets,
+          ifAbsent: () => contribution.value * exercise.sets,
+        );
+      }
+    }
+    final targeted = <String>[];
+    for (final muscle in MajorMuscleGroup.values) {
+      if ((projection[muscle] ?? 0) <= 0) continue;
+      final observed = ledger.muscle(muscle);
+      final band = targets.hypertrophyTargetBands[muscle]!;
+      if (observed.effectiveSets7d < band.minimum ||
+          observed.effectiveSets28d < band.centerForWindow(28)) {
+        targeted.add(muscle.name);
+      }
+    }
+    return targeted.join(', ');
   }
 
   PainFlag? _flagFor(List<PainFlag> pain, MovementPattern pattern, DateTime today) {
@@ -927,8 +1909,11 @@ class DecisionEngine {
   }
 
   ExerciseState _reduceLoadOne(ExerciseState state, EquipmentConfig cfg) {
-    final ladder = ladders[state.pattern]!;
-    final step = ladder.steps[state.ladderStepIndex.clamp(0, ladder.steps.length - 1)];
+    // Named S5 accessories and pain substitutes have their own equipment
+    // shape in the registry. Resolving through ProgressionEngine prevents a
+    // curl from being treated as the core/grip Plank step and prevents
+    // single-DB raises/extensions from using a two-DB press increment.
+    final step = progressionEngine.ladderStepFor(state);
     if (step.dumbbells == 0 || step.backpackLoaded) return state;
     final achievable = step.dumbbells == 1
         ? equipmentEngine.singleDbAchievableTotals(cfg)
@@ -939,6 +1924,12 @@ class DecisionEngine {
   }
 
   ExerciseState _regressLadderAndReduce(ExerciseState state, EquipmentConfig cfg) {
+    if (substituteRegistry.containsKey(state.trackKey)) {
+      // A named exercise has no backing movement ladder to regress. Its pain
+      // adjustment is exactly one achievable step on that exercise's real
+      // single-/double-dumbbell load dimension.
+      return _reduceLoadOne(state, cfg);
+    }
     final next = state.clone();
     if (next.ladderStepIndex > 0) next.ladderStepIndex -= 1;
     return _reduceLoadOne(next, cfg);
@@ -952,8 +1943,9 @@ class DecisionEngine {
     LadderStep step,
     double pct,
     int reps,
-    EquipmentConfig cfg,
-  ) {
+    EquipmentConfig cfg, {
+    bool isFeederWarmup = false,
+  }) {
     final achievable = step.dumbbells == 1
         ? equipmentEngine.singleDbAchievableTotals(cfg)
         : equipmentEngine.twoDbAchievableTotals(cfg, allowUneven: !step.unilateral);
@@ -974,31 +1966,45 @@ class DecisionEngine {
       loadSteps: achievable,
       rirTarget: Rir.rir3plus,
       isWarmup: true,
-      instruction: 'Rest <= 60 s',
+      instruction: 'Rest <= 45 s',
       progressionEligible: false,
+      isFeederWarmup: isFeederWarmup,
     );
   }
 
   PlannedExercise _generalWarmupEntry(
     SessionTypeId id, {
+    required int slotMinutes,
     required bool travelMode,
+    required bool painAware,
   }) {
-    final instruction = switch (id) {
-      SessionTypeId.s1 =>
-        'Start with easy walking or marching, then controlled hip hinges, squats, and ankle movement',
-      SessionTypeId.s2 =>
-        'Start with easy movement, then shoulder circles, scapular push-ups, and light reach-and-pulls',
-      SessionTypeId.s5 =>
-        'Start with easy movement, then shoulder, elbow, wrist, and trunk preparation',
-      _ => 'Start easy, then rehearse today\'s movement patterns through a comfortable range',
-    };
+    final prepMinutes = StrengthPrepPolicy.generalMinutes(slotMinutes);
+    final instruction = painAware
+        ? switch (id) {
+            SessionTypeId.s1 =>
+              'Use easy pain-free movement and breathing/bracing only. Skip every flagged or pain-provoking squat, hinge, or lower-body rehearsal.',
+            SessionTypeId.s2 || SessionTypeId.s5 =>
+              'Use easy pain-free movement, breathing/bracing, and non-reproducing scapular motion only. Skip every flagged or pain-provoking upper-body movement.',
+            _ =>
+              'Use easy pain-free movement, breathing/bracing, and non-reproducing rehearsal only. Skip every flagged or pain-provoking movement.',
+          }
+        : switch (id) {
+            SessionTypeId.s1 =>
+              'Start with easy walking or marching, then controlled hip hinges, squats, and ankle movement',
+            SessionTypeId.s2 =>
+              'Start with easy movement, then shoulder circles, scapular push-ups, and light reach-and-pulls',
+            SessionTypeId.s5 =>
+              'Start with easy movement, then shoulder, elbow, wrist, and trunk preparation',
+            _ =>
+              'Start easy, then rehearse today\'s movement patterns through a comfortable range',
+          };
     return PlannedExercise(
       trackKey: 'warmup:${id.name}',
       pattern: MovementPattern.kneeHealth,
       name: 'General warm-up & movement prep',
       sets: 1,
       metric: ExerciseMetric.minutes,
-      targetRange: const (5, 7),
+      targetRange: (prepMinutes, prepMinutes),
       rirTarget: Rir.rir4plus,
       isWarmup: true,
       instruction: travelMode ? '$instruction. No equipment needed.' : instruction,
@@ -1015,7 +2021,10 @@ class DecisionEngine {
     required EquipmentConfig equipmentConfig,
     String? substitutedFrom,
     required bool progressionEligible,
+    required bool isCompoundWork,
+    required bool microProgressionCueEligible,
     bool persistLoadOnCompletion = false,
+    bool isPainReentryTest = false,
     (int, int)? targetRangeOverride,
     String? instruction,
   }) {
@@ -1059,20 +2068,68 @@ class DecisionEngine {
       loadSteps: loadSteps,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
-      instruction: instruction,
+      instruction: instruction ??
+          _microProgressionInstruction(
+            state,
+            metric,
+            enabled:
+                progressionEligible && microProgressionCueEligible,
+          ),
       persistLoadOnCompletion: persistLoadOnCompletion,
       progressionEligible: progressionEligible,
+      isCompoundWork: isCompoundWork,
+      isPainReentryTest: isPainReentryTest,
     );
+  }
+
+  String? _microProgressionInstruction(
+    ExerciseState state,
+    ExerciseMetric metric, {
+    required bool enabled,
+  }) {
+    if (!enabled ||
+        state.painFrozen ||
+        state.status == ExerciseStatus.deload ||
+        state.microStepStage < 1 ||
+        state.microStepStage > 3) {
+      return null;
+    }
+
+    if (metric == ExerciseMetric.seconds) {
+      return switch (state.microStepStage) {
+        1 =>
+          'Micro-progression - controlled transition: enter and leave the hold slowly, then keep a strict position',
+        2 =>
+          'Micro-progression - strict hold: use a more exact, motionless position with no momentum or drift',
+        3 =>
+          'Micro-progression - harder leverage: use a longer lever, deeper position, or the next harder hold while staying controlled',
+        _ => null,
+      };
+    }
+
+    if (metric == ExerciseMetric.reps) {
+      return switch (state.microStepStage) {
+        1 =>
+          'Micro-progression - tempo: use a slow 3-second eccentric on every rep',
+        2 =>
+          'Micro-progression - pause: hold a controlled 1-second pause at the hardest safe point of every rep',
+        3 =>
+          'Micro-progression - range/leverage: add a small pain-free deficit or range of motion; otherwise use slightly harder leverage',
+        _ => null,
+      };
+    }
+
+    return null;
   }
 
   int _redDaysInRollingWindow(
     DecisionEngineInput input,
-    ReadinessBucket currentBucket,
-    DateTime today,
+    ReadinessBucket? endingDayBucket,
+    DateTime endingDay,
   ) {
-    var redDays = currentBucket == ReadinessBucket.red ? 1 : 0;
+    var redDays = endingDayBucket == ReadinessBucket.red ? 1 : 0;
     for (var offset = 1; offset < 7; offset++) {
-      final date = today.subtract(Duration(days: offset));
+      final date = endingDay.subtract(Duration(days: offset));
       if (_bucketForDate(input, date) == ReadinessBucket.red) redDays += 1;
     }
     return redDays;
@@ -1093,6 +2150,32 @@ class DecisionEngine {
   }
 
   bool _isSameDate(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+typedef _TemplateSlot = (
+  MovementPattern,
+  bool,
+  SubstituteExercise?,
+);
+
+class _PainAdjustedStrengthProjection {
+  final bool hasPainSafeWork;
+  final List<_TemplateSlot> stimulusSlots;
+
+  _PainAdjustedStrengthProjection({
+    required this.hasPainSafeWork,
+    required List<_TemplateSlot> stimulusSlots,
+  }) : stimulusSlots = List<_TemplateSlot>.unmodifiable(stimulusSlots);
+}
+
+class _PainAdjustedSlotResolution {
+  final bool hasWork;
+  final _TemplateSlot? stimulusSlot;
+
+  const _PainAdjustedSlotResolution({
+    required this.hasWork,
+    this.stimulusSlot,
+  });
 }
 
 class _Scored {

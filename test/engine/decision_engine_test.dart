@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/ai/ai_explainer.dart';
+import 'package:morningcoach/engine/cardio_engine.dart';
 import 'package:morningcoach/engine/decision_engine.dart';
 import 'package:morningcoach/engine/fallback_templates.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
+import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
@@ -52,17 +54,33 @@ void main() {
         setLogs: const [],
         plannedWorkSets: 6,
         completedWorkSets: 6,
-        durationMinutes: 30,
+        durationMinutes: switch (id) {
+          SessionTypeId.s3 => 35,
+          SessionTypeId.s6 => 60,
+          SessionTypeId.s7 => 10,
+          _ => 30,
+        },
         countsAs: categories,
       );
 
-  /// Enough logged history that the weekly floor (2 strength, 1 intensity)
-  /// is already satisfied - keeps floor-pressure scoring out of tests that
-  /// aren't about it.
+  /// Cardio target history used to keep anchor/base pressure out of tests
+  /// that exercise strength-plan assembly and safety mechanics.
   List<SessionLog> floorSatisfiedLogs() => [
         buildLog(SessionTypeId.s1, today.subtract(const Duration(days: 2)), {FloorCategory.strength}),
         buildLog(SessionTypeId.s4, today.subtract(const Duration(days: 4)), {FloorCategory.strength}),
         buildLog(SessionTypeId.s3, today.subtract(const Duration(days: 3)), {FloorCategory.intensity}),
+        buildLog(SessionTypeId.s6, today.subtract(const Duration(days: 2)), {FloorCategory.aerobic}),
+        SessionLog(
+          id: 's6-short',
+          templateId: SessionTypeId.s6,
+          tier: SessionTier.full,
+          date: today.subtract(const Duration(days: 5)),
+          setLogs: const [],
+          plannedWorkSets: 0,
+          completedWorkSets: 0,
+          durationMinutes: 35,
+          countsAs: const {FloorCategory.aerobic},
+        ),
       ];
 
   DecisionEngineInput buildInput({
@@ -77,6 +95,7 @@ void main() {
     Map<String, ExerciseState>? exerciseStates,
     UserSettings settings = const UserSettings(),
     SessionTypeId? forcedSessionId,
+    bool forceQueuePointer = true,
     DateTime? asOf,
   }) {
     final decisionDate = asOf ?? today;
@@ -96,7 +115,8 @@ void main() {
       queueState: queueState,
       settings: settings,
       today: decisionDate,
-      forcedSessionId: forcedSessionId,
+      forcedSessionId:
+          forcedSessionId ?? (forceQueuePointer ? queueState.pointer : null),
     );
   }
 
@@ -118,26 +138,313 @@ void main() {
 
     final hinge = trace.plan!.exercises.firstWhere((e) => e.substitutedFrom == 'hinge');
     expect(hinge.name, 'Bridge hamstring curl');
+    expect(
+      hinge.instruction,
+      contains('This substitute starts deliberately light'),
+    );
 
     final squat = trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.squat);
     expect(squat.loadTotal, lessThan(24));
 
     expect(trace.firedRuleCodes, containsAll(['ONBOARD_SUBSTITUTE', 'PAIN_SUB_HINGE_SHARP', 'PAIN_SUB_SQUAT_SHARP']));
+    expect(
+      output.patchedExerciseStates['squat']!
+          .sessionsScheduledWhileFlagged,
+      1,
+    );
+    expect(
+      output.patchedExerciseStates['hinge']!
+          .sessionsScheduledWhileFlagged,
+      1,
+    );
   });
 
-  test('floor-pressure day forces a strength candidate even when the queue points at intensity', () {
+  test('rest-day pain persists only affected normal tracks without scheduling them', () {
+    final unaffectedHinge = ExerciseState(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      currentLoad: 90,
+    );
+    final painOnlySubstitute = ExerciseState(
+      trackKey: bridgeHamstringCurl.trackKey,
+      pattern: bridgeHamstringCurl.pattern,
+      currentLoad: 12,
+    );
+    final output = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.kneeLeft,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      exerciseStates: {
+        unaffectedHinge.trackKey: unaffectedHinge,
+        painOnlySubstitute.trackKey: painOnlySubstitute,
+      },
+    ));
+
+    expect(output.trace.plan, isNull);
+    expect(output.patchedExerciseStates.keys.toSet(), {
+      'squat',
+      unaffectedHinge.trackKey,
+      painOnlySubstitute.trackKey,
+    });
+    final squat = output.patchedExerciseStates['squat']!;
+    expect(squat.painFrozen, isTrue);
+    expect(squat.painRegion, BodyRegion.kneeLeft);
+    expect(squat.painSeverity, PainSeverity.sharp);
+    expect(squat.sessionsScheduledWhileFlagged, 0);
+    expect(squat.lastPainScheduledDate, isNull);
+    expect(
+      identical(
+        output.patchedExerciseStates[unaffectedHinge.trackKey],
+        unaffectedHinge,
+      ),
+      isTrue,
+    );
+    expect(
+      identical(
+        output.patchedExerciseStates[painOnlySubstitute.trackKey],
+        painOnlySubstitute,
+      ),
+      isTrue,
+    );
+  });
+
+  test('lower-back pain persists both lower tracks on a cardio safety swap', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: const {},
+      forcedSessionId: SessionTypeId.s3,
+    ));
+
+    expect(output.trace.plan!.sessionId, SessionTypeId.s6);
+    for (final key in ['squat', 'hinge']) {
+      final state = output.patchedExerciseStates[key]!;
+      expect(state.painFrozen, isTrue, reason: key);
+      expect(state.painRegion, BodyRegion.lowerBack, reason: key);
+      expect(state.sessionsScheduledWhileFlagged, 0, reason: key);
+      expect(state.lastPainScheduledDate, isNull, reason: key);
+    }
+  });
+
+  test('persisted check-in pain blocks S3 and S7 next day without a re-tap', () {
+    final restDay = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.hip,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      exerciseStates: const {},
+    ));
+    final nextDay = today.add(const Duration(days: 1));
+
+    for (final requested in [
+      (SessionTypeId.s3, 35),
+      (SessionTypeId.s7, 20),
+    ]) {
+      final output = decisionEngine.decide(buildInput(
+        time: requested.$2,
+        subjective: 4,
+        pain: const [],
+        todaySnapshot: RecoverySnapshot(
+          date: nextDay,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        recoveryHistory: normalHrvHistory(),
+        sessionLogs: floorSatisfiedLogs(),
+        exerciseStates: restDay.patchedExerciseStates,
+        forcedSessionId: requested.$1,
+        asOf: nextDay,
+      ));
+
+      expect(
+        output.trace.plan!.sessionId,
+        anyOf(SessionTypeId.s2, SessionTypeId.s5),
+      );
+      expect(
+        output.patchedExerciseStates['squat']!
+            .sessionsScheduledWhileFlagged,
+        0,
+      );
+      expect(
+        output.patchedExerciseStates['hinge']!
+            .sessionsScheduledWhileFlagged,
+        0,
+      );
+    }
+  });
+
+  test('persisted sharp hip swaps next-day leg-heavy work without a re-tap', () {
+    final restDay = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.hip,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      exerciseStates: const {},
+    ));
+    final nextDay = today.add(const Duration(days: 1));
+    DecisionEngineOutput forcedS1(Map<String, ExerciseState> states) =>
+        decisionEngine.decide(buildInput(
+          time: 35,
+          subjective: 4,
+          pain: const [],
+          todaySnapshot: RecoverySnapshot(
+            date: nextDay,
+            hrvRmssd: 50,
+            restingHr: 60,
+            sleepScore: 90,
+          ),
+          recoveryHistory: normalHrvHistory(),
+          sessionLogs: floorSatisfiedLogs(),
+          exerciseStates: states,
+          forcedSessionId: SessionTypeId.s1,
+          asOf: nextDay,
+        ));
+
+    final sharp = forcedS1(restDay.patchedExerciseStates);
+    expect(sharp.trace.plan!.sessionId, isNot(SessionTypeId.s1));
+    expect(
+      sharp.trace.firedRules.any(
+        (rule) =>
+            rule.key == RuleKey.painSubSharp &&
+            rule.pattern == 'HIP_SESSION_SWAP',
+      ),
+      isTrue,
+    );
+
+    final mild = forcedS1({
+      'squat': ExerciseState(
+        trackKey: 'squat',
+        pattern: MovementPattern.squat,
+        painFrozen: true,
+        painSeverity: PainSeverity.mild,
+        painRegion: BodyRegion.hip,
+        painFlaggedDate: today,
+      ),
+    });
+    expect(mild.trace.plan!.sessionId, SessionTypeId.s1);
+    expect(
+      mild.trace.firedRules.any(
+        (rule) =>
+            rule.key == RuleKey.painSubSharp &&
+            rule.pattern == 'HIP_SESSION_SWAP',
+      ),
+      isFalse,
+    );
+  });
+
+  test('sharp hip selects upper strength in every window including travel', () {
+    const cases = <(int, bool, SessionTypeId)>[
+      (20, false, SessionTypeId.s1),
+      (35, false, SessionTypeId.s3),
+      (60, false, SessionTypeId.s6),
+      (20, true, SessionTypeId.s1),
+      (35, true, SessionTypeId.s1),
+      (60, true, SessionTypeId.s1),
+    ];
+    for (final (minutes, travel, forced) in cases) {
+      final output = decisionEngine.decide(buildInput(
+        time: minutes,
+        subjective: 4,
+        pain: [
+          PainFlag(
+            region: BodyRegion.hip,
+            severity: PainSeverity.sharp,
+            flaggedDate: today,
+          ),
+        ],
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        recoveryHistory: normalHrvHistory(),
+        sessionLogs: floorSatisfiedLogs(),
+        settings: UserSettings(travelMode: travel),
+        exerciseStates: const {},
+        forcedSessionId: forced,
+      ));
+
+      expect(
+        output.trace.plan!.sessionId,
+        anyOf(SessionTypeId.s2, SessionTypeId.s5),
+        reason: '$minutes minutes, travel=$travel, forced=${forced.name}',
+      );
+      expect(output.trace.plan!.exercises, isNotEmpty);
+      for (final key in ['squat', 'hinge']) {
+        final state = output.patchedExerciseStates[key]!;
+        expect(state.painRegion, BodyRegion.hip, reason: key);
+        expect(state.painSeverity, PainSeverity.sharp, reason: key);
+        expect(state.sessionsScheduledWhileFlagged, 0, reason: key);
+      }
+      expect(
+        output.trace.firedRules.any(
+          (rule) =>
+              rule.key == RuleKey.painSubSharp &&
+              rule.pattern == 'HIP_SESSION_SWAP',
+        ),
+        isTrue,
+      );
+      if (travel) {
+        expect(
+          output.trace.plan!.exercises
+              .where((exercise) => !exercise.isWarmup)
+              .every((exercise) => exercise.isTravel),
+          isTrue,
+        );
+      }
+    }
+  });
+
+  test('v2 ignores legacy weekly-floor pressure in selection and trace', () {
     final input = buildInput(
       time: 35,
       subjective: 3,
       todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
       recoveryHistory: normalHrvHistory(),
       queueState: const QueueState(pointer: SessionTypeId.s3), // intensity is "next"
-      sessionLogs: const [], // zero strength sessions logged -> deficit 2 -> hard force
+      sessionLogs: const [],
+      forceQueuePointer: false,
     );
     final output = decisionEngine.decide(input);
 
-    expect(output.trace.firedRuleCodes, contains('FLOOR_FORCE_STRENGTH'));
-    expect(output.trace.plan!.sessionId, isNot(SessionTypeId.s3));
+    expect(output.trace.plan!.sessionId, SessionTypeId.s3);
+    expect(
+      output.trace.firedRuleCodes.where((code) => code.startsWith('FLOOR_')),
+      isEmpty,
+    );
   });
 
   group('RED-day swaps', () {
@@ -169,7 +476,7 @@ void main() {
     });
   });
 
-  test('score tie-break follows S1..S5, then S7, then S6', () {
+  test('surplus intensity is scored below target-bearing candidates', () {
     final input = buildInput(
       time: 35,
       subjective: 3,
@@ -181,18 +488,21 @@ void main() {
     final output = decisionEngine.decide(input);
     final order = output.trace.candidates.map((c) => c.sessionId).toList();
 
-    final s5 = order.indexOf(SessionTypeId.s5);
-    final s6 = order.indexOf(SessionTypeId.s6);
     final s7 = order.indexOf(SessionTypeId.s7);
-    expect(s5, lessThan(s7));
-    expect(s7, lessThan(s6));
+    expect(s7, order.length - 1);
+    expect(
+      output.trace.candidates
+          .firstWhere((candidate) => candidate.sessionId == SessionTypeId.s7)
+          .scoreTerms,
+      contains('surplusIntensitySuppressed'),
+    );
   });
 
   group('§11 swap session', () {
     test('forcedSessionId overrides the natural winner but still runs modulation/pain steps', () {
       final input = buildInput(
         time: 35,
-        subjective: 3,
+        subjective: 4,
         pain: [PainFlag(region: BodyRegion.lowerBack, severity: PainSeverity.sharp, flaggedDate: today)],
         todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
         recoveryHistory: normalHrvHistory(),
@@ -208,83 +518,53 @@ void main() {
       expect(output.trace.firedRuleCodes, contains('PAIN_SUB_SQUAT_SHARP'));
     });
 
-    test('an invalid forcedSessionId (not in the feasible set) falls back to the natural winner', () {
+    test('20-minute S6 is a valid forced recovery-cardio option', () {
       final input = buildInput(
-        time: 20, // S4 is not in the 20-minute conceptual candidate set
-        subjective: 3,
+        time: 20,
+        subjective: 4,
         queueState: const QueueState(pointer: SessionTypeId.s1),
-        forcedSessionId: SessionTypeId.s4, // not feasible at 20 min
+        forcedSessionId: SessionTypeId.s6,
       );
       final output = decisionEngine.decide(input);
-      expect(output.trace.plan!.sessionId, isNot(SessionTypeId.s4));
-      expect(output.trace.plan!.sessionId, SessionTypeId.s1); // natural winner
+
+      expect(output.trace.plan!.sessionId, SessionTypeId.s6);
+      expect(output.trace.plan!.estimatedDurationMin, lessThanOrEqualTo(20));
     });
   });
 
-  group('§13 floor deficit==1 aging-out horizon', () {
-    test('fires FLOOR_FORCE when the lone qualifying session ages out within 2 days', () {
-      final input = buildInput(
-        time: 35,
-        subjective: 3,
-        todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
-        recoveryHistory: normalHrvHistory(),
-        queueState: const QueueState(pointer: SessionTypeId.s3),
-        sessionLogs: [
-          SessionLog(
-            id: 'a',
-            templateId: SessionTypeId.s1,
-            tier: SessionTier.full,
-            date: today.subtract(const Duration(days: 6)),
-            setLogs: const [],
-            plannedWorkSets: 6,
-            completedWorkSets: 6,
-            durationMinutes: 30,
-            countsAs: const {FloorCategory.strength},
-          ),
-          buildLog(
-            SessionTypeId.s3,
-            today.subtract(const Duration(days: 2)),
-            {FloorCategory.intensity},
-          ),
-        ],
-      );
-      final output = decisionEngine.decide(input);
-      expect(output.trace.firedRuleCodes, contains('FLOOR_FORCE_STRENGTH'));
-    });
+  test('legacy weeklyFloor settings no longer change v2 scores', () {
+    final normal = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      sessionLogs: floorSatisfiedLogs(),
+      forceQueuePointer: false,
+    ));
+    final extremeLegacyFloor = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      sessionLogs: floorSatisfiedLogs(),
+      forceQueuePointer: false,
+      settings: const UserSettings(
+        weeklyFloor: {
+          FloorCategory.strength: 99,
+          FloorCategory.intensity: 99,
+        },
+      ),
+    ));
 
-    test('stays a soft boost when the lone qualifying session is not about to age out', () {
-      final input = buildInput(
-        time: 35,
-        subjective: 3,
-        todaySnapshot: RecoverySnapshot(date: today, hrvRmssd: 50, restingHr: 60, sleepScore: 90),
-        recoveryHistory: normalHrvHistory(),
-        queueState: const QueueState(pointer: SessionTypeId.s1),
-        sessionLogs: [
-          SessionLog(
-            id: 'a',
-            templateId: SessionTypeId.s1,
-            tier: SessionTier.full,
-            date: today.subtract(const Duration(days: 1)),
-            setLogs: const [],
-            plannedWorkSets: 6,
-            completedWorkSets: 6,
-            durationMinutes: 30,
-            countsAs: const {FloorCategory.strength},
-          ),
-          buildLog(
-            SessionTypeId.s3,
-            today.subtract(const Duration(days: 2)),
-            {FloorCategory.intensity},
-          ),
-        ],
-      );
-      final output = decisionEngine.decide(input);
-      expect(output.trace.firedRuleCodes, isNot(contains('FLOOR_FORCE_STRENGTH')));
-      expect(output.trace.firedRuleCodes, contains('FLOOR_SOFT_BOOST'));
-    });
+    expect(extremeLegacyFloor.trace.plan!.sessionId, normal.trace.plan!.sessionId);
+    expect(
+      extremeLegacyFloor.trace.candidates.map((candidate) => candidate.score),
+      normal.trace.candidates.map((candidate) => candidate.score),
+    );
+    expect(
+      extremeLegacyFloor.trace.firedRuleCodes
+          .where((code) => code.startsWith('FLOOR_')),
+      isEmpty,
+    );
   });
 
-  test('§6 order of operations: 20-min + YELLOW stacks compression then the 25% volume cut', () {
+  test('§6 order: 20-min YELLOW stacks compression then recovery volume reduction', () {
     final input = buildInput(
       time: 20,
       subjective: 3,
@@ -296,7 +576,7 @@ void main() {
 
     expect(output.trace.recovery.bucket, ReadinessBucket.yellow);
     expect(output.trace.plan!.tier.name, 'compressed');
-    // Baseline compressed compound sets = 2 (§2.5); 25% cut floors to 1.
+    // Baseline compressed compound sets = 2 (§2.5); integer reduction gives 1.
     for (final e in output.trace.plan!.exercises) {
       expect(e.sets, 1);
     }
@@ -405,6 +685,12 @@ void main() {
       sessionsScheduledWhileFlagged: 0,
       prePainLoad: 90,
     );
+    states[bridgeHamstringCurl.trackKey] = ExerciseState(
+      trackKey: bridgeHamstringCurl.trackKey,
+      pattern: bridgeHamstringCurl.pattern,
+      currentLoad: 12,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+    );
     final input = buildInput(
       time: 35,
       subjective: 3,
@@ -416,8 +702,13 @@ void main() {
     final output = decisionEngine.decide(input);
 
     expect(output.trace.firedRuleCodes, contains('PAIN_SUB_HINGE_SHARP'));
+    expect(output.trace.firedRuleCodes, isNot(contains('ONBOARD_SUBSTITUTE')));
     final hinge = output.trace.plan!.exercises.firstWhere((e) => e.substitutedFrom == 'hinge');
     expect(hinge.trackKey, startsWith('sub:'));
+    expect(
+      hinge.instruction,
+      'Use a pain-free range and stop if pain worsens.',
+    );
     // and the §7.2 scheduled counter still ticks
     expect(output.patchedExerciseStates['hinge']!.sessionsScheduledWhileFlagged, 1);
   });
@@ -450,7 +741,7 @@ void main() {
     expect(output.trace.plan!.plannedWorkSets, 6);
   });
 
-  test('§2.5: the ATG block replaces the ramp on S4 (feeders only)', () {
+  test('the ATG block replaces general prep, not the first-compound ramp', () {
     final input = buildInput(
       time: 60,
       subjective: 4,
@@ -464,11 +755,81 @@ void main() {
 
     expect(ex.first.trackKey, 'atg_block');
     expect(ex.first.isWarmup, isTrue);
-    expect(ex.any((e) => e.name.contains('40%')), isFalse); // no ramp
-    // the first compound still gets its 60% feeder
+    expect(ex.first.targetRange, (5, 5));
+    expect(ex.any((e) => e.name.contains('40%')), isTrue);
+    expect(ex.any((e) => e.name.contains('80%')), isTrue);
+    // The first compound gets the full 40/60/80 ramp.
     final squatIdx = ex.indexWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
     expect(ex[squatIdx - 1].isWarmup, isTrue);
-    expect(ex[squatIdx - 1].name, contains('60%'));
+    expect(ex[squatIdx - 1].name, contains('80%'));
+  });
+
+  test('current knee pain replaces S4 ATG loading with equal-time pain-aware prep', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 60,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.kneeLeft,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s4),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    final prep = output.trace.plan!.exercises.first;
+
+    expect(prep.trackKey, 'atg_block');
+    expect(prep.isWarmup, isTrue);
+    expect(prep.targetRange, (5, 5));
+    expect(prep.name, 'Pain-aware general + upper/scapular prep');
+    expect(prep.name, isNot(contains('ATG')));
+    expect(prep.instruction, contains('Skip backward treadmill'));
+    expect(prep.instruction, contains('pain-provoking knee movement'));
+  });
+
+  test('persisted shoulder pain removes reproducing upper warm-up cues', () {
+    final states = baseStates();
+    states['pushHorizontal'] = ExerciseState(
+      trackKey: 'pushHorizontal',
+      pattern: MovementPattern.pushHorizontal,
+      currentLoad: 40,
+      painFrozen: true,
+      painSeverity: PainSeverity.mild,
+      painRegion: BodyRegion.shoulderLeft,
+      painFlaggedDate: today.subtract(const Duration(days: 1)),
+    );
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s2),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    ));
+    final prep = output.trace.plan!.exercises.first;
+
+    expect(prep.trackKey, 'warmup:s2');
+    expect(prep.isWarmup, isTrue);
+    expect(prep.targetRange, (5, 5));
+    expect(prep.instruction, contains('non-reproducing scapular motion'));
+    expect(prep.instruction, contains('Skip every flagged'));
+    expect(prep.instruction, isNot(contains('shoulder circles')));
+    expect(prep.instruction, isNot(contains('scapular push-ups')));
   });
 
   test('§5 Step 7 "60->35": a 60-min session in a 35-min slot drops the accessory block', () {
@@ -582,7 +943,12 @@ void main() {
       settings: const UserSettings(travelMode: true),
     ));
     final s4Names = s4.trace.plan!.exercises.map((e) => e.name).toList();
-    expect(s4Names, contains('Travel knee-health: backward walking, wall tibialis raises, calf raises'));
+    expect(
+      s4Names,
+      contains(
+        'Travel ATG + upper prep: backward walking, wall tibialis/calf raises, shoulder circles, scapular push-ups',
+      ),
+    );
     expect(s4Names.any((name) => name.contains('treadmill') || name.contains('slant-board')), isFalse);
 
     final s5 = decisionEngine.decide(buildInput(
@@ -653,6 +1019,71 @@ void main() {
     expect(hinge.persistLoadOnCompletion, isTrue);
   });
 
+  test('YELLOW and RED detraining plans retain their emitted safe baseline marker', () {
+    for (final subjective in [3, 1]) {
+      final states = baseStates();
+      states['hinge'] = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 100,
+        lastTrainedDate: today.subtract(const Duration(days: 15)),
+      );
+      final output = decisionEngine.decide(buildInput(
+        time: 35,
+        subjective: subjective,
+        queueState: const QueueState(pointer: SessionTypeId.s1),
+        sessionLogs: floorSatisfiedLogs(),
+        exerciseStates: states,
+      ));
+      final hinge = output.trace.plan!.exercises.firstWhere(
+        (exercise) =>
+            exercise.pattern == MovementPattern.hinge &&
+            !exercise.isWarmup,
+      );
+
+      expect(
+        output.trace.recovery.bucket,
+        subjective == 1 ? ReadinessBucket.red : ReadinessBucket.yellow,
+      );
+      expect(output.trace.firedRuleCodes, contains('DETRAIN_ADJUST_HINGE'));
+      expect(hinge.persistLoadOnCompletion, isTrue);
+      expect(hinge.progressionEligible, isFalse);
+      expect(hinge.loadTotal, isNotNull);
+      expect(hinge.loadTotal, lessThanOrEqualTo(90));
+    }
+  });
+
+  test('first-ever work uses the minimum load without comeback narration', () {
+    final states = baseStates();
+    states['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 0,
+    );
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    ));
+
+    final squat = output.trace.plan!.exercises.firstWhere(
+      (exercise) =>
+          !exercise.isWarmup && exercise.pattern == MovementPattern.squat,
+    );
+    expect(output.trace.firedRuleCodes, isNot(contains('DETRAIN_ADJUST_SQUAT')));
+    expect(squat.loadTotal, 6, reason: 'the minimum single-DB load remains the onboarding load');
+    expect(squat.persistLoadOnCompletion, isFalse);
+  });
+
   test('§6.3: a third RED day starts global deload before double-RED rest', () {
     final states = baseStates();
     states['squat'] = ExerciseState(
@@ -719,6 +1150,145 @@ void main() {
     expect(output.trace.plan, isNotNull);
     expect(output.patchedExerciseStates['hinge']!.status, ExerciseStatus.deload);
     expect(output.patchedExerciseStates['hinge']!.deloadSessionsRemaining, 2);
+  });
+
+  test('§6.3: the same at-or-above-three RED cluster never retriggers completed tracks', () {
+    final completedWithinEpisode = baseStates();
+    completedWithinEpisode['hinge'] = ExerciseState(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      currentLoad: 80,
+      status: ExerciseStatus.progress,
+      deloadSessionsRemaining: 0,
+    );
+    completedWithinEpisode['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 20,
+      status: ExerciseStatus.deload,
+      deloadSessionsRemaining: 1,
+      preDeloadLoad: 24,
+    );
+    final nextDay = today.add(const Duration(days: 1));
+    final output = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 4,
+      asOf: nextDay,
+      checkinHistory: [
+        for (final redDate in [
+          today,
+          today.subtract(const Duration(days: 2)),
+          today.subtract(const Duration(days: 4)),
+        ])
+          CheckIn(
+            date: redDate,
+            timeMinutes: 35,
+            subjective: 1,
+            timestamp: redDate,
+          ),
+      ],
+      exerciseStates: completedWithinEpisode,
+      forceQueuePointer: false,
+    ));
+
+    expect(output.trace.plan, isNull);
+    expect(
+      output.patchedExerciseStates['hinge']!.status,
+      ExerciseStatus.progress,
+    );
+    expect(
+      output.patchedExerciseStates['hinge']!.deloadSessionsRemaining,
+      0,
+    );
+    expect(
+      output.patchedExerciseStates['squat']!.deloadSessionsRemaining,
+      1,
+    );
+  });
+
+  test('§6.3: a later RED threshold crossing starts a new deload episode', () {
+    final later = today.add(const Duration(days: 10));
+    final output = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 1,
+      asOf: later,
+      checkinHistory: [
+        for (final daysAgo in const [2, 4])
+          CheckIn(
+            date: later.subtract(Duration(days: daysAgo)),
+            timeMinutes: 35,
+            subjective: 1,
+            timestamp: later.subtract(Duration(days: daysAgo)),
+          ),
+      ],
+      exerciseStates: {
+        'hinge': ExerciseState(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          currentLoad: 80,
+          status: ExerciseStatus.progress,
+        ),
+      },
+      forceQueuePointer: false,
+    ));
+
+    expect(output.trace.plan, isNull);
+    expect(
+      output.patchedExerciseStates['hinge']!.status,
+      ExerciseStatus.deload,
+    );
+    expect(
+      output.patchedExerciseStates['hinge']!.deloadSessionsRemaining,
+      2,
+    );
+  });
+
+  test('§6.3: automatic global deload persists for unscheduled tracks after the trigger ages out', () {
+    final triggered = decisionEngine.decide(buildInput(
+      time: 0,
+      subjective: 1,
+      checkinHistory: [
+        for (final daysAgo in const [2, 4])
+          CheckIn(
+            date: today.subtract(Duration(days: daysAgo)),
+            timeMinutes: 35,
+            subjective: 1,
+            timestamp: today.subtract(Duration(days: daysAgo)),
+          ),
+      ],
+      exerciseStates: const {},
+      forceQueuePointer: false,
+    ));
+
+    expect(triggered.trace.plan, isNull);
+    expect(
+      triggered.patchedExerciseStates[overheadTriceps.trackKey]!.status,
+      ExerciseStatus.deload,
+    );
+    expect(
+      triggered.patchedExerciseStates[overheadTriceps.trackKey]!
+          .deloadSessionsRemaining,
+      2,
+    );
+
+    final afterTriggerAgedOut = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      asOf: today.add(const Duration(days: 8)),
+      checkinHistory: const [],
+      exerciseStates: triggered.patchedExerciseStates,
+      forcedSessionId: SessionTypeId.s5,
+    ));
+    final triceps = afterTriggerAgedOut.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.trackKey == overheadTriceps.trackKey,
+    );
+
+    expect(triceps.rirTarget, Rir.rir4plus);
+    expect(triceps.sets, 1);
+    expect(
+      afterTriggerAgedOut.trace.firedRuleCodes,
+      contains('DELOAD_ACTIVE_PUSHVERTICAL'),
+    );
   });
 
   test('sharp hip protection overrides a manually forced leg-heavy session', () {
@@ -832,7 +1402,7 @@ void main() {
     expect(output.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
   });
 
-  test('compressed travel S5 retains a bodyweight core work slot', () {
+  test('compressed travel S5 preserves its dynamic pair with viable variants', () {
     final output = decisionEngine.decide(buildInput(
       time: 20,
       subjective: 4,
@@ -849,11 +1419,112 @@ void main() {
     ));
 
     final work = output.trace.plan!.exercises.where((exercise) => !exercise.isWarmup).toList();
-    expect(work, isNotEmpty);
-    final hold = work.firstWhere((exercise) => exercise.name == 'Plank / hollow hold');
-    expect(hold.metric, ExerciseMetric.seconds);
-    expect(hold.targetRange, (20, 45));
+    expect(work, hasLength(2));
+    expect(
+      work.map((exercise) => exercise.name),
+      ['Self-resisted curl', 'Prone Y-raise'],
+    );
+    expect(work.every((exercise) => exercise.isTravel), isTrue);
     expect(output.trace.plan!.plannedWorkSets, greaterThan(0));
+  });
+
+  test('mild wrist pain reduces every S5 named accessory by one real load step', () {
+    final states = baseStates();
+    for (final named in s5NamedAccessories) {
+      states[named.trackKey] = ExerciseState(
+        trackKey: named.trackKey,
+        pattern: named.pattern,
+        ladderStepIndex: 3,
+        currentLoad: 24,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+    }
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.wrist,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+        ),
+      ],
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+      forcedSessionId: SessionTypeId.s5,
+    ));
+    final workByKey = {
+      for (final exercise
+          in output.trace.plan!.exercises.where((value) => !value.isWarmup))
+        exercise.trackKey: exercise,
+    };
+
+    for (final named in s5NamedAccessories) {
+      expect(workByKey[named.trackKey]!.loadTotal, 21, reason: named.name);
+      expect(
+        workByKey[named.trackKey]!.instruction,
+        contains('pain-free range'),
+        reason: named.name,
+      );
+    }
+  });
+
+  test('mild shoulder pain keeps named S5 tracks and uses single-DB reduction', () {
+    final states = baseStates();
+    for (final named in s5NamedAccessories) {
+      states[named.trackKey] = ExerciseState(
+        trackKey: named.trackKey,
+        pattern: named.pattern,
+        ladderStepIndex: 3,
+        currentLoad: 24,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+    }
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.shoulderLeft,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+        ),
+      ],
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+      forcedSessionId: SessionTypeId.s5,
+    ));
+    final workByKey = {
+      for (final exercise
+          in output.trace.plan!.exercises.where((value) => !value.isWarmup))
+        exercise.trackKey: exercise,
+    };
+
+    expect(workByKey[dbCurl.trackKey]!.loadTotal, 24);
+    for (final named in [lateralRaise, overheadTriceps]) {
+      final exercise = workByKey[named.trackKey]!;
+      expect(exercise.name, named.name);
+      expect(exercise.loadTotal, 21, reason: named.name);
+      expect(exercise.instruction, contains('pain-free range'));
+      expect(
+        output.patchedExerciseStates[named.trackKey]!.ladderStepIndex,
+        3,
+      );
+    }
   });
 
   test('home core holds use seconds while wrist curls remain rep-based', () {
@@ -907,6 +1578,212 @@ void main() {
     expect(wristCurl.targetLabel, '8-15 reps');
   });
 
+  test('active rep micro-stages emit deterministic execution cues', () {
+    const expectations = <(int, String)>[
+      (1, 'slow 3-second eccentric'),
+      (2, 'controlled 1-second pause'),
+      (3, 'deficit or range of motion'),
+    ];
+
+    for (final (stage, expectedCue) in expectations) {
+      final states = baseStates();
+      states['squat'] = ExerciseState(
+        trackKey: 'squat',
+        pattern: MovementPattern.squat,
+        currentLoad: 24,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+        microStepStage: stage,
+      );
+      final output = decisionEngine.decide(buildInput(
+        time: 35,
+        subjective: 4,
+        recoveryHistory: normalHrvHistory(),
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        queueState: const QueueState(pointer: SessionTypeId.s1),
+        sessionLogs: floorSatisfiedLogs(),
+        exerciseStates: states,
+      ));
+
+      final squat = output.trace.plan!.exercises.firstWhere(
+        (exercise) =>
+            !exercise.isWarmup && exercise.pattern == MovementPattern.squat,
+      );
+      expect(squat.instruction, contains(expectedCue), reason: 'stage $stage');
+    }
+  });
+
+  test('timed-hold micro-stages use position and leverage cues, never rep cues', () {
+    const expectations = <(int, String)>[
+      (1, 'controlled transition'),
+      (2, 'strict hold'),
+      (3, 'harder leverage'),
+    ];
+
+    for (final (stage, expectedCue) in expectations) {
+      final states = baseStates();
+      states['coreGrip'] = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+        microStepStage: stage,
+      );
+      final output = decisionEngine.decide(buildInput(
+        time: 35,
+        subjective: 4,
+        recoveryHistory: normalHrvHistory(),
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        queueState: const QueueState(pointer: SessionTypeId.s5),
+        sessionLogs: floorSatisfiedLogs(),
+        exerciseStates: states,
+      ));
+
+      final hold = output.trace.plan!.exercises.firstWhere(
+        (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
+      );
+      expect(hold.instruction, contains(expectedCue), reason: 'stage $stage');
+      expect(hold.instruction, isNot(matches(RegExp(r'\breps?\b'))));
+    }
+  });
+
+  test('recovery, deload, pain re-entry, travel, and warm-ups suppress micro cues', () {
+    Map<String, ExerciseState> stagedStates() => {
+          ...baseStates(),
+          'squat': ExerciseState(
+            trackKey: 'squat',
+            pattern: MovementPattern.squat,
+            currentLoad: 24,
+            lastTrainedDate: today.subtract(const Duration(days: 2)),
+            microStepStage: 2,
+          ),
+        };
+
+    final yellow = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 3,
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: stagedStates(),
+    ));
+    final yellowWork = yellow.trace.plan!.exercises.where(
+      (exercise) => !exercise.isWarmup,
+    );
+    expect(yellow.trace.recovery.bucket, ReadinessBucket.yellow);
+    expect(yellowWork.every((exercise) => exercise.instruction == null), isTrue);
+
+    final deloadStates = stagedStates();
+    deloadStates['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 24,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+      status: ExerciseStatus.deload,
+      deloadSessionsRemaining: 1,
+      preDeloadLoad: 24,
+      microStepStage: 2,
+    );
+    final deload = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: deloadStates,
+    ));
+    final deloadSquat = deload.trace.plan!.exercises.firstWhere(
+      (exercise) =>
+          !exercise.isWarmup && exercise.pattern == MovementPattern.squat,
+    );
+    expect(deloadSquat.instruction, isNull);
+
+    final reentryStates = stagedStates();
+    reentryStates['squat'] = ExerciseState(
+      trackKey: 'squat',
+      pattern: MovementPattern.squat,
+      currentLoad: 24,
+      lastTrainedDate: today.subtract(const Duration(days: 2)),
+      painFrozen: true,
+      painSeverity: PainSeverity.sharp,
+      painRegion: BodyRegion.kneeLeft,
+      painFlaggedDate: today.subtract(const Duration(days: 2)),
+      sessionsScheduledWhileFlagged: 2,
+      lastPainScheduledDate: today.subtract(const Duration(days: 1)),
+      prePainLoad: 24,
+      painReentryTestOffered: true,
+      microStepStage: 2,
+    );
+    final reentry = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: reentryStates,
+    ));
+    final reentrySquat = reentry.trace.plan!.exercises.firstWhere(
+      (exercise) =>
+          !exercise.isWarmup && exercise.pattern == MovementPattern.squat,
+    );
+    expect(reentrySquat.instruction, contains('stop if pain returns'));
+    expect(reentrySquat.instruction, isNot(contains('Micro-progression')));
+
+    final travel = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: stagedStates(),
+      settings: const UserSettings(travelMode: true),
+    ));
+    final travelWork = travel.trace.plan!.exercises.where(
+      (exercise) => !exercise.isWarmup,
+    );
+    expect(
+      travelWork.every(
+        (exercise) =>
+            exercise.instruction?.contains('Micro-progression') != true,
+      ),
+      isTrue,
+    );
+    expect(
+      travel.trace.plan!.exercises
+          .where((exercise) => exercise.isWarmup)
+          .every(
+            (exercise) =>
+                exercise.instruction?.contains('Micro-progression') != true,
+          ),
+      isTrue,
+    );
+  });
+
   test('every hold step has an explicit seconds prescription', () {
     final coreSteps = ladders[MovementPattern.coreGrip]!.steps;
     for (final name in ['Plank', 'L-sit progression', 'Hanging', 'Weighted hanging']) {
@@ -930,6 +1807,18 @@ void main() {
           severity: PainSeverity.mild,
           flaggedDate: today,
           tags: const {PainTag.tingling},
+        ),
+        PainFlag(
+          region: BodyRegion.shoulderLeft,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+          tags: const {PainTag.numbness},
+        ),
+        PainFlag(
+          region: BodyRegion.elbow,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+          tags: const {PainTag.radiating},
         ),
       ],
       todaySnapshot: RecoverySnapshot(
@@ -981,6 +1870,18 @@ void main() {
           flaggedDate: today,
           tags: const {PainTag.numbness},
         ),
+        PainFlag(
+          region: BodyRegion.shoulderLeft,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+          tags: const {PainTag.tingling},
+        ),
+        PainFlag(
+          region: BodyRegion.elbow,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+          tags: const {PainTag.radiating},
+        ),
       ],
       todaySnapshot: RecoverySnapshot(
         date: today,
@@ -1000,7 +1901,32 @@ void main() {
     expect(explanation, english);
   });
 
-  test('weekend prioritization selects S6 and emits its matching rule', () {
+  test('new selection rationales have deterministic EN/DE fallback copy', () {
+    const recovery = FiredRule(RuleKey.easyRecoveryCardio);
+    const manual = FiredRule(
+      RuleKey.manualSessionOverride,
+      params: {'session': 'Upper Strength'},
+    );
+
+    expect(
+      fallbackText(recovery, AppLanguage.en),
+      contains('no current base-aerobic deficit'),
+    );
+    expect(
+      fallbackText(recovery, AppLanguage.de),
+      contains('kein aktuelles Grundlagendefizit'),
+    );
+    expect(fallbackText(manual, AppLanguage.en), contains('Upper Strength'));
+    expect(fallbackText(manual, AppLanguage.de), contains('Upper Strength'));
+    final yellow = fallbackText(
+      const FiredRule(RuleKey.yellowVolumeCut),
+      AppLanguage.en,
+    );
+    expect(yellow, contains('training volume is reduced'));
+    expect(yellow, isNot(contains('%')));
+  });
+
+  test('long base deficit selects S6 without weekend gating', () {
     final saturday = DateTime(2026, 1, 24);
     final weekendHistory = List.generate(
       20,
@@ -1029,14 +1955,16 @@ void main() {
       recoveryHistory: weekendHistory,
       exerciseStates: const {},
       sessionLogs: weekendLogs,
+      forceQueuePointer: false,
     ));
 
     expect(output.trace.plan!.sessionId, SessionTypeId.s6);
-    expect(output.trace.firedRuleCodes, contains('S6_WEEKEND_RULE'));
+    expect(output.trace.firedRuleCodes, contains('BASE_LONG_DEFICIT'));
     final s6 = output.trace.candidates.firstWhere(
       (candidate) => candidate.sessionId == SessionTypeId.s6,
     );
-    expect(s6.scoreTerms['weekendPriority'], 50);
+    expect(s6.scoreTerms['baseLongDeficit'], 15000);
+    expect(s6.scoreTerms, isNot(contains('weekendPriority')));
   });
 
   test('a RED weekend S6 winner remains Zone 2 and never becomes a technique session', () {
@@ -1052,6 +1980,7 @@ void main() {
       asOf: saturday,
       exerciseStates: const {},
       sessionLogs: weekendLogs,
+      forceQueuePointer: false,
     ));
 
     expect(output.trace.recovery.bucket, ReadinessBucket.red);
@@ -1061,7 +1990,7 @@ void main() {
     expect(output.trace.firedRuleCodes, isNot(contains('RED_SWAP_TECHNIQUE')));
   });
 
-  test('cardio duration is capped at its type duration and non-cycle cardio gets no credit', () {
+  test('CAROL presets keep fixed duration and full tier', () {
     final s3 = decisionEngine.decide(buildInput(
       time: 60,
       subjective: 4,
@@ -1089,9 +2018,101 @@ void main() {
       forcedSessionId: SessionTypeId.s7,
     ));
 
-    expect(s3.trace.plan!.estimatedDurationMin, 35);
-    expect(s7.trace.plan!.estimatedDurationMin, 10);
+    expect(s3.trace.plan!.estimatedDurationMin, 30);
+    expect(s3.trace.plan!.tier, SessionTier.full);
+    expect(s7.trace.plan!.estimatedDurationMin, 9);
+    expect(s7.trace.plan!.tier, SessionTier.full);
     expect(s7.trace.plan!.grantsQueueCredit, isFalse);
+  });
+
+  test('all emitted cardio plans carry exact explicit prescriptions', () {
+    DecisionEngineOutput outputFor(
+      SessionTypeId id,
+      int time, {
+      UserSettings settings = const UserSettings(age: 40),
+    }) =>
+        decisionEngine.decide(buildInput(
+          time: time,
+          subjective: 4,
+          todaySnapshot: RecoverySnapshot(
+            date: today,
+            hrvRmssd: 50,
+            restingHr: 60,
+            sleepScore: 90,
+          ),
+          recoveryHistory: normalHrvHistory(),
+          sessionLogs: floorSatisfiedLogs(),
+          settings: settings,
+          forcedSessionId: id,
+        ));
+
+    final fourByFour = outputFor(SessionTypeId.s3, 60).trace.plan!;
+    final p4 = fourByFour.cardioPrescription!;
+    expect(p4.protocol.type, CardioProtocolType.norwegian4x4);
+    expect(p4.plannedDurationSeconds, 1800);
+    expect(p4.plannedWorkIntervals, 4);
+    expect(p4.plannedWorkSeconds, 960);
+    expect(p4.plannedRecoveryIntervals, 3);
+    expect(p4.plannedRecoverySeconds, 540);
+    // Default HRmax for age 40 is 180: 85-95% = 153-171 bpm.
+    expect(p4.targetHeartRateMinBpm, closeTo(153, 0.0001));
+    expect(p4.targetHeartRateMaxBpm, closeTo(171, 0.0001));
+    expect(p4.targetRpeMin, 8);
+    expect(p4.targetRpeMax, 9);
+
+    for (final minutes in [35, 60]) {
+      final base = outputFor(
+        SessionTypeId.s6,
+        minutes,
+        settings: const UserSettings(age: 40, hrMaxOverride: 200),
+      ).trace.plan!;
+      final p6 = base.cardioPrescription!;
+      expect(base.estimatedDurationMin, minutes);
+      expect(p6.protocol.type, CardioProtocolType.zone2Base);
+      expect(p6.plannedWorkIntervals, 1);
+      expect(p6.plannedWorkSeconds, minutes * 60);
+      expect(p6.plannedDurationSeconds, minutes * 60);
+      expect(p6.targetHeartRateMinBpm, 130);
+      expect(p6.targetHeartRateMaxBpm, 150);
+      expect(p6.targetRpeMin, 3);
+      expect(p6.targetRpeMax, 4);
+    }
+
+    final rehit = outputFor(SessionTypeId.s7, 35).trace.plan!;
+    final p7 = rehit.cardioPrescription!;
+    expect(p7.protocol.type, CardioProtocolType.rehit);
+    expect(p7.plannedDurationSeconds, 300);
+    expect(p7.plannedWorkIntervals, 2);
+    expect(p7.plannedWorkSeconds, 40);
+    expect(p7.plannedRecoveryIntervals, 0);
+    expect(p7.plannedRecoverySeconds, 0);
+    expect(p7.targetHeartRateMinBpm, isNull);
+    expect(p7.targetRpeMin, 9);
+    expect(p7.targetRpeMax, 10);
+  });
+
+  test('RED 20-minute safety swap stays inside the slot and is non-qualifying base work', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 20,
+      subjective: 1,
+      queueState: const QueueState(pointer: SessionTypeId.s3),
+      sessionLogs: floorSatisfiedLogs(),
+      forcedSessionId: SessionTypeId.s3,
+    ));
+
+    final plan = output.trace.plan!;
+    expect(plan.sessionId, SessionTypeId.s6);
+    expect(plan.estimatedDurationMin, 20);
+    expect(plan.grantsQueueCredit, isFalse);
+    expect(plan.cardioPrescription!.plannedDurationSeconds, 1200);
+    expect(plan.cardioPrescription!.plannedWorkSeconds, 1200);
+    expect(plan.exercises, isEmpty);
+    final completion = const CardioEngine().completionFromEntry(
+      prescription: plan.cardioPrescription!,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 20,
+    );
+    expect(completion.meetsCreditableDose, isFalse);
   });
 
   test('cardio plans contain no app-added warm-up exercises', () {
@@ -1112,6 +2133,7 @@ void main() {
       final plan = output.trace.plan!;
       expect(plan.exercises, isEmpty, reason: id.name);
       expect(plan.plannedWorkSets, 0, reason: id.name);
+      expect(plan.cardioPrescription, isNotNull, reason: id.name);
     }
   });
 
@@ -1187,6 +2209,11 @@ void main() {
         isFalse,
       );
       expect(output.patchedExerciseStates['squat']!.painRegion, BodyRegion.kneeLeft);
+      expect(
+        output.patchedExerciseStates['squat']!
+            .sessionsScheduledWhileFlagged,
+        0,
+      );
     }
   });
 
@@ -1243,7 +2270,7 @@ void main() {
     expect(second.patchedExerciseStates['squat']!.painTags, contains(PainTag.radiating));
   });
 
-  test('equal recency ties use a stable movement-pattern order', () {
+  test('exercise-state insertion order does not affect v2 target scores', () {
     final squat = ExerciseState(
       trackKey: 'squat',
       pattern: MovementPattern.squat,
@@ -1265,12 +2292,20 @@ void main() {
           sessionLogs: floorSatisfiedLogs(),
           queueState: const QueueState(pointer: SessionTypeId.s1),
           exerciseStates: states,
-        )));
+        ))).toList();
 
     for (final output in outputs) {
       expect(output.trace.plan!.sessionId, SessionTypeId.s1);
-      expect(output.trace.firedRuleCodes, contains('RECENCY_BOOST_SQUAT'));
+      expect(output.trace.firedRuleCodes, contains('MUSCLE_STIMULUS_DEFICIT'));
+      expect(
+        output.trace.firedRuleCodes.where((code) => code.startsWith('RECENCY_')),
+        isEmpty,
+      );
     }
+    expect(
+      outputs.first.trace.candidates.map((candidate) => candidate.score),
+      outputs.last.trace.candidates.map((candidate) => candidate.score),
+    );
   });
 
   test('readiness prescriptions persist progression eligibility and exact RED RIR', () {
@@ -1301,6 +2336,42 @@ void main() {
     expect(redWork.every((exercise) => exercise.rirTarget == Rir.rir4plus), isTrue);
   });
 
+  test('YELLOW and RED keep active deload work prescribed at RIR 4+', () {
+    for (final subjective in [3, 1]) {
+      final states = baseStates();
+      states['squat'] = ExerciseState(
+        trackKey: 'squat',
+        pattern: MovementPattern.squat,
+        currentLoad: 24,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 2,
+        preDeloadLoad: 24,
+      );
+      final output = decisionEngine.decide(buildInput(
+        time: 35,
+        subjective: subjective,
+        sessionLogs: floorSatisfiedLogs(),
+        queueState: const QueueState(pointer: SessionTypeId.s1),
+        exerciseStates: states,
+      ));
+      final squat = output.trace.plan!.exercises.firstWhere(
+        (exercise) =>
+            !exercise.isWarmup && exercise.trackKey == 'squat',
+      );
+
+      expect(
+        output.trace.recovery.bucket,
+        subjective == 1 ? ReadinessBucket.red : ReadinessBucket.yellow,
+      );
+      expect(squat.progressionEligible, isFalse);
+      expect(squat.rirTarget, Rir.rir4plus);
+      expect(
+        output.trace.firedRuleCodes,
+        contains('DELOAD_ACTIVE_SQUAT'),
+      );
+    }
+  });
+
   test('20-minute S3 priority substitutes to S7 without compression trace or queue credit', () {
     final output = decisionEngine.decide(buildInput(
       time: 20,
@@ -1313,6 +2384,8 @@ void main() {
 
     expect(output.trace.candidates.map((candidate) => candidate.sessionId), contains(SessionTypeId.s3));
     expect(output.trace.plan!.sessionId, SessionTypeId.s7);
+    expect(output.trace.plan!.tier, SessionTier.full);
+    expect(output.trace.plan!.estimatedDurationMin, 9);
     expect(output.trace.plan!.grantsQueueCredit, isFalse);
     expect(output.trace.firedRuleCodes, contains('S7_TIME_SUB'));
     expect(output.trace.firedRuleCodes, isNot(contains('TIME_COMPRESS_35_20')));
@@ -1344,6 +2417,8 @@ void main() {
       sessionLogs: floorSatisfiedLogs(),
       forcedSessionId: SessionTypeId.s7,
     ));
+    expect(output.trace.plan!.tier, SessionTier.full);
+    expect(output.trace.plan!.estimatedDurationMin, 9);
     expect(output.trace.firedRuleCodes, isNot(contains('TIME_COMPRESS_35_20')));
   });
 
@@ -1376,6 +2451,107 @@ void main() {
     ));
     expect(hipSwap.trace.plan!.sessionId, isNot(SessionTypeId.s1));
     expect(hipSwap.trace.firedRuleCodes, isNot(contains('QUEUE_NEXT')));
+  });
+
+  test('leg-heavy demotion explains a natural non-pointer redirect', () {
+    SessionLog bicepsHistory(String id, DateTime at, int setCount) =>
+        SessionLog(
+          id: id,
+          templateId: SessionTypeId.s5,
+          tier: SessionTier.full,
+          date: at,
+          completedAt: at,
+          setLogs: [
+            for (var index = 0; index < setCount; index++)
+              SetLog(
+                trackKey: 'sub:coreGrip:db_curl',
+                pattern: MovementPattern.coreGrip,
+                exerciseName: 'DB curl',
+                weight: 8,
+                value: 10,
+                rir: Rir.rir2,
+                timestamp: at,
+              ),
+          ],
+          plannedWorkSets: setCount,
+          completedWorkSets: setCount,
+          durationMinutes: 20,
+          countsAs: const {FloorCategory.strength},
+        );
+    final output = decisionEngine.decide(buildInput(
+      time: 20,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      queueState: const QueueState(pointer: SessionTypeId.s1),
+      sessionLogs: [
+        ...floorSatisfiedLogs(),
+        // Biceps sits at 10 sets in 7d and the 40-set 28d center. That makes
+        // S1 beat S2 by only its one-point queue edge before the -30
+        // back-to-back leg penalty, and S2 win after the penalty.
+        bicepsHistory(
+          'biceps-recent',
+          today.subtract(const Duration(days: 2)),
+          10,
+        ),
+        bicepsHistory(
+          'biceps-older',
+          today.subtract(const Duration(days: 14)),
+          30,
+        ),
+        buildLog(
+          SessionTypeId.s1,
+          today.subtract(const Duration(days: 1)),
+          {FloorCategory.strength},
+        ),
+      ],
+      forceQueuePointer: false,
+    ));
+
+    expect(output.trace.plan!.sessionId, SessionTypeId.s2);
+    expect(output.trace.firedRuleCodes, contains('LEGHEAVY_DEMOTED'));
+    expect(output.trace.firedRuleCodes, isNot(contains('QUEUE_NEXT')));
+  });
+
+  test('empty legacy rule list never fabricates queue provenance', () async {
+    final source = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      forceQueuePointer: false,
+    )).trace;
+    final legacy = DecisionTrace(
+      date: source.date,
+      checkin: source.checkin,
+      recovery: source.recovery,
+      candidates: source.candidates,
+      firedRules: const [],
+      plan: source.plan,
+      queue: source.queue,
+      restReason: source.restReason,
+    );
+
+    final explanation = await const AiExplainer().dailyExplanation(
+      legacy,
+      const UserSettings(),
+    );
+    expect(
+      explanation,
+      'No decision rationale was recorded for this saved plan.',
+    );
+    expect(explanation, isNot(contains('queue')));
   });
 
   test('floor rationale is omitted when a forced plan does not cover the pressured category', () {

@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/floor_category.dart';
 import '../../models/movement_pattern.dart';
 import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
+
+String _editableHrMax(double? value) {
+  if (value == null) return '';
+  if (!value.isFinite) return value.toString();
+  return value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,7 +37,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _settings = context.read<AppController>().settings;
     _ageController = TextEditingController(text: _settings.age.toString());
-    _hrMaxController = TextEditingController(text: _settings.hrMaxOverride?.toStringAsFixed(0) ?? '');
+    _hrMaxController = TextEditingController(
+      text: _editableHrMax(_settings.hrMaxOverride),
+    );
     _ouraClientIdController = TextEditingController(text: _settings.oura.clientId ?? '');
     _ouraClientSecretController = TextEditingController(text: _settings.oura.clientSecret ?? '');
     _apiKeyController = TextEditingController(text: _settings.anthropicApiKey ?? '');
@@ -51,14 +60,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// OAuth redirect while this screen was open - never gets clobbered by
   /// an unrelated field edit here.
   Future<void> _save() async {
+    final ageText = _ageController.text.trim();
+    final age = int.tryParse(ageText);
+    if (age == null || age < 1 || age > 120) {
+      _showSaveValidationError(
+        'Age must be a whole number from 1 to 120.',
+      );
+      return;
+    }
+
+    final hrMaxText = _hrMaxController.text.trim();
+    final parsedHrMax = hrMaxText.isEmpty ? null : double.tryParse(hrMaxText);
+    if (hrMaxText.isNotEmpty &&
+        (parsedHrMax == null ||
+            !parsedHrMax.isFinite ||
+            parsedHrMax < 30 ||
+            parsedHrMax > 260)) {
+      _showSaveValidationError(
+        'HRmax override must be a finite number from 30 to 260, or left blank.',
+      );
+      return;
+    }
+
+    final apiKeyText = _apiKeyController.text.trim();
     final controller = context.read<AppController>();
     final newSettings = controller.settings.copyWith(
       equipment: _settings.equipment,
-      weeklyFloor: _settings.weeklyFloor,
       language: _settings.language,
-      age: int.tryParse(_ageController.text) ?? _settings.age,
-      hrMaxOverride: double.tryParse(_hrMaxController.text),
-      anthropicApiKey: _apiKeyController.text.isEmpty ? null : _apiKeyController.text,
+      age: age,
+      hrMaxOverride: parsedHrMax,
+      clearHrMaxOverride: hrMaxText.isEmpty,
+      anthropicApiKey: apiKeyText.isEmpty ? null : apiKeyText,
+      clearAnthropicApiKey: apiKeyText.isEmpty,
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
       travelMode: _settings.travelMode,
       notificationsEnabled: _settings.notificationsEnabled,
@@ -66,6 +99,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+  }
+
+  void _showSaveValidationError(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _connectOura() async {
@@ -185,7 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               secondary: const Icon(Icons.luggage_outlined),
               title: const Text('Travel mode (no equipment)'),
               subtitle: const Text('Uses bodyweight and self-resisted variants. Load progression pauses, '
-                  'but sessions still count toward your rotation and weekly targets.'),
+                  'but completed work still contributes to your stimulus history.'),
               value: _settings.travelMode,
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(travelMode: v);
@@ -233,38 +273,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               },
             ),
-            const Divider(height: 32),
-            Text('Weekly floor', style: Theme.of(context).textTheme.titleMedium),
-            Text(
-              'Design spec default (§2.2): >= 2 strength, >= 1 intensity per rolling 7 days. '
-              'Change these only if you deliberately want a different minimum.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 4),
-            ListTile(
-              title: const Text('Strength sessions / week'),
-              subtitle: Text(
-                (_settings.weeklyFloor[FloorCategory.strength] ?? 2) == 2 ? 'Spec default' : 'Spec default is 2',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              trailing: _stepper(
-                _settings.weeklyFloor[FloorCategory.strength] ?? 2,
-                (v) => setState(() => _settings = _settings.copyWith(
-                    weeklyFloor: {..._settings.weeklyFloor, FloorCategory.strength: v})),
-              ),
-            ),
-            ListTile(
-              title: const Text('Intensity sessions / week'),
-              subtitle: Text(
-                (_settings.weeklyFloor[FloorCategory.intensity] ?? 1) == 1 ? 'Spec default' : 'Spec default is 1',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              trailing: _stepper(
-                _settings.weeklyFloor[FloorCategory.intensity] ?? 1,
-                (v) => setState(() => _settings = _settings.copyWith(
-                    weeklyFloor: {..._settings.weeklyFloor, FloorCategory.intensity: v})),
-              ),
-            ),
             if (frozenTracks.isNotEmpty) ...[
               const Divider(height: 32),
               Text('Pain progression freezes', style: Theme.of(context).textTheme.titleMedium),
@@ -292,11 +300,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             const Divider(height: 32),
             Text('Profile', style: Theme.of(context).textTheme.titleMedium),
-            TextField(controller: _ageController, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number),
             TextField(
+              key: const Key('settings-age'),
+              controller: _ageController,
+              decoration: const InputDecoration(labelText: 'Age'),
+              keyboardType: TextInputType.number,
+            ),
+            TextField(
+              key: const Key('settings-hr-max'),
               controller: _hrMaxController,
               decoration: const InputDecoration(labelText: 'HRmax override (blank = 208 - 0.7 x age)'),
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const Divider(height: 32),
             Text('Language', style: Theme.of(context).textTheme.titleMedium),
@@ -437,12 +453,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (v) => setState(() => _settings = _settings.copyWith(aiExplanationsEnabled: v)),
             ),
             TextField(
+              key: const Key('settings-anthropic-api-key'),
               controller: _apiKeyController,
               decoration: const InputDecoration(labelText: 'Anthropic API key (for AI "why" text)'),
               obscureText: true,
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: _save, child: const Text('Save settings')),
+            FilledButton(
+              key: const Key('settings-save'),
+              onPressed: _save,
+              child: const Text('Save settings'),
+            ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: () => _confirmManualDeload(context),
@@ -465,8 +486,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'half the work sets, and RIR >= 4 (leave a lot in the tank). '
           "It's shown in the app as a deload, not a setback.\n\n"
           'After those 2 sessions, each pattern automatically returns to normal progression '
-          '(one small step back from where it was, so you ease back in rather than jumping '
-          'straight to your old working weight).\n\n'
+          'from its saved exercise and load, backed off by exactly one available prescription '
+          'step (a dumbbell increment, 5 lb of backpack load, or one tempo/pause/ROM or '
+          'bodyweight/hold-ladder stage).\n\n'
           "Use this when you're feeling generally beat up and want a planned lighter block, "
           'not for a single sore muscle or joint - use the pain flag on the check-in for that instead.',
         ),
@@ -523,16 +545,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '${spaced[0].toUpperCase()}${spaced.substring(1)}';
   }
 
-  Widget _stepper(int value, void Function(int) onChanged) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(onPressed: () => onChanged((value - 1).clamp(0, 7)), icon: const Icon(Icons.remove)),
-        Text('$value'),
-        IconButton(onPressed: () => onChanged((value + 1).clamp(0, 7)), icon: const Icon(Icons.add)),
-      ],
-    );
-  }
 }
 
 class _OuraStatusChip extends StatelessWidget {

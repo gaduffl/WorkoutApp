@@ -12,6 +12,7 @@ import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/ui/screens/checkin_screen.dart';
 import 'package:morningcoach/ui/screens/logger_screen.dart';
+import 'package:morningcoach/ui/screens/settings_screen.dart';
 
 /// Widget-level smoke test for the check-in screen. Deliberately avoids
 /// calling `AppController.init()` (which opens the on-device sqflite
@@ -44,6 +45,22 @@ void main() {
 
     final buttonAfter = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(buttonAfter.onPressed, isNotNull);
+  });
+
+  testWidgets('Settings does not expose ignored legacy weekly floors',
+      (WidgetTester tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+
+    expect(find.text('Weekly floor'), findsNothing);
+    expect(find.text('Strength sessions / week'), findsNothing);
+    expect(find.text('Intensity sessions / week'), findsNothing);
   });
 
   testWidgets('travel logger shows context and starts at the prescribed RIR', (WidgetTester tester) async {

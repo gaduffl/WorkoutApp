@@ -10,7 +10,7 @@ class CardioProtocol {
 
   static const norwegian4x4 = CardioProtocol(
     type: CardioProtocolType.norwegian4x4,
-    name: 'Norwegian 4x4',
+    name: 'CAROL 4×4 Norwegian Zone 5 Intervals',
   );
   static const zone2Base = CardioProtocol(
     type: CardioProtocolType.zone2Base,
@@ -18,15 +18,16 @@ class CardioProtocol {
   );
   static const rehit = CardioProtocol(
     type: CardioProtocolType.rehit,
-    name: 'REHIT',
+    name: 'CAROL REHIT Intense',
   );
 }
 
 /// Exact dose the app prescribed for a cardio session.
 ///
 /// Work and recovery seconds are totals across the stated interval counts.
-/// [plannedDurationSeconds] also includes any protocol-owned preparation,
-/// transitions, and cooldown.
+/// [plannedDurationSeconds] is the total bike-guided preset or continuous
+/// duration. CAROL-owned warm-up, transitions, and cooldown are deliberately
+/// not decomposed into app-authored segments.
 class CardioPrescription {
   final CardioProtocol protocol;
   final int plannedWorkIntervals;
@@ -101,4 +102,37 @@ class CardioCompletion {
         assert(averageHeartRateBpm == null || averageHeartRateBpm > 0),
         assert(peakHeartRateBpm == null || peakHeartRateBpm > 0),
         assert(rpe == null || (rpe >= 0 && rpe <= 10));
+
+  /// Whether this attempt delivered the minimum dose that earns training
+  /// credit. The stimuli stay intentionally separate: a short REHIT never
+  /// stands in for 4x4 or base work, and a sub-30-minute easy ride is still
+  /// useful recovery without becoming a qualifying base exposure.
+  bool get meetsCreditableDose => switch (protocol.type) {
+        CardioProtocolType.norwegian4x4 =>
+          completedWorkIntervals == 4 && completedWorkSeconds >= 960,
+        CardioProtocolType.zone2Base =>
+          completedWorkIntervals == 1 &&
+              completedWorkSeconds >= 1800 &&
+              completedDurationSeconds >= 1800,
+        CardioProtocolType.rehit =>
+          completedWorkIntervals == 2 && completedWorkSeconds >= 40,
+      };
+
+  /// Whether the recorded dose completed the exact plan that was shown.
+  ///
+  /// This is deliberately separate from [meetsCreditableDose]. For example,
+  /// a prescribed 20-minute S6 recovery ride is complete as prescribed even
+  /// though it is below the 30-minute threshold for base-aerobic credit. In
+  /// the other direction, 30 minutes of a prescribed 35-minute S6 earns base
+  /// credit but is still only a partial completion of that plan.
+  ///
+  /// Heart-rate and RPE targets are coaching ranges rather than required
+  /// completion fields, so adherence here compares the prescribed dose only.
+  bool completesPrescription(CardioPrescription prescription) =>
+      protocol.type == prescription.protocol.type &&
+      completedWorkIntervals >= prescription.plannedWorkIntervals &&
+      completedWorkSeconds >= prescription.plannedWorkSeconds &&
+      completedRecoveryIntervals >= prescription.plannedRecoveryIntervals &&
+      completedRecoverySeconds >= prescription.plannedRecoverySeconds &&
+      completedDurationSeconds >= prescription.plannedDurationSeconds;
 }

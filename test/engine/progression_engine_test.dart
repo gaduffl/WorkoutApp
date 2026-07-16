@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:morningcoach/engine/intensity_recovery_policy.dart';
 import 'package:morningcoach/engine/progression_engine.dart';
 import 'package:morningcoach/models/equipment.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
@@ -79,6 +80,26 @@ void main() {
 
       expect(result.currentLoad, 60);
       expect(result.lastTrainedDate, isNull);
+      expect(result.microStepStage, 0);
+    });
+
+    test('zero-value work never drives progression or training recency', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 60,
+        ladderStepIndex: 2,
+      );
+      final result = engine.evaluateSession(
+        state,
+        [set(reps: 0, rir: Rir.rir4plus)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentLoad, 60);
+      expect(result.lastTrainedDate, isNull);
+      expect(result.status, ExerciseStatus.progress);
       expect(result.microStepStage, 0);
     });
 
@@ -183,6 +204,28 @@ void main() {
       }
     });
 
+    test('below-minimum work cannot pass the one-shot undershoot check', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 40,
+        ladderStepIndex: 2,
+        awaitingUndershootCheck: true,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [set(reps: 4, rir: Rir.rir4plus, weight: 40)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentLoad, 40);
+      expect(result.awaitingUndershootCheck, isFalse);
+      expect(result.status, ExerciseStatus.hold);
+      expect(result.consecutiveHoldCount, 1);
+    });
+
     test('a >10% jump stalls one session on tempo before the load actually jumps', () {
       // Large-block-only rig so the canonical 30 -> 40 press example (+33%,
       // matching §2.6's illustrative jump) is unambiguous: with both blocks
@@ -223,9 +266,271 @@ void main() {
       expect(state.status, ExerciseStatus.regress);
       expect(state.currentLoad, lessThan(60));
     });
+
+    test('bodyweight regression removes one active micro-progression', () {
+      var state = ExerciseState(
+        trackKey: 'pushHorizontal',
+        pattern: MovementPattern.pushHorizontal,
+        microStepStage: 2,
+      );
+      SetLog missed() => SetLog(
+            trackKey: 'pushHorizontal',
+            pattern: MovementPattern.pushHorizontal,
+            exerciseName: 'Push-up',
+            weight: 0,
+            value: 2,
+            rir: Rir.rir0,
+            timestamp: today,
+          );
+
+      state = engine.evaluateSession(
+        state,
+        [missed()],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      state = engine.evaluateSession(
+        state,
+        [missed()],
+        equipmentConfig: cfg,
+        sessionDate: today.add(const Duration(days: 3)),
+      );
+
+      expect(state.status, ExerciseStatus.regress);
+      expect(state.microStepStage, 1);
+      expect(state.ladderStepIndex, 0);
+    });
+
+    test('timed-hold regression returns to the prior final micro stage', () {
+      var state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 1,
+      );
+      SetLog missedHold() => SetLog(
+            trackKey: 'coreGrip',
+            pattern: MovementPattern.coreGrip,
+            exerciseName: 'L-sit progression',
+            weight: 0,
+            metric: ExerciseMetric.seconds,
+            value: 5,
+            rir: Rir.rir0,
+            timestamp: today,
+          );
+
+      state = engine.evaluateSession(
+        state,
+        [missedHold()],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      state = engine.evaluateSession(
+        state,
+        [missedHold()],
+        equipmentConfig: cfg,
+        sessionDate: today.add(const Duration(days: 3)),
+      );
+
+      expect(state.status, ExerciseStatus.regress);
+      expect(state.microStepStage, 3);
+      expect(state.ladderStepIndex, 0);
+      expect(engine.ladderStepFor(state).name, 'Plank');
+    });
   });
 
   group('§6.3 deload trigger', () {
+    test('global deload materializes every built-in progressable track', () {
+      final states = engine.forceGlobalDeloadForBuiltInTracks(const {});
+      final expectedKeys = {
+        'squat',
+        'hinge',
+        'pushHorizontal',
+        'pushVertical',
+        'pullVertical',
+        'pullHorizontal',
+        'coreGrip',
+        dbCurl.trackKey,
+        lateralRaise.trackKey,
+        overheadTriceps.trackKey,
+      };
+
+      expect(states.keys.toSet(), expectedKeys);
+      expect(states, isNot(contains('kneeHealth')));
+      expect(states, isNot(contains(bridgeHamstringCurl.trackKey)));
+      expect(states, isNot(contains(lightSingleLegRdl.trackKey)));
+      expect(states, isNot(contains(floorPress.trackKey)));
+      expect(
+        states.values,
+        everyElement(
+          isA<ExerciseState>()
+              .having((state) => state.status, 'status', ExerciseStatus.deload)
+              .having(
+                (state) => state.deloadSessionsRemaining,
+                'remaining touches',
+                2,
+              ),
+        ),
+      );
+    });
+
+    test('global materialization preserves existing pain and deload state', () {
+      final flaggedAt = today.subtract(const Duration(days: 2));
+      final historicalSubstitute = ExerciseState(
+        trackKey: bridgeHamstringCurl.trackKey,
+        pattern: bridgeHamstringCurl.pattern,
+        currentLoad: 10,
+        lastTrainedDate: flaggedAt,
+      );
+      final importedTrack = ExerciseState(
+        trackKey: 'imported:custom-row',
+        pattern: MovementPattern.pullHorizontal,
+        ladderStepIndex: 2,
+        currentLoad: 42,
+        status: ExerciseStatus.hold,
+      );
+      final states = engine.forceGlobalDeloadForBuiltInTracks({
+        'hinge': ExerciseState(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          ladderStepIndex: 3,
+          currentLoad: 90,
+          status: ExerciseStatus.hold,
+          painFrozen: true,
+          painSeverity: PainSeverity.sharp,
+          painRegion: BodyRegion.lowerBack,
+          painFlaggedDate: flaggedAt,
+          painTags: const {PainTag.tingling},
+          sessionsScheduledWhileFlagged: 1,
+          prePainLoad: 100,
+          prePainLadderStepIndex: 4,
+        ),
+        'squat': ExerciseState(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          currentLoad: 24,
+          status: ExerciseStatus.deload,
+          deloadSessionsRemaining: 1,
+          preDeloadLoad: 24,
+        ),
+        bridgeHamstringCurl.trackKey: historicalSubstitute,
+        importedTrack.trackKey: importedTrack,
+      });
+
+      final hinge = states['hinge']!;
+      expect(hinge.status, ExerciseStatus.hold);
+      expect(hinge.painFrozen, isTrue);
+      expect(hinge.painSeverity, PainSeverity.sharp);
+      expect(hinge.painRegion, BodyRegion.lowerBack);
+      expect(hinge.painFlaggedDate, flaggedAt);
+      expect(hinge.painTags, {PainTag.tingling});
+      expect(hinge.sessionsScheduledWhileFlagged, 1);
+      expect(hinge.prePainLoad, 100);
+      expect(hinge.prePainLadderStepIndex, 4);
+      expect(hinge.currentLoad, 90);
+      expect(hinge.ladderStepIndex, 3);
+      expect(states['squat']!.deloadSessionsRemaining, 1);
+      expect(
+        identical(
+          states[bridgeHamstringCurl.trackKey],
+          historicalSubstitute,
+        ),
+        isTrue,
+      );
+      expect(
+        states[bridgeHamstringCurl.trackKey]!.status,
+        ExerciseStatus.progress,
+      );
+      expect(states[bridgeHamstringCurl.trackKey]!.deloadSessionsRemaining, 0);
+      expect(
+        states[bridgeHamstringCurl.trackKey]!.preDeloadLoad,
+        isNull,
+      );
+      expect(identical(states[importedTrack.trackKey], importedTrack), isTrue);
+      expect(states[importedTrack.trackKey]!.status, ExerciseStatus.hold);
+      expect(states[importedTrack.trackKey]!.currentLoad, 42);
+    });
+
+    test('global deload clears without ever scheduling a pain substitute', () {
+      final historicalSubstitute = ExerciseState(
+        trackKey: bridgeHamstringCurl.trackKey,
+        pattern: bridgeHamstringCurl.pattern,
+        currentLoad: 10,
+        lastTrainedDate: today.subtract(const Duration(days: 30)),
+      );
+      final states = engine.forceGlobalDeloadForBuiltInTracks({
+        historicalSubstitute.trackKey: historicalSubstitute,
+      });
+      expect(
+        identical(states[historicalSubstitute.trackKey], historicalSubstitute),
+        isTrue,
+      );
+      expect(states, isNot(contains(lightSingleLegRdl.trackKey)));
+      expect(states, isNot(contains(floorPress.trackKey)));
+
+      final normalPlanKeys = states.keys
+          .where((key) => key != historicalSubstitute.trackKey)
+          .toList();
+      for (final key in normalPlanKeys) {
+        var state = states[key]!;
+        for (var touch = 0; touch < 2; touch++) {
+          state = engine.evaluateSession(
+            state,
+            [
+              SetLog(
+                trackKey: state.trackKey,
+                pattern: state.pattern,
+                exerciseName: engine.ladderStepFor(state).name,
+                weight: state.currentLoad,
+                metric: engine.metricFor(state),
+                value: 1,
+                rir: Rir.rir4plus,
+                timestamp: today.add(Duration(days: touch)),
+              ),
+            ],
+            equipmentConfig: cfg,
+            sessionDate: today.add(Duration(days: touch)),
+          );
+        }
+        states[key] = state;
+      }
+
+      expect(
+        normalPlanKeys.map((key) => states[key]!),
+        everyElement(
+          isA<ExerciseState>()
+              .having(
+                (state) => state.status,
+                'status',
+                ExerciseStatus.progress,
+              )
+              .having(
+                (state) => state.deloadSessionsRemaining,
+                'remaining touches',
+                0,
+              ),
+        ),
+      );
+      expect(
+        identical(states[historicalSubstitute.trackKey], historicalSubstitute),
+        isTrue,
+      );
+      expect(historicalSubstitute.status, ExerciseStatus.progress);
+      expect(historicalSubstitute.deloadSessionsRemaining, 0);
+      expect(
+        historicalSubstitute.lastTrainedDate,
+        today.subtract(const Duration(days: 30)),
+      );
+      final safety = const IntensityRecoveryPolicy()
+          .evaluateHighIntensitySafety(
+        logs: const [],
+        asOf: today.add(const Duration(days: 2)),
+        checkInPain: const [],
+        exerciseStates: states.values,
+      );
+      expect(safety.deloadActive, isFalse);
+      expect(safety.blocked, isFalse);
+    });
+
     test('>=2 regressions within a rolling 28 days forces a deload', () {
       var state = ExerciseState(trackKey: 'hinge', pattern: MovementPattern.hinge, currentLoad: 60);
       state.regressionDates.addAll([today.subtract(const Duration(days: 5)), today.subtract(const Duration(days: 10))]);
@@ -249,6 +554,200 @@ void main() {
       state = engine.evaluateSession(state, [set(reps: 8, rir: Rir.rir3plus)], equipmentConfig: cfg, sessionDate: today);
       expect(state.status, ExerciseStatus.progress);
       expect(state.deloadSessionsRemaining, 0);
+    });
+
+    test('a positive prescribed deload entry consumes one touch but no work does not', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 60,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 2,
+        preDeloadLoad: 60,
+      );
+
+      final noWork = engine.evaluateSession(
+        state,
+        const [],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      expect(noWork.deloadSessionsRemaining, 2);
+
+      final completed = engine.evaluateSession(
+        noWork,
+        [set(reps: 8, rir: Rir.rir4plus, weight: 36)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      expect(completed.status, ExerciseStatus.deload);
+      expect(completed.deloadSessionsRemaining, 1);
+      expect(completed.lastTrainedDate, today);
+    });
+
+    test('deload exit restores the saved loaded step then drops one load', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        ladderStepIndex: 0,
+        currentLoad: 24,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadLoad: 60,
+        preDeloadLadderStepIndex: 2,
+        microStepStage: 2,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [set(reps: 8, rir: Rir.rir4plus, weight: 36)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.status, ExerciseStatus.progress);
+      expect(result.ladderStepIndex, 2);
+      expect(engine.ladderStepFor(result).name, 'DB RDL');
+      expect(result.currentLoad, 50);
+      expect(result.microStepStage, 2);
+      expect(result.regressionDates, isEmpty);
+      expect(result.preDeloadLoad, isNull);
+      expect(result.preDeloadLadderStepIndex, isNull);
+    });
+
+    test('deload exit removes one micro stage at the dumbbell floor', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        ladderStepIndex: 0,
+        currentLoad: 60,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadLoad: 12,
+        preDeloadLadderStepIndex: 2,
+        microStepStage: 2,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [set(reps: 8, rir: Rir.rir4plus, weight: 12)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.ladderStepIndex, 2);
+      expect(result.currentLoad, 12);
+      expect(result.microStepStage, 1);
+      expect(result.regressionDates, isEmpty);
+    });
+
+    test('deload exit removes exactly 5 lb from a backpack step', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 0,
+        currentLoad: 0,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadLoad: 25,
+        preDeloadLadderStepIndex: 3,
+        microStepStage: 2,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [
+          SetLog(
+            trackKey: 'coreGrip',
+            pattern: MovementPattern.coreGrip,
+            exerciseName: 'Weighted hanging',
+            weight: 15,
+            metric: ExerciseMetric.seconds,
+            value: 20,
+            rir: Rir.rir4plus,
+            timestamp: today,
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.ladderStepIndex, 3);
+      expect(result.currentLoad, 20);
+      expect(result.microStepStage, 2);
+      expect(result.regressionDates, isEmpty);
+    });
+
+    test('timed-hold deload exit returns to the prior final micro stage', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 0,
+        currentLoad: 0,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadLoad: 0,
+        preDeloadLadderStepIndex: 2,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [
+          SetLog(
+            trackKey: 'coreGrip',
+            pattern: MovementPattern.coreGrip,
+            exerciseName: 'Hanging',
+            weight: 0,
+            metric: ExerciseMetric.seconds,
+            value: 20,
+            rir: Rir.rir4plus,
+            timestamp: today,
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.ladderStepIndex, 1);
+      expect(engine.ladderStepFor(result).name, 'L-sit progression');
+      expect(result.microStepStage, 3);
+      expect(result.currentLoad, 0);
+      expect(result.regressionDates, isEmpty);
+    });
+
+    test('named no-load deload exit never enters its pattern ladder', () {
+      final state = ExerciseState(
+        trackKey: bridgeHamstringCurl.trackKey,
+        pattern: bridgeHamstringCurl.pattern,
+        ladderStepIndex: 4,
+        currentLoad: 0,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadLoad: 0,
+        preDeloadLadderStepIndex: 4,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [
+          SetLog(
+            trackKey: bridgeHamstringCurl.trackKey,
+            pattern: bridgeHamstringCurl.pattern,
+            exerciseName: bridgeHamstringCurl.name,
+            weight: 0,
+            value: 8,
+            rir: Rir.rir4plus,
+            timestamp: today,
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.ladderStepIndex, 4);
+      expect(result.microStepStage, 0);
+      expect(engine.ladderStepFor(result).name, bridgeHamstringCurl.name);
+      expect(result.regressionDates, isEmpty);
     });
 
     test('does not replace the working load with a temporary deload load', () {
@@ -373,6 +872,21 @@ void main() {
   });
 
   group('§6.6 detraining adjustment', () {
+    test('a never-trained exercise stays an onboarding prescription', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 0,
+      );
+
+      final resolution = engine.resolveTodaysPrescription(state, today, cfg);
+
+      expect(resolution.detrainFired, isFalse);
+      expect(resolution.state.currentLoad, 0);
+      expect(resolution.state.ladderStepIndex, 0);
+      expect(identical(resolution.state, state), isTrue);
+    });
+
     test('10-20 days untrained resumes at 90%', () {
       final state = ExerciseState(
         trackKey: 'hinge',

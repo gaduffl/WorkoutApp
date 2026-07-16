@@ -22,7 +22,7 @@ void main() {
       plannedWorkSeconds: 960,
       plannedRecoveryIntervals: 3,
       plannedRecoverySeconds: 540,
-      plannedDurationSeconds: 2100,
+      plannedDurationSeconds: 1800,
       targetHeartRateMinBpm: 150,
       targetHeartRateMaxBpm: 180,
       targetRpeMin: 8,
@@ -30,10 +30,10 @@ void main() {
     );
     const plan = SessionPlan(
       sessionId: SessionTypeId.s3,
-      sessionName: 'Norwegian 4x4 (CAROL)',
+      sessionName: 'CAROL 4×4 Norwegian Zone 5 Intervals',
       tier: SessionTier.full,
       exercises: [],
-      estimatedDurationMin: 35,
+      estimatedDurationMin: 30,
       cardioPrescription: prescription,
     );
 
@@ -45,12 +45,15 @@ void main() {
       restoredPrescription.protocol.type,
       CardioProtocolType.norwegian4x4,
     );
-    expect(restoredPrescription.protocol.name, 'Norwegian 4x4');
+    expect(
+      restoredPrescription.protocol.name,
+      'CAROL 4×4 Norwegian Zone 5 Intervals',
+    );
     expect(restoredPrescription.plannedWorkIntervals, 4);
     expect(restoredPrescription.plannedWorkSeconds, 960);
     expect(restoredPrescription.plannedRecoveryIntervals, 3);
     expect(restoredPrescription.plannedRecoverySeconds, 540);
-    expect(restoredPrescription.plannedDurationSeconds, 2100);
+    expect(restoredPrescription.plannedDurationSeconds, 1800);
     expect(restoredPrescription.targetHeartRateMinBpm, 150);
     expect(restoredPrescription.targetHeartRateMaxBpm, 180);
     expect(restoredPrescription.targetRpeMin, 8);
@@ -68,6 +71,7 @@ void main() {
       completedWorkSets: 0,
       durationMinutes: 31,
       countsAs: const {FloorCategory.intensity},
+      cardioCompletedAsPrescribed: false,
       cardioCompletion: const CardioCompletion(
         protocol: CardioProtocol.norwegian4x4,
         completedWorkIntervals: 3,
@@ -86,6 +90,10 @@ void main() {
     );
     expect(restoredLog.completedAt, completedAt);
     expect(
+      restoredLog.completedAtPrecision,
+      CompletionTimePrecision.exact,
+    );
+    expect(
       restoredLog.cardioCompletion!.protocol.type,
       CardioProtocolType.norwegian4x4,
     );
@@ -97,6 +105,7 @@ void main() {
     expect(restoredLog.cardioCompletion!.averageHeartRateBpm, 157);
     expect(restoredLog.cardioCompletion!.peakHeartRateBpm, 178);
     expect(restoredLog.cardioCompletion!.rpe, 9.5);
+    expect(restoredLog.cardioCompletedAsPrescribed, isFalse);
   });
 
   test('legacy plan and log JSON default all new fields safely', () {
@@ -121,11 +130,75 @@ void main() {
       countsAs: const {FloorCategory.aerobic},
     ))
       ..remove('cardioCompletion')
-      ..remove('completedAt');
+      ..remove('cardioCompletedAsPrescribed')
+      ..remove('completedAt')
+      ..remove('completedAtPrecision');
 
     final restored = sessionLogFromJson(legacyLog);
     expect(restored.cardioCompletion, isNull);
+    expect(restored.cardioCompletedAsPrescribed, isNull);
     expect(restored.completedAt, DateTime(2026, 7, 14));
+    expect(
+      restored.completedAtPrecision,
+      CompletionTimePrecision.dateOnlyInferred,
+    );
+    final roundTrippedLegacy = sessionLogFromJson(
+      _throughJson(sessionLogToJson(restored)),
+    );
+    expect(
+      roundTrippedLegacy.completedAtPrecision,
+      CompletionTimePrecision.dateOnlyInferred,
+    );
+    expect(restored.countsTowardQueueAndFloor, isTrue);
+  });
+
+  test('timestamp rows predating precision metadata remain exact', () {
+    final completedAt = DateTime(2026, 7, 14, 18, 30);
+    final json = sessionLogToJson(SessionLog(
+      id: 'exact-before-precision-field',
+      templateId: SessionTypeId.s7,
+      tier: SessionTier.full,
+      date: DateTime(2026, 7, 14),
+      completedAt: completedAt,
+      setLogs: const [],
+      plannedWorkSets: 0,
+      completedWorkSets: 0,
+      durationMinutes: 10,
+      countsAs: const {FloorCategory.intensity},
+    ))..remove('completedAtPrecision');
+
+    final restored = sessionLogFromJson(json);
+    expect(restored.completedAt, completedAt);
+    expect(restored.completedAtPrecision, CompletionTimePrecision.exact);
+  });
+
+  test('serialized protocol mismatch fails closed without harming legacy logs', () {
+    final malformed = SessionLog(
+      id: 'mismatched-import',
+      templateId: SessionTypeId.s3,
+      tier: SessionTier.full,
+      date: DateTime(2026, 7, 15),
+      setLogs: const [],
+      plannedWorkSets: 0,
+      completedWorkSets: 0,
+      durationMinutes: 10,
+      countsAs: const {FloorCategory.intensity},
+      cardioCompletion: const CardioCompletion(
+        protocol: CardioProtocol.rehit,
+        completedWorkIntervals: 2,
+        completedWorkSeconds: 40,
+        completedRecoveryIntervals: 1,
+        completedRecoverySeconds: 180,
+        completedDurationSeconds: 600,
+      ),
+    );
+
+    final restored = sessionLogFromJson(
+      _throughJson(sessionLogToJson(malformed)),
+    );
+    expect(restored.cardioCompletion!.meetsCreditableDose, isTrue);
+    expect(restored.cardioDoseQualifies, isFalse);
+    expect(restored.countsTowardQueueAndFloor, isFalse);
   });
 
   test('personal targets round-trip without losing target bands', () {

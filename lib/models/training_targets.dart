@@ -1,7 +1,7 @@
 import 'dart:collection';
 
 /// Muscle groups whose direct and indirect work will be tracked by the
-/// stimulus ledger. The decision engine does not consume these targets yet.
+/// stimulus ledger and Decision Engine v2.
 enum MajorMuscleGroup {
   quads,
   glutes,
@@ -37,8 +37,8 @@ class EffectiveSetTargetBand {
 ///
 /// These are optimization targets for the owner of the app, not population
 /// activity guidelines. They are deliberately separate from recommendation
-/// logic so the current decision tree remains unchanged while the new model is
-/// introduced and persisted safely.
+/// logic so the recommendation policy can be tested against an immutable,
+/// explicit target set.
 class TrainingTargets {
   static const EffectiveSetTargetBand defaultHypertrophyBand =
       EffectiveSetTargetBand(minimum: 8, center: 10, maximum: 12);

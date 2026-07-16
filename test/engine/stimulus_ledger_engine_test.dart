@@ -95,13 +95,14 @@ void main() {
     required DateTime completedAt,
     required int durationMinutes,
     required Set<FloorCategory> countsAs,
+    SessionTier tier = SessionTier.full,
     CardioCompletion? cardioCompletion,
     bool rehitFinisherCompleted = false,
   }) =>
       SessionLog(
         id: id,
         templateId: templateId,
-        tier: SessionTier.full,
+        tier: tier,
         date: DateTime(
           completedAt.year,
           completedAt.month,
@@ -278,6 +279,32 @@ void main() {
         isTrue,
       );
     });
+
+    test('cardio-only templates cannot emit imported muscle stimulus', () {
+      final malformed = strengthLog(
+        id: 'malformed-cardio-sets',
+        templateId: SessionTypeId.s3,
+        countsAs: const {FloorCategory.intensity},
+        sets: [
+          set(
+            trackKey: 'squat',
+            pattern: MovementPattern.squat,
+            name: 'Malformed imported squat',
+          ),
+        ],
+      );
+
+      final result = engine.buildFromSessionLogs(
+        logs: [malformed],
+        asOf: asOf,
+      );
+      expect(
+        MajorMuscleGroup.values.every(
+          (muscle) => result.muscle(muscle).effectiveSets28d == 0,
+        ),
+        isTrue,
+      );
+    });
   });
 
   group('protocol-specific cardio stimulus', () {
@@ -319,35 +346,89 @@ void main() {
       expect(result.protocol(CardioProtocolType.rehit).sessions7d, 1);
     });
 
-    test('structured completion overrides misleading template and duration', () {
-      final misleading = cardioLog(
-        id: 'structured-wins',
-        templateId: SessionTypeId.s3,
-        completedAt: asOf,
-        durationMinutes: 60,
-        countsAs: const {FloorCategory.intensity, FloorCategory.aerobic},
-        cardioCompletion: completion(CardioProtocolType.rehit, 10),
-      );
-      final structuredZero = cardioLog(
-        id: 'structured-zero',
-        templateId: SessionTypeId.s6,
-        completedAt: asOf,
-        durationMinutes: 60,
-        countsAs: const {FloorCategory.aerobic},
-        cardioCompletion: completion(CardioProtocolType.zone2Base, 0),
-      );
-
+    test('structured protocol/template mismatches fail closed', () {
+      final mismatches = [
+        cardioLog(
+          id: 's3-rehit-mismatch',
+          templateId: SessionTypeId.s3,
+          completedAt: asOf,
+          durationMinutes: 60,
+          countsAs: const {
+            FloorCategory.intensity,
+            FloorCategory.aerobic,
+          },
+          cardioCompletion: completion(CardioProtocolType.rehit, 10),
+        ),
+        cardioLog(
+          id: 's6-4x4-mismatch',
+          templateId: SessionTypeId.s6,
+          completedAt: asOf,
+          durationMinutes: 35,
+          countsAs: const {FloorCategory.aerobic},
+          cardioCompletion:
+              completion(CardioProtocolType.norwegian4x4, 35),
+        ),
+        cardioLog(
+          id: 's7-base-mismatch',
+          templateId: SessionTypeId.s7,
+          completedAt: asOf,
+          durationMinutes: 30,
+          countsAs: const {FloorCategory.intensity},
+          cardioCompletion: completion(CardioProtocolType.zone2Base, 30),
+        ),
+        cardioLog(
+          id: 's1-rehit-mismatch',
+          templateId: SessionTypeId.s1,
+          completedAt: asOf,
+          durationMinutes: 10,
+          countsAs: const {FloorCategory.strength},
+          cardioCompletion: completion(CardioProtocolType.rehit, 10),
+        ),
+        cardioLog(
+          id: 's2-nonextended-rehit-mismatch',
+          templateId: SessionTypeId.s2,
+          completedAt: asOf,
+          durationMinutes: 60,
+          countsAs: const {
+            FloorCategory.strength,
+            FloorCategory.intensity,
+          },
+          cardioCompletion: completion(CardioProtocolType.rehit, 10),
+        ),
+      ];
       final result = engine.buildFromSessionLogs(
-        logs: [misleading, structuredZero],
+        logs: mismatches,
         asOf: asOf,
       );
-      expect(result.protocol(CardioProtocolType.rehit).sessions7d, 1);
-      expect(result.protocol(CardioProtocolType.rehit).durationMinutes7d, 10);
       expect(
         result.protocol(CardioProtocolType.norwegian4x4).sessions7d,
         0,
       );
       expect(result.protocol(CardioProtocolType.zone2Base).sessions7d, 0);
+      expect(result.protocol(CardioProtocolType.rehit).sessions7d, 0);
+    });
+
+    test('structured extended S2 REHIT finisher remains creditable', () {
+      final result = engine.buildFromSessionLogs(
+        logs: [
+          cardioLog(
+            id: 's2-extended-rehit',
+            templateId: SessionTypeId.s2,
+            tier: SessionTier.extended,
+            completedAt: asOf,
+            durationMinutes: 60,
+            countsAs: const {
+              FloorCategory.strength,
+              FloorCategory.intensity,
+            },
+            cardioCompletion: completion(CardioProtocolType.rehit, 10),
+          ),
+        ],
+        asOf: asOf,
+      );
+
+      expect(result.protocol(CardioProtocolType.rehit).sessions7d, 1);
+      expect(result.protocol(CardioProtocolType.rehit).durationMinutes7d, 10);
     });
 
     test('partial structured attempts cannot satisfy target deficits', () {
@@ -469,7 +550,14 @@ void main() {
           id: 'legacy-4x4',
           templateId: SessionTypeId.s3,
           completedAt: asOf,
-          durationMinutes: 35,
+          durationMinutes: 30,
+          countsAs: const {FloorCategory.intensity},
+        ),
+        cardioLog(
+          id: 'legacy-4x4-too-short',
+          templateId: SessionTypeId.s3,
+          completedAt: asOf,
+          durationMinutes: 29,
           countsAs: const {FloorCategory.intensity},
         ),
         cardioLog(
@@ -483,7 +571,14 @@ void main() {
           id: 'legacy-rehit',
           templateId: SessionTypeId.s7,
           completedAt: asOf,
-          durationMinutes: 8,
+          durationMinutes: 5,
+          countsAs: const {FloorCategory.intensity},
+        ),
+        cardioLog(
+          id: 'legacy-rehit-too-short',
+          templateId: SessionTypeId.s7,
+          completedAt: asOf,
+          durationMinutes: 4,
           countsAs: const {FloorCategory.intensity},
         ),
         cardioLog(
@@ -506,7 +601,7 @@ void main() {
       );
       expect(result.protocol(CardioProtocolType.zone2Base).sessions7d, 1);
       expect(result.protocol(CardioProtocolType.rehit).sessions7d, 2);
-      expect(result.protocol(CardioProtocolType.rehit).durationMinutes7d, 18);
+      expect(result.protocol(CardioProtocolType.rehit).durationMinutes7d, 14);
     });
 
     test('two same-day REHIT sessions count as one distinct day', () {

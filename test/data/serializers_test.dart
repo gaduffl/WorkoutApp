@@ -98,17 +98,106 @@ void main() {
     expect(restoredPlan.targetRange, (6, 10));
   });
 
-  test('REHIT nudge day round-trips and older settings default to null', () {
-    const settings = UserSettings(
-      secondRehitNudgeScheduledDay: '2026-07-15',
+  test('duration-budget metadata round-trips and remains legacy-safe', () {
+    const compound = PlannedExercise(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      name: 'DB deadlift',
+      sets: 3,
+      targetRange: (6, 10),
+      rirTarget: Rir.rir2,
+      isCompoundWork: true,
     );
-    final json = userSettingsToJson(settings);
+    const feeder = PlannedExercise(
+      trackKey: 'row',
+      pattern: MovementPattern.pullHorizontal,
+      name: 'DB row - warm-up 60%',
+      sets: 1,
+      targetRange: (5, 5),
+      rirTarget: Rir.rir3plus,
+      isWarmup: true,
+      isFeederWarmup: true,
+    );
     expect(
-      userSettingsFromJson(json).secondRehitNudgeScheduledDay,
-      '2026-07-15',
+      plannedExerciseFromJson(plannedExerciseToJson(compound)).isCompoundWork,
+      isTrue,
+    );
+    expect(
+      plannedExerciseFromJson(plannedExerciseToJson(feeder)).isFeederWarmup,
+      isTrue,
     );
 
+    final json = plannedExerciseToJson(compound)
+      ..remove('isCompoundWork')
+      ..remove('isFeederWarmup');
+    final legacy = plannedExerciseFromJson(json);
+    expect(legacy.isCompoundWork, isTrue);
+    expect(legacy.isFeederWarmup, isFalse);
+
+    final explicitFalse = plannedExerciseToJson(compound)
+      ..['isCompoundWork'] = false;
+    expect(
+      plannedExerciseFromJson(explicitFalse).isCompoundWork,
+      isFalse,
+    );
+
+    final legacyNamed = plannedExerciseToJson(const PlannedExercise(
+      trackKey: 'sub:pushVertical:lateral_raise',
+      pattern: MovementPattern.pushVertical,
+      name: 'Lateral raise',
+      sets: 2,
+      targetRange: (8, 15),
+      rirTarget: Rir.rir2,
+    ))..remove('isCompoundWork');
+    expect(
+      plannedExerciseFromJson(legacyNamed).isCompoundWork,
+      isFalse,
+    );
+  });
+
+  test('REHIT nudge state round-trips and malformed targets fail safely', () {
+    final target = DateTime(2026, 7, 15, 15);
+    final settings = UserSettings(
+      secondRehitNudgeScheduledDay: '2026-07-15',
+      secondRehitNudgeScheduledFor: target,
+    );
+    final json = userSettingsToJson(settings);
+    final restored = userSettingsFromJson(json);
+    expect(restored.secondRehitNudgeScheduledDay, '2026-07-15');
+    expect(restored.secondRehitNudgeScheduledFor, target);
+
     json.remove('secondRehitNudgeScheduledDay');
-    expect(userSettingsFromJson(json).secondRehitNudgeScheduledDay, isNull);
+    json.remove('secondRehitNudgeScheduledFor');
+    final legacy = userSettingsFromJson(json);
+    expect(legacy.secondRehitNudgeScheduledDay, isNull);
+    expect(legacy.secondRehitNudgeScheduledFor, isNull);
+
+    final malformedString = userSettingsToJson(settings)
+      ..['secondRehitNudgeScheduledFor'] = 'not-a-timestamp';
+    final restoredMalformedString = userSettingsFromJson(malformedString);
+    expect(restoredMalformedString.secondRehitNudgeScheduledDay, '2026-07-15');
+    expect(restoredMalformedString.secondRehitNudgeScheduledFor, isNull);
+
+    final malformedType = userSettingsToJson(settings)
+      ..['secondRehitNudgeScheduledFor'] = 12345;
+    final restoredMalformedType = userSettingsFromJson(malformedType);
+    expect(restoredMalformedType.secondRehitNudgeScheduledDay, '2026-07-15');
+    expect(restoredMalformedType.secondRehitNudgeScheduledFor, isNull);
+  });
+
+  test('optional HRmax and API-key settings remain nullable and legacy-safe',
+      () {
+    final json = userSettingsToJson(const UserSettings(
+      age: 45,
+      hrMaxOverride: 185,
+      anthropicApiKey: 'secret',
+    ))
+      ..remove('hrMaxOverride')
+      ..remove('anthropicApiKey');
+
+    final restored = userSettingsFromJson(json);
+    expect(restored.hrMaxOverride, isNull);
+    expect(restored.hrMax, 208 - 0.7 * 45);
+    expect(restored.anthropicApiKey, isNull);
   });
 }

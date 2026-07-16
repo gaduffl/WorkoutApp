@@ -3,6 +3,19 @@
 enum RuleKey {
   restTimeZero,
   restDoubleRed,
+  norwegian4x4Due,
+  rehitFallbackDue,
+  baseLongDeficit,
+  baseShortDeficit,
+  muscleStimulusDeficit,
+  muscleRecoveryDemotion,
+  muscleOverMaxDemotion,
+  recoverySwapEasyCardio,
+  easyRecoveryCardio,
+  manualSessionOverride,
+
+  // Legacy v1 keys remain deserializable for saved DecisionTrace history.
+  // Decision Engine v2 does not emit the floor/weekend/recency keys below.
   floorForceStrength,
   floorForceIntensity,
   floorSoftBoost,
@@ -58,6 +71,26 @@ extension RuleKeyCode on RuleKey {
         return 'REST_TIME_ZERO';
       case RuleKey.restDoubleRed:
         return 'REST_DOUBLE_RED';
+      case RuleKey.norwegian4x4Due:
+        return 'NORWEGIAN_4X4_DUE';
+      case RuleKey.rehitFallbackDue:
+        return 'REHIT_FALLBACK_DUE';
+      case RuleKey.baseLongDeficit:
+        return 'BASE_LONG_DEFICIT';
+      case RuleKey.baseShortDeficit:
+        return 'BASE_SHORT_DEFICIT';
+      case RuleKey.muscleStimulusDeficit:
+        return 'MUSCLE_STIMULUS_DEFICIT';
+      case RuleKey.muscleRecoveryDemotion:
+        return 'MUSCLE_RECOVERY_DEMOTION';
+      case RuleKey.muscleOverMaxDemotion:
+        return 'MUSCLE_OVER_MAX_DEMOTION';
+      case RuleKey.recoverySwapEasyCardio:
+        return 'RECOVERY_SWAP_EASY_CARDIO';
+      case RuleKey.easyRecoveryCardio:
+        return 'EASY_RECOVERY_CARDIO';
+      case RuleKey.manualSessionOverride:
+        return 'MANUAL_SESSION_OVERRIDE';
       case RuleKey.floorForceStrength:
         return 'FLOOR_FORCE_STRENGTH';
       case RuleKey.floorForceIntensity:

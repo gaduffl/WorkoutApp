@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../engine/cardio_engine.dart';
 import '../../engine/session_templates.dart';
+import '../../engine/strength_duration_engine.dart';
+import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
-import '../../models/movement_pattern.dart';
 import '../../models/plan.dart';
 import '../../models/session_type.dart';
 import '../../models/set_log.dart';
 import '../../state/app_controller.dart';
+import '../widgets/cardio_widgets.dart';
 
 /// §11.3: one exercise at a time, big steppers, RIR buttons, pain button,
 /// rest timer, "wrap up" button. Weight steps follow the exercise's real
@@ -49,7 +52,9 @@ class _LoggerScreenState extends State<LoggerScreen> {
   int _restSecondsLeft = 0;
   Timer? _holdTimer;
   int _holdSecondsLeft = 0;
+  int _holdTargetSeconds = 0;
   bool _holdRunning = false;
+  bool _holdTimerUsed = false;
   final _stopwatch = Stopwatch()..start();
 
   List<PlannedExercise> get _ex => widget.plan.exercises;
@@ -150,6 +155,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
     _holdRunning = false;
     _value = _exercise.targetRange.$1;
     _holdSecondsLeft = _value;
+    _holdTargetSeconds = _value;
+    _holdTimerUsed = false;
     _rir = _exercise.rirTarget;
     _painFlag = false;
   }
@@ -172,8 +179,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
     setState(() => _weightByExercise[idx] = next);
   }
 
-  void _startRest(bool compound) {
-    _restSecondsLeft = compound ? 90 : 60;
+  void _startRest(int seconds) {
+    _restSecondsLeft = seconds;
     _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_restSecondsLeft <= 0) {
@@ -184,6 +191,22 @@ class _LoggerScreenState extends State<LoggerScreen> {
     });
   }
 
+  int? _restSecondsAfter(_Step step, PlannedExercise exercise) {
+    if (exercise.isWarmup) {
+      // General/ATG preparation is a continuous minute block and transitions
+      // directly into the load ramp. Generated load ramps and later-compound
+      // feeders are rep-based, loaded warm-ups whose duration budget includes
+      // 45 seconds before the next step.
+      final isLoadedRepWarmup =
+          exercise.metric == ExerciseMetric.reps && exercise.loadTotal != null;
+      return isLoadedRepWarmup
+          ? StrengthDurationEstimator.loadWarmupRestSeconds
+          : null;
+    }
+    if (!step.restAfter) return null;
+    return exercise.isCompoundWork ? 90 : 60;
+  }
+
   void _toggleHoldTimer() {
     if (_holdRunning) {
       _holdTimer?.cancel();
@@ -191,7 +214,11 @@ class _LoggerScreenState extends State<LoggerScreen> {
       return;
     }
     setState(() {
-      if (_holdSecondsLeft <= 0) _holdSecondsLeft = _value;
+      if (_holdSecondsLeft <= 0 || !_holdTimerUsed) {
+        _holdSecondsLeft = _value;
+        _holdTargetSeconds = _value;
+      }
+      _holdTimerUsed = true;
       _holdRunning = true;
     });
     _holdTimer?.cancel();
@@ -217,21 +244,58 @@ class _LoggerScreenState extends State<LoggerScreen> {
     setState(() {
       _holdRunning = false;
       _holdSecondsLeft = _value;
+      _holdTargetSeconds = _value;
+      _holdTimerUsed = false;
+    });
+  }
+
+  int get _loggedValue {
+    if (_exercise.metric != ExerciseMetric.seconds || !_holdTimerUsed) {
+      return _value;
+    }
+    return (_holdTargetSeconds - _holdSecondsLeft)
+        .clamp(0, _holdTargetSeconds)
+        .toInt();
+  }
+
+  void _stepValue(int direction) {
+    final step = _exercise.metric == ExerciseMetric.seconds ? 5 : 1;
+    final max = switch (_exercise.metric) {
+      ExerciseMetric.reps => 50,
+      ExerciseMetric.seconds => 600,
+      ExerciseMetric.minutes => 120,
+    };
+    final next = (_value + direction * step).clamp(0, max).toInt();
+    _holdTimer?.cancel();
+    setState(() {
+      _value = next;
+      if (_exercise.metric == ExerciseMetric.seconds) {
+        // A manual target change intentionally leaves countdown mode. The
+        // selected value becomes an explicit manual result until Start hold
+        // is pressed again.
+        _holdRunning = false;
+        _holdTimerUsed = false;
+        _holdTargetSeconds = next;
+        _holdSecondsLeft = next;
+      }
     });
   }
 
   Future<void> _logSet() async {
     if (_finishing) return;
+    final completedValue = _loggedValue;
+    if (completedValue <= 0) return;
     final step = _steps[_current];
     final ex = _ex[step.exIdx];
     final wasLast = _current == _steps.length - 1;
+    final restSeconds = wasLast ? null : _restSecondsAfter(step, ex);
     final log = SetLog(
       trackKey: ex.trackKey,
       pattern: ex.pattern,
       exerciseName: ex.name,
       weight: _weightByExercise[step.exIdx] ?? 0,
       metric: ex.metric,
-      value: _value,
+      value: completedValue,
       rir: _rir,
       painFlag: _painFlag,
       isWarmup: ex.isWarmup,
@@ -247,9 +311,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
       _holdTimer?.cancel();
       _holdRunning = false;
       _holdSecondsLeft = 0;
-      if (!wasLast && step.restAfter && !ex.isWarmup) {
-        _startRest(ex.pattern.patternClass == PatternClass.compound);
-      }
+      if (restSeconds != null) _startRest(restSeconds);
       if (!wasLast) {
         _current++;
         _syncSetInputs();
@@ -265,21 +327,34 @@ class _LoggerScreenState extends State<LoggerScreen> {
     final controller = context.read<AppController>();
 
     try {
-      var rehitDone = false;
-      final offersFinisher = sessionTemplates[widget.plan.sessionId]?.hasOptionalRehitFinisher ?? false;
-      if (!wrapUp && offersFinisher && widget.plan.tier == SessionTier.extended && mounted) {
-        rehitDone = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('REHIT finisher'),
-                content: const Text('Did you do the 8-min REHIT finisher? (That is what earns the intensity credit.)'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Skipped')),
-                  FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Done')),
-                ],
-              ),
-            ) ??
-            false;
+      CardioCompletion? rehitCompletion;
+      // A partial dose is evaluated separately by the shared >=50% gate.
+      // `endedEarly` records only the user's explicit Wrap up action.
+      final endedEarly = wrapUp;
+      final offersFinisher =
+          widget.plan.optionalRehitFinisherReserved &&
+          sessionTemplates[widget.plan.sessionId]?.hasOptionalRehitFinisher ==
+              true &&
+          widget.plan.tier == SessionTier.extended &&
+          controller
+              .rehitFinisherEligibility(
+                widget.plan,
+                _logged,
+                endedEarly: endedEarly,
+              )
+              .eligible;
+      if (offersFinisher && mounted) {
+        final prescription = const CardioEngine().prescriptionFor(
+          sessionId: SessionTypeId.s7,
+          durationMinutes:
+              sessionTypes[SessionTypeId.s7]!.fullDurationMin,
+          heartRateMaxBpm: controller.settings.hrMax,
+        );
+        rehitCompletion = await showCardioCompletionDialog(
+          context,
+          prescription: prescription,
+          title: 'Log optional REHIT finisher',
+        );
       }
       if (!mounted) return;
 
@@ -287,7 +362,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
         widget.plan,
         _logged,
         durationMinutes: _stopwatch.elapsed.inMinutes.clamp(1, 999),
-        rehitFinisherCompleted: rehitDone,
+        rehitFinisherCompletion: rehitCompletion,
+        endedEarly: endedEarly,
       );
       if (!mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
@@ -407,7 +483,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _finishing ? null : _logSet,
+                  onPressed:
+                      _finishing || _loggedValue <= 0 ? null : _logSet,
                   child: Text(_logButtonLabel(e, isLast)),
                 ),
               ),
@@ -416,7 +493,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: _finishing ? null : () => _finish(),
+                    onPressed:
+                        _finishing ? null : () => _finish(wrapUp: true),
                     child: const Text('Finish early'),
                   ),
                 ),
@@ -459,31 +537,19 @@ class _LoggerScreenState extends State<LoggerScreen> {
   }
 
   Widget _valueStepper() {
-    final step = _exercise.metric == ExerciseMetric.seconds ? 5 : 1;
-    final max = switch (_exercise.metric) {
-      ExerciseMetric.reps => 50,
-      ExerciseMetric.seconds => 600,
-      ExerciseMetric.minutes => 120,
-    };
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         SizedBox(width: 90, child: Text(_exercise.metric.inputLabel)),
         IconButton.filledTonal(
-            onPressed: () => setState(() {
-                  _value = (_value - step).clamp(0, max);
-                  if (!_holdRunning) _holdSecondsLeft = _value;
-                }),
+            onPressed: () => _stepValue(-1),
             icon: const Icon(Icons.remove)),
         SizedBox(
           width: 96,
           child: Text('$_value', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
         ),
         IconButton.filledTonal(
-            onPressed: () => setState(() {
-                  _value = (_value + step).clamp(0, max);
-                  if (!_holdRunning) _holdSecondsLeft = _value;
-                }),
+            onPressed: () => _stepValue(1),
             icon: const Icon(Icons.add)),
       ],
     );

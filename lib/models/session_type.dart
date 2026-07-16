@@ -56,7 +56,7 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     id: SessionTypeId.s2,
     name: 'Upper Strength',
     fullDurationMin: 60,
-    minDurationMin: 25,
+    minDurationMin: 20,
     legHeavy: false,
     // Intensity credit only applies if REHIT finisher completed - handled
     // dynamically in session logging, not as a static flag here.
@@ -65,8 +65,8 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
   ),
   SessionTypeId.s3: const SessionTypeDef(
     id: SessionTypeId.s3,
-    name: 'Norwegian 4x4 (CAROL)',
-    fullDurationMin: 35,
+    name: 'CAROL 4×4 Norwegian Zone 5 Intervals',
+    fullDurationMin: 30,
     minDurationMin: null,
     legHeavy: true,
     countsAs: {FloorCategory.intensity},
@@ -76,7 +76,7 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     id: SessionTypeId.s4,
     name: 'Full Body + ATG Mobility Block',
     fullDurationMin: 60,
-    minDurationMin: 30,
+    minDurationMin: 20,
     legHeavy: true,
     countsAs: {FloorCategory.strength},
     cycleMember: true,
@@ -85,7 +85,7 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     id: SessionTypeId.s5,
     name: 'Flex / Pump (ATG 1)',
     fullDurationMin: 35,
-    minDurationMin: 15,
+    minDurationMin: 20,
     legHeavy: false,
     countsAs: {FloorCategory.strength},
     cycleMember: true,
@@ -94,6 +94,9 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     id: SessionTypeId.s6,
     name: 'Zone 2',
     fullDurationMin: 60,
+    // Thirty minutes is the base-target credit threshold. Decision may emit
+    // an explicit 20-minute recovery prescription inside the immutable hard
+    // time window, but that shorter dose earns no base-target credit.
     minDurationMin: 30,
     legHeavy: false,
     countsAs: {FloorCategory.aerobic},
@@ -101,9 +104,12 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
   ),
   SessionTypeId.s7: const SessionTypeDef(
     id: SessionTypeId.s7,
-    name: 'REHIT',
-    fullDurationMin: 10,
-    minDurationMin: 8,
+    name: 'CAROL REHIT Intense',
+    // CAROL currently reports 5:00–8:40 for this fixed preset. Reserve the
+    // conservative rounded 9-minute upper bound in strength/time budgeting,
+    // while 5 minutes is the minimum bike-guided completion duration.
+    fullDurationMin: 9,
+    minDurationMin: 5,
     legHeavy: false,
     countsAs: {FloorCategory.intensity},
     cycleMember: false,

@@ -215,6 +215,15 @@ const overheadTriceps = SubstituteExercise(
   dumbbells: 1,
 );
 
+/// Named progression tracks that are part of a normal (non-pain) plan.
+/// Pain-only substitutes remain in [substituteRegistry], but are created only
+/// when their corresponding pain action is actually prescribed.
+const s5NamedAccessories = <SubstituteExercise>[
+  dbCurl,
+  lateralRaise,
+  overheadTriceps,
+];
+
 /// No-equipment equivalents for S5's named dumbbell accessories. Keeping
 /// their normal track keys means the session still records recency for the
 /// intended slot while load-based progression remains frozen in travel mode.
@@ -231,6 +240,11 @@ const Map<String, LadderStep> travelNamedSteps = {
 /// substitute's real name/load setup instead of falling back to its
 /// underlying pattern's normal ladder (§7.1).
 final Map<String, SubstituteExercise> substituteRegistry = {
-  for (final s in [bridgeHamstringCurl, lightSingleLegRdl, floorPress, dbCurl, lateralRaise, overheadTriceps])
+  for (final s in [
+    bridgeHamstringCurl,
+    lightSingleLegRdl,
+    floorPress,
+    ...s5NamedAccessories,
+  ])
     s.trackKey: s,
 };

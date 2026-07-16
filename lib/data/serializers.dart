@@ -23,6 +23,11 @@ import '../engine/queue_engine.dart';
 String _dateStr(DateTime d) => DateTime(d.year, d.month, d.day).toIso8601String();
 DateTime _parseDate(String s) => DateTime.parse(s);
 
+DateTime? _tryParseOptionalDateTime(Object? value) {
+  if (value is! String) return null;
+  return DateTime.tryParse(value);
+}
+
 ExerciseMetric _exerciseMetricFromJson(Object? value) {
   if (value is String) {
     for (final metric in ExerciseMetric.values) {
@@ -30,6 +35,21 @@ ExerciseMetric _exerciseMetricFromJson(Object? value) {
     }
   }
   return ExerciseMetric.reps;
+}
+
+bool _plannedExerciseIsCompoundWorkFromJson(Map<String, dynamic> json) {
+  final explicit = json['isCompoundWork'];
+  if (explicit is bool) return explicit;
+
+  // Plans saved before compound-role metadata was introduced used the
+  // movement pattern itself as the normal progression track key. Infer only
+  // that narrow legacy shape: named S5 work and pain substitutes use their
+  // own `sub:` track keys, while warm-ups are never work entries.
+  if (json['isWarmup'] as bool? ?? false) return false;
+  final pattern =
+      MovementPattern.values.byName(json['pattern'] as String);
+  return pattern.patternClass == PatternClass.compound &&
+      json['trackKey'] == pattern.name;
 }
 
 Map<String, dynamic> exerciseStateToJson(ExerciseState s) => {
@@ -246,6 +266,7 @@ Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'tier': l.tier.name,
       'date': _dateStr(l.date),
       'completedAt': l.completedAt.toIso8601String(),
+      'completedAtPrecision': l.completedAtPrecision.name,
       'setLogs': l.setLogs.map(setLogToJson).toList(),
       'plannedWorkSets': l.plannedWorkSets,
       'completedWorkSets': l.completedWorkSets,
@@ -254,19 +275,44 @@ Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'cardioCompletion': l.cardioCompletion == null
           ? null
           : cardioCompletionToJson(l.cardioCompletion!),
+      'cardioCompletedAsPrescribed': l.cardioCompletedAsPrescribed,
       'countsAs': l.countsAs.map((c) => c.name).toList(),
       'rehitFinisherCompleted': l.rehitFinisherCompleted,
       'travelMode': l.travelMode,
+      'endedEarly': l.endedEarly,
     };
+
+DateTime? _sessionCompletedAtFromJson(Map<String, dynamic> json) {
+  final value = json['completedAt'];
+  return value is String ? DateTime.tryParse(value) : null;
+}
+
+CompletionTimePrecision _sessionCompletionTimePrecisionFromJson(
+  Map<String, dynamic> json,
+) {
+  // A missing or malformed timestamp has only calendar-date precision,
+  // regardless of any contradictory metadata.
+  if (_sessionCompletedAtFromJson(json) == null) {
+    return CompletionTimePrecision.dateOnlyInferred;
+  }
+  final value = json['completedAtPrecision'];
+  if (value is String) {
+    for (final precision in CompletionTimePrecision.values) {
+      if (precision.name == value) return precision;
+    }
+  }
+  // Rows written after exact timestamps were introduced but before explicit
+  // precision metadata are exact and remain backward compatible.
+  return CompletionTimePrecision.exact;
+}
 
 SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
       id: j['id'] as String,
       templateId: SessionTypeId.values.byName(j['templateId'] as String),
       tier: SessionTier.values.byName(j['tier'] as String),
       date: _parseDate(j['date'] as String),
-      completedAt: DateTime.parse(
-        (j['completedAt'] ?? j['date']) as String,
-      ),
+      completedAt: _sessionCompletedAtFromJson(j),
+      completedAtPrecision: _sessionCompletionTimePrecisionFromJson(j),
       setLogs: (j['setLogs'] as List).map((e) => setLogFromJson(e as Map<String, dynamic>)).toList(),
       plannedWorkSets: j['plannedWorkSets'] as int,
       completedWorkSets: j['completedWorkSets'] as int,
@@ -277,9 +323,12 @@ SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
           : cardioCompletionFromJson(
               j['cardioCompletion'] as Map<String, dynamic>,
             ),
+      cardioCompletedAsPrescribed:
+          j['cardioCompletedAsPrescribed'] as bool?,
       countsAs: (j['countsAs'] as List).map((c) => FloorCategory.values.byName(c as String)).toSet(),
       rehitFinisherCompleted: j['rehitFinisherCompleted'] as bool? ?? false,
       travelMode: j['travelMode'] as bool? ?? false,
+      endedEarly: j['endedEarly'] as bool? ?? false,
     );
 
 Map<String, dynamic> queueStateToJson(QueueState q) => {
@@ -361,6 +410,8 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'travelMode': u.travelMode,
       'notificationsEnabled': u.notificationsEnabled,
       'secondRehitNudgeScheduledDay': u.secondRehitNudgeScheduledDay,
+      'secondRehitNudgeScheduledFor':
+          u.secondRehitNudgeScheduledFor?.toIso8601String(),
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -381,6 +432,8 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       travelMode: j['travelMode'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
       secondRehitNudgeScheduledDay: j['secondRehitNudgeScheduledDay'] as String?,
+      secondRehitNudgeScheduledFor:
+          _tryParseOptionalDateTime(j['secondRehitNudgeScheduledFor']),
     );
 
 Map<String, dynamic> firedRuleToJson(FiredRule r) => {
@@ -417,6 +470,9 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'isTravel': e.isTravel,
       'loadSteps': e.loadSteps,
       'supersetGroup': e.supersetGroup,
+      'isCompoundWork': e.isCompoundWork,
+      'isFeederWarmup': e.isFeederWarmup,
+      'isPainReentryTest': e.isPainReentryTest,
     };
 
 PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExercise(
@@ -440,6 +496,9 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       isTravel: j['isTravel'] as bool? ?? false,
       loadSteps: (j['loadSteps'] as List?)?.map((e) => (e as num).toDouble()).toList(),
       supersetGroup: j['supersetGroup'] as int?,
+      isCompoundWork: _plannedExerciseIsCompoundWorkFromJson(j),
+      isFeederWarmup: j['isFeederWarmup'] as bool? ?? false,
+      isPainReentryTest: j['isPainReentryTest'] as bool? ?? false,
     );
 
 Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
@@ -453,6 +512,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
           : cardioPrescriptionToJson(p.cardioPrescription!),
       'grantsQueueCredit': p.grantsQueueCredit,
       'travelMode': p.travelMode,
+      'optionalRehitFinisherReserved': p.optionalRehitFinisherReserved,
     };
 
 SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
@@ -468,6 +528,8 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
             ),
       grantsQueueCredit: j['grantsQueueCredit'] as bool? ?? true,
       travelMode: j['travelMode'] as bool? ?? false,
+      optionalRehitFinisherReserved:
+          j['optionalRehitFinisherReserved'] as bool? ?? false,
     );
 
 Map<String, dynamic> effectiveSetTargetBandToJson(

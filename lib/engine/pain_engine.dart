@@ -151,16 +151,42 @@ class PainEngine {
       next.painReentryTestOffered = false;
       next.painReentryTestPassed = false;
     } else {
-      // Severity can only escalate while frozen (mild -> sharp); a sharp
-      // freeze never softens just because today's tap said mild.
-      if (activeFlag.severity == PainSeverity.sharp) {
+      final sameRegion = next.painRegion == activeFlag.region;
+      final previousSeverity = next.painSeverity;
+
+      if (!sameRegion) {
+        // One ExerciseState can hold one causal region. If deterministic pain
+        // resolution replaces it with a different region, that region may
+        // begin its own clock. Severity still never softens while the pattern
+        // remains frozen.
+        next.painRegion = activeFlag.region;
+        next.painFlaggedDate = activeFlag.flaggedDate;
+        if (previousSeverity == null ||
+            activeFlag.severity == PainSeverity.sharp) {
+          next.painSeverity = activeFlag.severity;
+        }
+      } else if (previousSeverity == PainSeverity.sharp) {
+        // Daily re-taps describe the same ongoing sharp episode; they must
+        // not reset the >7-day medical-escalation clock. An earlier imported
+        // date is accepted, while a mild re-tap cannot soften or re-date it.
         next.painSeverity = PainSeverity.sharp;
+        if (activeFlag.severity == PainSeverity.sharp &&
+            (next.painFlaggedDate == null ||
+                activeFlag.flaggedDate.isBefore(next.painFlaggedDate!))) {
+          next.painFlaggedDate = activeFlag.flaggedDate;
+        }
+      } else if (previousSeverity == null) {
+        next.painSeverity = activeFlag.severity;
+        next.painFlaggedDate = activeFlag.flaggedDate;
+      } else if (activeFlag.severity == PainSeverity.sharp) {
+        // Mild -> sharp starts the sharp-persistence clock at escalation,
+        // rather than incorrectly backdating it to the earlier mild episode.
+        next.painSeverity = PainSeverity.sharp;
+        next.painFlaggedDate = activeFlag.flaggedDate;
+      } else if (next.painFlaggedDate == null ||
+          activeFlag.flaggedDate.isBefore(next.painFlaggedDate!)) {
+        next.painFlaggedDate = activeFlag.flaggedDate;
       }
-      // DecisionEngine passes the most restrictive applicable active or
-      // persisted flag. Update its identifying details while never allowing
-      // a later mild tap to soften an existing sharp freeze.
-      next.painRegion = activeFlag.region;
-      next.painFlaggedDate = activeFlag.flaggedDate;
       next.painTags.addAll(activeFlag.tags);
     }
 

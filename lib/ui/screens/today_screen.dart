@@ -2,25 +2,110 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../ai/ai_explainer.dart';
+import '../../engine/cardio_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../models/decision_trace.dart';
-import '../../models/pain.dart';
 import '../../models/plan.dart';
+import '../../models/rule_key.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
+import '../widgets/cardio_widgets.dart';
 import 'checkin_screen.dart';
 import 'logger_screen.dart';
 
 const optionalRehitFinisherMessage =
-    'Optional finisher: 8-min REHIT after the strength work. Completing it earns intensity credit.';
+    'Optional finisher: CAROL REHIT Intense after the strength work. Complete the bike-guided preset; both sprints earn intensity credit.';
+
+String planTimingLabel(SessionPlan plan) => switch (plan.sessionId) {
+      SessionTypeId.s3 => 'CAROL bike preset · 30 min',
+      SessionTypeId.s7 => 'CAROL bike preset · 5:00–8:40',
+      _ => '${plan.tier.name} tier - ~${plan.estimatedDurationMin} min',
+    };
+
+String candidateTimingLabel(
+  SessionTypeId sessionId,
+  String reason,
+) => switch (sessionId) {
+      SessionTypeId.s3 => 'CAROL 30-minute preset · $reason',
+      SessionTypeId.s7 => 'CAROL preset (5:00–8:40) · $reason',
+      _ => reason,
+    };
 
 /// Mirrors the logger's finisher dialog gate exactly, so Today never
 /// promises a finisher that the completed plan cannot actually offer.
-String? optionalRehitFinisherHint(SessionPlan? plan) {
+String? optionalRehitFinisherHint(
+  SessionPlan? plan, {
+  required bool safetyEligible,
+}) {
+  if (!safetyEligible) return null;
   if (plan == null || plan.tier != SessionTier.extended) return null;
+  if (!plan.optionalRehitFinisherReserved) return null;
   if (sessionTemplates[plan.sessionId]?.hasOptionalRehitFinisher != true) return null;
   return optionalRehitFinisherMessage;
 }
+
+/// A short, honest reason a candidate ranked where it did, drawn from the
+/// same score terms the engine used rather than invented by the UI.
+String candidateReason(ScoredCandidate candidate) {
+  final terms = candidate.scoreTerms;
+  if (terms.containsKey(painNoSafeWorkScoreTerm)) {
+    return 'Unavailable - no pain-safe work remains';
+  }
+  if (terms.containsKey('norwegian4x4Due')) {
+    return 'Fills the rolling 7-day 4x4 anchor';
+  }
+  if (terms.containsKey('rehitFallbackDue')) {
+    return 'Advances the separate-day REHIT fallback';
+  }
+  if (terms.containsKey('baseLongDeficit')) {
+    return 'Fills the long base-aerobic exposure';
+  }
+  if (terms.containsKey('baseShortDeficit')) {
+    return 'Fills the remaining 30+ min base exposure';
+  }
+  if (terms.containsKey('muscleWeeklyDeficit') ||
+      terms.containsKey('muscle28dMinimumDeficit') ||
+      terms.containsKey('muscle28dCenterDeficit')) {
+    return 'Targets your largest effective-set deficits';
+  }
+  if (terms.containsKey('surplusIntensitySuppressed')) {
+    return 'Extra intensity is not needed now';
+  }
+  if (terms.containsKey('muscleOverMaxDemotion')) {
+    return 'Deprioritized - projected work crosses a 7-day or 28-day maximum';
+  }
+  if (terms.containsKey('muscleRecoveryDemotion')) {
+    return 'Deprioritized - target muscles need recovery';
+  }
+  if (candidate.sessionId == SessionTypeId.s6) {
+    return 'Easy recovery cardio that fits today\'s available time';
+  }
+  // Legacy v1 traces remain readable after the engine upgrade.
+  if (terms.containsKey('floorForceStrength') ||
+      terms.containsKey('floorForceIntensity')) {
+    return 'Would catch up your weekly floor';
+  }
+  if (terms.containsKey('floorSoftBoost')) {
+    return 'Slightly behind on your weekly floor';
+  }
+  if (terms.containsKey('legHeavyDemoted')) {
+    return 'Deprioritized - legs were worked yesterday';
+  }
+  if (terms.containsKey('recencyBoost')) {
+    return "Covers a pattern you haven't trained in a while";
+  }
+  if (terms.containsKey('weekendPriority')) {
+    return 'Prioritized for your weekend schedule';
+  }
+  return 'Next up in your rotation';
+}
+
+/// Fully pain-blocked strength candidates remain in the trace for audit, but
+/// offering one as a tappable swap is misleading because the hard safety gate
+/// must redirect it. A partially surviving candidate has no such term and
+/// remains available.
+bool isPainSafeAlternative(ScoredCandidate candidate) =>
+    !candidate.scoreTerms.containsKey(painNoSafeWorkScoreTerm);
 
 class TodayScreen extends StatefulWidget {
   final DecisionTrace trace;
@@ -43,6 +128,22 @@ class _TodayScreenState extends State<TodayScreen> {
     super.initState();
     _trace = widget.trace;
     _loadExplanation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final refreshed = Provider.of<AppController>(context).todayTrace;
+    if (refreshed != null &&
+        _sameDate(refreshed.date, _trace.date) &&
+        !identical(refreshed, _trace)) {
+      // Settings changes and manual deloads recompute the controller trace
+      // while this route can remain mounted. Adopt that authoritative result;
+      // local swaps are preserved because swapToSession updates the same
+      // controller trace before returning it here.
+      _trace = refreshed;
+      _loadExplanation();
+    }
   }
 
   void _loadExplanation() {
@@ -93,44 +194,58 @@ class _TodayScreenState extends State<TodayScreen> {
     }
   }
 
-  /// A short, honest reason a candidate ranked where it did - drawn from
-  /// the same score terms the engine used (§5 Step 4), not invented.
-  String _candidateReason(ScoredCandidate c) {
-    final terms = c.scoreTerms;
-    if (terms.containsKey('floorForceStrength') || terms.containsKey('floorForceIntensity')) {
-      return 'Would catch up your weekly floor';
-    }
-    if (terms.containsKey('floorSoftBoost')) return 'Slightly behind on your weekly floor';
-    if (terms.containsKey('legHeavyDemoted')) return 'Deprioritized - legs were worked yesterday';
-    if (terms.containsKey('recencyBoost')) return "Covers a pattern you haven't trained in a while";
-    if (terms.containsKey('weekendPriority')) return 'Prioritized for your weekend schedule';
-    return 'Next up in your rotation';
-  }
-
   SessionTypeId _effectiveAlternativeId(DecisionTrace trace, SessionTypeId sourceId) {
-    if (trace.recovery.bucket == ReadinessBucket.red &&
+    final safetySwap = trace.firedRuleCodes
+        .contains(RuleKey.recoverySwapEasyCardio.code());
+    if ((trace.recovery.bucket != ReadinessBucket.green || safetySwap) &&
         (sourceId == SessionTypeId.s3 || sourceId == SessionTypeId.s7)) {
       return SessionTypeId.s6;
     }
     if (sourceId == SessionTypeId.s3 &&
-        (trace.checkin.timeMinutes < 35 || trace.recovery.bucket == ReadinessBucket.yellow)) {
+        trace.checkin.timeMinutes < 35) {
       return SessionTypeId.s7;
     }
     return sourceId;
   }
 
   Future<void> _logCardio(
-    SessionTypeId id,
-    int minutes, {
+    SessionTypeId id, {
     SessionPlan? plan,
   }) async {
     if (_loggingCardio) return;
-    setState(() => _loggingCardio = true);
     final controller = context.read<AppController>();
+    final prescription = const CardioEngine().resolvePrescription(
+      sessionId: id,
+      persistedPrescription: plan?.cardioPrescription,
+      durationMinutes:
+          plan?.estimatedDurationMin ?? sessionTypes[id]!.fullDurationMin,
+      heartRateMaxBpm: controller.settings.hrMax,
+    );
+    final completion = await showCardioCompletionDialog(
+      context,
+      prescription: prescription,
+      title: id == SessionTypeId.s7 && plan == null
+          ? 'Log second CAROL REHIT Intense attempt'
+          : 'Log ${sessionTypes[id]!.name} attempt',
+    );
+    if (completion == null || !mounted) return;
+    setState(() => _loggingCardio = true);
     try {
-      await controller.logCardioSession(id, durationMinutes: minutes, plan: plan);
+      await controller.logCardioSession(
+        id,
+        completion: completion,
+        plan: plan,
+      );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${sessionTypes[id]!.name} logged ✓')));
+      final completedAsPrescribed =
+          completion.completesPrescription(prescription);
+      final message = completion.meetsCreditableDose
+          ? '${sessionTypes[id]!.name} dose logged ✓'
+          : id == SessionTypeId.s6 && completedAsPrescribed
+              ? 'Recovery session completed ✓ — no base-aerobic credit'
+              : '${sessionTypes[id]!.name} attempt saved — below the qualifying training dose';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not log cardio: $e')));
@@ -143,25 +258,66 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<AppController>();
     final trace = _trace;
-    final plan = trace.plan;
+    final restoredPlan = trace.plan;
+    final staleHighIntensityPlan = restoredPlan != null &&
+        !controller.isPlanUsableNow(restoredPlan);
+    final plan = staleHighIntensityPlan ? null : restoredPlan;
     final done = controller.sessionDoneToday;
     final loggingStarted = controller.sessionLoggedToday;
-    final finisherHint = loggingStarted ? null : optionalRehitFinisherHint(plan);
+    final finisherHint = loggingStarted
+        ? null
+        : optionalRehitFinisherHint(
+            plan,
+            safetyEligible:
+                controller.rehitFinisherPreviewEligibility(plan).eligible,
+          );
+    final primaryCardioPrescription = () {
+      if (plan == null ||
+          sessionTemplates[plan.sessionId]?.isCardioOnly != true) {
+        return null;
+      }
+      return const CardioEngine().resolvePrescription(
+        sessionId: plan.sessionId,
+        persistedPrescription: plan.cardioPrescription,
+        durationMinutes: plan.estimatedDurationMin,
+        heartRateMaxBpm: controller.settings.hrMax,
+      );
+    }();
+    final secondRehitEligibility = controller.secondRehitEligibility;
+    final secondRehitPrescription = secondRehitEligibility.eligible
+        ? const CardioEngine().prescriptionFor(
+            sessionId: SessionTypeId.s7,
+            durationMinutes:
+                sessionTypes[SessionTypeId.s7]!.fullDurationMin,
+            heartRateMaxBpm: controller.settings.hrMax,
+          )
+        : null;
     final noOpAlternativeIds = <SessionTypeId>{if (plan != null) plan.sessionId};
     final firedCodes = trace.firedRuleCodes.toSet();
     if (firedCodes.contains('S7_TIME_SUB') || firedCodes.contains('YELLOW_4X4_TO_REHIT')) {
       noOpAlternativeIds.add(SessionTypeId.s3);
     }
-    if (firedCodes.contains('RED_SWAP_Z2')) {
+    if (firedCodes.contains('RED_SWAP_Z2') ||
+        firedCodes.contains('RECOVERY_SWAP_EASY_CARDIO')) {
       noOpAlternativeIds.addAll(const {SessionTypeId.s3, SessionTypeId.s7});
     }
-    final sharpHipPain = trace.checkin.pain.any(
-      (flag) => flag.region == BodyRegion.hip && flag.severity == PainSeverity.sharp,
-    );
+    final sharpHipPain =
+        controller.hasActiveSharpHipPain(trace.checkin.pain);
     final seenEffectiveAlternatives = <SessionTypeId>{};
     final alternatives = plan == null
         ? <ScoredCandidate>[]
         : trace.candidates
+            .where(isPainSafeAlternative)
+            // Defense in depth for restored legacy traces: no-equipment
+            // travel plans must never expose CAROL-only swaps.
+            .where((c) =>
+                !(controller.settings.travelMode || plan.travelMode) ||
+                (c.sessionId != SessionTypeId.s3 &&
+                    c.sessionId != SessionTypeId.s7))
+            .where((c) =>
+                controller.isHighIntensityUsableNow() ||
+                (c.sessionId != SessionTypeId.s3 &&
+                    c.sessionId != SessionTypeId.s7))
             .where((c) => !noOpAlternativeIds.contains(c.sessionId))
             .where((c) => !sharpHipPain || sessionTypes[c.sessionId]?.legHeavy != true)
             .where((c) => seenEffectiveAlternatives.add(_effectiveAlternativeId(trace, c.sessionId)))
@@ -189,7 +345,8 @@ class _TodayScreenState extends State<TodayScreen> {
           IconButton(
             icon: const Icon(Icons.restart_alt),
             tooltip: 'Redo check-in',
-            onPressed: () => _confirmResetToday(context),
+            onPressed:
+                loggingStarted ? null : () => _confirmResetToday(context),
           ),
         ],
       ),
@@ -206,24 +363,32 @@ class _TodayScreenState extends State<TodayScreen> {
                     _ReadinessBadge(bucket: trace.recovery.bucket, score: trace.recovery.compositeScore),
                     const SizedBox(height: 8),
                     Text(
-                      plan?.sessionName ?? trace.restReason ?? 'Rest day',
+                      staleHighIntensityPlan
+                          ? 'Plan unavailable in current safety mode'
+                          : plan?.sessionName ?? trace.restReason ?? 'Rest day',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    if (plan != null) Text('${plan.tier.name} tier - ~${plan.estimatedDurationMin} min'),
+                    if (plan != null) Text(planTimingLabel(plan)),
                     const SizedBox(height: 12),
-                    FutureBuilder<String>(
-                      future: _explanation,
-                      builder: (context, snap) {
-                        if (!snap.hasData) {
-                          return const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          );
-                        }
-                        return Text(snap.data!, style: Theme.of(context).textTheme.bodyMedium);
-                      },
-                    ),
+                    if (staleHighIntensityPlan)
+                      Text(
+                        'This recommendation cannot be started under the current travel/recovery settings. Regenerate it or redo today\'s check-in.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      )
+                    else
+                      FutureBuilder<String>(
+                        future: _explanation,
+                        builder: (context, snap) {
+                          if (!snap.hasData) {
+                            return const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            );
+                          }
+                          return Text(snap.data!, style: Theme.of(context).textTheme.bodyMedium);
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -275,6 +440,10 @@ class _TodayScreenState extends State<TodayScreen> {
                       trailing: e.isWarmup ? null : Text('RIR ${_rirLabel(e.rirTarget.name)}'),
                     ),
                   )),
+            if (primaryCardioPrescription != null)
+              CardioPrescriptionCard(
+                prescription: primaryCardioPrescription,
+              ),
             if (finisherHint != null)
               Card(
                 color: Theme.of(context).colorScheme.tertiaryContainer,
@@ -293,9 +462,18 @@ class _TodayScreenState extends State<TodayScreen> {
                   subtitle: Text('Nice work — see it on the History tab.'),
                 ),
               )
+            else if (loggingStarted)
+              Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: const ListTile(
+                  leading: Icon(Icons.check_circle_outline),
+                  title: Text('Workout attempt saved'),
+                  subtitle: Text(
+                    'The primary plan is locked for today. Any eligible later-day REHIT appears separately below.',
+                  ),
+                ),
+              )
             else if (plan != null && sessionTemplates[plan.sessionId]?.isCardioOnly == true)
-              // Cardio-only session (S3 4×4, S6 Zone 2, S7 REHIT): nothing to
-              // log set-by-set, just mark it done.
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -304,10 +482,9 @@ class _TodayScreenState extends State<TodayScreen> {
                       ? null
                       : () => _logCardio(
                             plan.sessionId,
-                            plan.estimatedDurationMin,
                             plan: plan,
                           ),
-                  label: Text('Mark ${plan.sessionName} done'),
+                  label: const Text('Log cardio attempt'),
                 ),
               )
             else if (plan != null && plan.exercises.isNotEmpty)
@@ -329,9 +506,9 @@ class _TodayScreenState extends State<TodayScreen> {
                 ),
               ),
 
-            // §2.1/§12 second-session REHIT offer: after a strength session
-            // with no intensity in the trailing 48 h.
-            if (controller.canOfferSecondRehit) ...[
+            // The controller's shared readiness/safety result also drives the
+            // notification scheduler. Unsafe days stay silent here.
+            if (secondRehitPrescription != null) ...[
               const SizedBox(height: 12),
               Card(
                 child: Padding(
@@ -339,15 +516,21 @@ class _TodayScreenState extends State<TodayScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Add an 8-min REHIT?', style: Theme.of(context).textTheme.titleMedium),
-                      const Text('Covers your weekly intensity floor — the bike runs the protocol.'),
+                      Text(
+                        'Optional CAROL REHIT Intense',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      ...cardioPrescriptionSummaryLines(secondRehitPrescription)
+                          .map((line) => Text(line)),
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonalIcon(
                           icon: const Icon(Icons.bolt),
-                          onPressed: _loggingCardio ? null : () => _logCardio(SessionTypeId.s7, 10),
-                          label: const Text('Log REHIT'),
+                          onPressed: _loggingCardio
+                              ? null
+                              : () => _logCardio(SessionTypeId.s7),
+                          label: const Text('Log CAROL preset'),
                         ),
                       ),
                     ],
@@ -355,7 +538,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 ),
               ),
             ],
-            if (!done && alternatives.isNotEmpty) ...[
+            if (!done && !loggingStarted && alternatives.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text('Other options today', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 2),
@@ -370,12 +553,12 @@ class _TodayScreenState extends State<TodayScreen> {
                 String? modulationLabel;
                 if (effectiveId == SessionTypeId.s6 && effectiveId != c.sessionId) {
                   modulationLabel =
-                      '~${trace.checkin.timeMinutes} min · Substitutes high-intensity cardio due to RED readiness';
+                      '~${trace.checkin.timeMinutes} min · Substitutes high-intensity cardio due to today\'s recovery/safety gate';
                 } else if (effectiveId == SessionTypeId.s7 && effectiveId != c.sessionId) {
                   modulationLabel = trace.checkin.timeMinutes < 35
-                      ? '${sessionTypes[SessionTypeId.s7]!.fullDurationMin} min · '
+                      ? 'CAROL preset (5:00–8:40) · '
                           'Substitutes queued 4×4 due to time'
-                      : '${sessionTypes[SessionTypeId.s7]!.fullDurationMin} min · '
+                      : 'CAROL preset (5:00–8:40) · '
                           'Substitutes 4×4 due to YELLOW readiness';
                 }
                 final def = sessionTypes[effectiveId]!;
@@ -385,7 +568,13 @@ class _TodayScreenState extends State<TodayScreen> {
                 final tierLabel = modulationLabel ??
                     (c.tier == SessionTier.full && def.fullDurationMin >= 60
                         ? 'compressed to 35 min'
-                        : '${c.tier.name} tier · ${_candidateReason(c)}');
+                        : candidateTimingLabel(
+                            effectiveId,
+                            effectiveId == SessionTypeId.s3 ||
+                                    effectiveId == SessionTypeId.s7
+                                ? candidateReason(c)
+                                : '${c.tier.name} tier · ${candidateReason(c)}',
+                          ));
                 return Card(
                   child: ListTile(
                     title: Text(def.name),
@@ -412,9 +601,7 @@ class _TodayScreenState extends State<TodayScreen> {
         content: const Text(
           "This discards today's check-in and recommendation (readiness numbers, pain flags, "
           'the plan you\'re looking at) so you can enter it again from scratch. '
-          "If you haven't logged any sets yet today, nothing else is affected. "
-          "If you've already logged part of a session, that workout data is kept either way - "
-          'only the check-in itself is reset.',
+          "This is available only before a workout attempt has been logged today.",
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
@@ -436,6 +623,9 @@ class _TodayScreenState extends State<TodayScreen> {
         'rir4plus' => '4+',
         _ => '3+',
       };
+
+  bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 /// §4.3's GREEN/YELLOW/RED bucket, made visible - not just a value buried
