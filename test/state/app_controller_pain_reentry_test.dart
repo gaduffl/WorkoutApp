@@ -28,7 +28,7 @@ void main() {
         painSeverity: PainSeverity.sharp,
         painRegion: pattern == MovementPattern.squat
             ? BodyRegion.kneeLeft
-            : BodyRegion.elbowWrist,
+            : BodyRegion.wrist,
         painFlaggedDate: DateTime.now().subtract(const Duration(days: 2)),
         prePainLoad: load,
         painReentryTestOffered: true,

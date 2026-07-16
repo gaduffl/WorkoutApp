@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/cardio_engine.dart';
-import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';

@@ -28,6 +28,7 @@ import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/history_data.dart';
 import '../models/ladders.dart';
+import '../models/movement_pattern.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
 import '../models/recovery_snapshot.dart';

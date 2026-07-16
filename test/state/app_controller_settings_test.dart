@@ -40,7 +40,7 @@ void main() {
 }
 
 class _SettingsController extends AppController {
-  _SettingsController(Repository repository) : super(repository);
+  _SettingsController(super.repository);
 
   @override
   Future<void> syncNotifications() async {}

@@ -8,6 +8,7 @@ import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
+import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/movement_pattern.dart';

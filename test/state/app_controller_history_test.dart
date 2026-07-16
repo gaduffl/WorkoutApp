@@ -9,13 +9,12 @@ import 'package:morningcoach/state/app_controller.dart';
 
 class _HistoryRepository extends Repository {
   final List<SessionLog> sessions;
-  final List<RecoverySnapshot> recovery;
+  final List<RecoverySnapshot> recovery = const [];
   DateTime? sessionSince;
   DateTime? recoverySince;
 
   _HistoryRepository({
     this.sessions = const [],
-    this.recovery = const [],
   }) : super(AppDatabase());
 
   @override
