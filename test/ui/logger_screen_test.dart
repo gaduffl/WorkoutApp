@@ -512,7 +512,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<AppController>.value(
         value: nominallySafe,
-        child: MaterialApp(home: LoggerScreen(plan: s2Plan(2))),
+        child: MaterialApp(
+          home: LoggerScreen(
+            key: const ValueKey('early-s2'),
+            plan: s2Plan(2),
+          ),
+        ),
       ),
     );
     await tester.tap(find.text('Finish early'));

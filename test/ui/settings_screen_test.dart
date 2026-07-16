@@ -9,6 +9,46 @@ import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/settings_screen.dart';
 
 void main() {
+  const controlKeys = [
+    'settings-age',
+    'settings-hr-max',
+    'settings-anthropic-api-key',
+    'settings-save',
+  ];
+
+  Future<Finder> scrollToControl(
+    WidgetTester tester,
+    String key,
+  ) async {
+    final target = find.byKey(Key(key));
+    final scrollable = find.descendant(
+      of: find.byType(SettingsScreen),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
+    );
+    expect(scrollable, findsOneWidget);
+
+    final targetIndex = controlKeys.indexOf(key);
+    final materializedControlIndices = <int>[
+      for (var index = 0; index < controlKeys.length; index++)
+        if (find.byKey(Key(controlKeys[index])).evaluate().isNotEmpty) index,
+    ];
+    final scrollDelta = materializedControlIndices.isNotEmpty &&
+            targetIndex < materializedControlIndices.first
+        ? -400.0
+        : 400.0;
+
+    await tester.scrollUntilVisible(
+      target,
+      scrollDelta,
+      scrollable: scrollable,
+    );
+    await tester.pump();
+    return target;
+  }
+
   Future<_RecordingSettingsController> pumpSettings(
     WidgetTester tester, {
     UserSettings settings = const UserSettings(),
@@ -24,8 +64,7 @@ void main() {
   }
 
   Future<void> tapSave(WidgetTester tester) async {
-    final save = find.byKey(const Key('settings-save'));
-    await tester.ensureVisible(save);
+    final save = await scrollToControl(tester, 'settings-save');
     await tester.tap(save);
     await tester.pump();
   }
@@ -41,10 +80,16 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byKey(const Key('settings-age')), ' 50 ');
-    await tester.enterText(find.byKey(const Key('settings-hr-max')), '   ');
     await tester.enterText(
-      find.byKey(const Key('settings-anthropic-api-key')),
+      await scrollToControl(tester, 'settings-age'),
+      ' 50 ',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-hr-max'),
+      '   ',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-anthropic-api-key'),
       '   ',
     );
     await tapSave(tester);
@@ -60,10 +105,16 @@ void main() {
   testWidgets('nonblank settings text is trimmed before save', (tester) async {
     final controller = await pumpSettings(tester);
 
-    await tester.enterText(find.byKey(const Key('settings-age')), ' 41 ');
-    await tester.enterText(find.byKey(const Key('settings-hr-max')), ' 188.5 ');
     await tester.enterText(
-      find.byKey(const Key('settings-anthropic-api-key')),
+      await scrollToControl(tester, 'settings-age'),
+      ' 41 ',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-hr-max'),
+      ' 188.5 ',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-anthropic-api-key'),
       '  secret  ',
     );
     await tapSave(tester);
@@ -82,7 +133,7 @@ void main() {
     );
 
     final field = tester.widget<TextField>(
-      find.byKey(const Key('settings-hr-max')),
+      await scrollToControl(tester, 'settings-hr-max'),
     );
     expect(field.controller!.text, '188.5');
   });
@@ -93,7 +144,7 @@ void main() {
       final controller = await pumpSettings(tester);
 
       await tester.enterText(
-        find.byKey(const Key('settings-age')),
+        await scrollToControl(tester, 'settings-age'),
         invalidAge,
       );
       await tapSave(tester);
@@ -112,7 +163,7 @@ void main() {
       final controller = await pumpSettings(tester);
 
       await tester.enterText(
-        find.byKey(const Key('settings-hr-max')),
+        await scrollToControl(tester, 'settings-hr-max'),
         invalidHrMax,
       );
       await tapSave(tester);
@@ -131,15 +182,27 @@ void main() {
       (tester) async {
     final controller = await pumpSettings(tester);
 
-    await tester.enterText(find.byKey(const Key('settings-age')), '120');
-    await tester.enterText(find.byKey(const Key('settings-hr-max')), '260');
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-age'),
+      '120',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-hr-max'),
+      '260',
+    );
     await tapSave(tester);
     expect(controller.saveCalls, 1);
     expect(controller.settings.age, 120);
     expect(controller.settings.hrMaxOverride, 260);
 
-    await tester.enterText(find.byKey(const Key('settings-age')), '1');
-    await tester.enterText(find.byKey(const Key('settings-hr-max')), '30');
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-age'),
+      '1',
+    );
+    await tester.enterText(
+      await scrollToControl(tester, 'settings-hr-max'),
+      '30',
+    );
     await tapSave(tester);
     expect(controller.saveCalls, 2);
     expect(controller.settings.age, 1);

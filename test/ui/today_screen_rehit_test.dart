@@ -610,6 +610,7 @@ void main() {
 
     expect(find.text('Plan unavailable in current safety mode'), findsNothing);
     expect(find.text('Travel-safe Zone 2'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Log cardio attempt'), 200);
     expect(find.text('Log cardio attempt'), findsOneWidget);
   });
 }
