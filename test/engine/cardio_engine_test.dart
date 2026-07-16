@@ -208,6 +208,8 @@ void main() {
       CardioCompletion? completion, {
       Set<FloorCategory> countsAs = const {FloorCategory.intensity},
       bool? completedAsPrescribed,
+      bool isSupplemental = false,
+      bool isUnplanned = false,
     }) =>
         SessionLog(
           id: 'test-${id.name}-${completion?.completedWorkSeconds}',
@@ -223,6 +225,8 @@ void main() {
           countsAs: countsAs,
           cardioCompletion: completion,
           cardioCompletedAsPrescribed: completedAsPrescribed,
+          isSupplemental: isSupplemental,
+          isUnplanned: isUnplanned,
         );
 
     test('partial 4x4 persists but does not count or advance', () {
@@ -325,6 +329,40 @@ void main() {
       final legacy = log(SessionTypeId.s3, null);
       expect(legacy.cardioDoseQualifies, isTrue);
       expect(legacy.countsTowardQueueAndFloor, isTrue);
+    });
+
+    test('supplemental dose counts without completing the primary plan', () {
+      final prescription = engine.prescriptionFor(
+        sessionId: SessionTypeId.s7,
+        durationMinutes: 5,
+        heartRateMaxBpm: 180,
+      );
+      final completion = engine.completionFromEntry(
+        prescription: prescription,
+        completedWorkIntervals: 2,
+        completedDurationMinutes: 5,
+      );
+      final recommendedExtra = log(
+        SessionTypeId.s7,
+        completion,
+        completedAsPrescribed: true,
+        isSupplemental: true,
+      );
+      final unplanned = log(
+        SessionTypeId.s7,
+        completion,
+        completedAsPrescribed: true,
+        isSupplemental: true,
+        isUnplanned: true,
+      );
+
+      expect(recommendedExtra.countsTowardQueueAndFloor, isTrue);
+      expect(recommendedExtra.completesTodaysPlan, isFalse);
+      expect(recommendedExtra.isUnplanned, isFalse);
+      expect(unplanned.countsTowardQueueAndFloor, isTrue);
+      expect(unplanned.completesTodaysPlan, isFalse);
+      expect(unplanned.isSupplemental, isTrue);
+      expect(unplanned.isUnplanned, isTrue);
     });
 
     test('mismatched session and completion protocol is rejected', () {

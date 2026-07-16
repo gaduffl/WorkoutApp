@@ -105,12 +105,15 @@ class AppController extends ChangeNotifier {
   /// Whether today's prescription was completed (Home/Today "done" state).
   /// Stimulus/category credit is tracked separately: a fully completed
   /// 20-minute S6 recovery prescription is done without becoming base work.
-  bool get sessionDoneToday => _todaysLogs.any((l) => l.completesTodaysPlan);
+  bool get sessionDoneToday => _todaysLogs.any(
+        (log) => !log.isSupplemental && log.completesTodaysPlan,
+      );
 
-  /// Any persisted work today, including a partial session. A plan must not
-  /// be regenerated after logging has begun because that would change the
-  /// prescription underneath an in-progress/partial workout.
-  bool get sessionLoggedToday => _todaysLogs.isNotEmpty;
+  /// Any persisted primary work today, including a partial primary session.
+  /// Supplemental work remains visible to dose/recovery logic without
+  /// changing or locking the primary prescription.
+  bool get sessionLoggedToday =>
+      _todaysLogs.any((log) => !log.isSupplemental);
 
   static const _primaryPlanLockedMessage =
       'Today\'s primary prescription is locked after any workout attempt has been logged.';
@@ -120,19 +123,20 @@ class AppController extends ChangeNotifier {
   /// as well, so a stale controller (for example after route restoration)
   /// cannot create a second primary attempt.
   Future<bool> _hasPersistedWorkoutToday() async {
-    if (sessionLoggedToday) return true;
+    final hasKnownPrimary = sessionLoggedToday;
     final day = today();
     final persisted = (await repo.loadSessionLogsSince(day))
         .where((log) => _isSameDate(log.date, day))
         .toList();
-    if (persisted.isEmpty) return false;
+    if (persisted.isEmpty) return hasKnownPrimary;
 
     final knownIds = _recentLogs.map((log) => log.id).toSet();
     _recentLogs = [
       ..._recentLogs,
       ...persisted.where((log) => knownIds.add(log.id)),
     ];
-    return true;
+    return hasKnownPrimary ||
+        persisted.any((log) => !log.isSupplemental);
   }
 
   Future<void> _assertPrimaryPlanUnlocked() async {
@@ -852,7 +856,8 @@ class AppController extends ChangeNotifier {
   /// Discards today's check-in/recovery entry and recommendation so the
   /// user can redo the morning check-in (e.g. after a typo). This also undoes
   /// the pain-lifecycle bookkeeping the mistaken check-in wrote. Once any
-  /// workout attempt is logged, the check-in and plan are immutable today.
+  /// primary attempt is logged, the check-in and plan are immutable today;
+  /// supplemental work does not lock them.
   Future<void> resetToday() async {
     await _assertPrimaryPlanUnlocked();
     final now = today();
@@ -984,7 +989,7 @@ class AppController extends ChangeNotifier {
       cardioCompletion: cardioCompletion,
       rehitFinisherCompletion: rehitFinisherCompletion,
       endedEarly: endedEarly,
-      isAddedSecondRehit: false,
+      isSupplemental: false,
     );
   }
 
@@ -992,15 +997,18 @@ class AppController extends ChangeNotifier {
     SessionPlan plan,
     List<SetLog> loggedSets, {
     required int durationMinutes,
-    required bool isAddedSecondRehit,
+    required bool isSupplemental,
+    bool isUnplanned = false,
+    bool bypassProspectiveHighIntensityGate = false,
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
   }) async {
-    if (!isAddedSecondRehit) {
+    assert(!isUnplanned || isSupplemental);
+    if (!isSupplemental) {
       await _assertPrimaryPlanUnlocked();
     }
-    if (!isPlanUsableNow(plan)) {
+    if (!bypassProspectiveHighIntensityGate && !isPlanUsableNow(plan)) {
       throw StateError(
         'This high-intensity session does not pass the current recovery/safety gate.',
       );
@@ -1294,6 +1302,8 @@ class AppController extends ChangeNotifier {
             : null,
         rehitFinisherCompleted:
             rehitFinisherCompletion?.meetsCreditableDose == true,
+        isSupplemental: isSupplemental,
+        isUnplanned: isUnplanned,
         travelMode: plan.travelMode,
         endedEarly: endedEarly,
       );
@@ -1382,7 +1392,47 @@ class AppController extends ChangeNotifier {
       const [],
       durationMinutes: (completion.completedDurationSeconds + 59) ~/ 60,
       cardioCompletion: completion,
-      isAddedSecondRehit: plan == null,
+      isSupplemental: plan == null,
+    );
+  }
+
+  /// Records a fixed CAROL REHIT attempt that already happened outside the
+  /// app's prospective plan. Retrospective entry validates the real dose but
+  /// deliberately does not re-run readiness, travel, recovery-window, first-
+  /// session, or primary-plan gates that can no longer prevent the workout.
+  Future<void> logUnplannedRehit({
+    required CardioCompletion completion,
+  }) async {
+    const cardioEngine = CardioEngine();
+    final def = sessionTypes[SessionTypeId.s7]!;
+    final prescription = cardioEngine.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: def.fullDurationMin,
+      heartRateMaxBpm: settings.hrMax,
+    );
+    cardioEngine.validateSessionMatch(
+      sessionId: SessionTypeId.s7,
+      prescription: prescription,
+      completion: completion,
+    );
+    final plan = SessionPlan(
+      sessionId: SessionTypeId.s7,
+      sessionName: def.name,
+      tier: SessionTier.full,
+      exercises: const [],
+      estimatedDurationMin: def.fullDurationMin,
+      cardioPrescription: prescription,
+      grantsQueueCredit: false,
+      travelMode: false,
+    );
+    await _completeSession(
+      plan,
+      const [],
+      durationMinutes: (completion.completedDurationSeconds + 59) ~/ 60,
+      cardioCompletion: completion,
+      isSupplemental: true,
+      isUnplanned: true,
+      bypassProspectiveHighIntensityGate: true,
     );
   }
 

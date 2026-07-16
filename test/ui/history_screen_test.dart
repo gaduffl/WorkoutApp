@@ -319,6 +319,88 @@ void main() {
   });
 
   testWidgets(
+      'supplemental and unplanned REHIT rows use delivered dose for partial status',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 4000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SessionLog rehit({
+      required String id,
+      required DateTime date,
+      required bool isUnplanned,
+      required CardioCompletion completion,
+    }) =>
+        SessionLog(
+          id: id,
+          templateId: SessionTypeId.s7,
+          tier: SessionTier.full,
+          date: date,
+          completedAt: date.add(const Duration(hours: 8)),
+          setLogs: const [],
+          plannedWorkSets: 0,
+          completedWorkSets: 0,
+          durationMinutes: 8,
+          countsAs: completion.meetsCreditableDose
+              ? const {FloorCategory.intensity}
+              : const {},
+          cardioCompletedAsPrescribed: false,
+          cardioCompletion: completion,
+          isSupplemental: true,
+          isUnplanned: isUnplanned,
+        );
+    final data = dataWith(
+      logs: [
+        rehit(
+          id: 'eligible-second-rehit',
+          date: DateTime(2026, 7, 14),
+          isUnplanned: false,
+          completion: const CardioCompletion(
+            protocol: CardioProtocol.rehit,
+            completedWorkIntervals: 2,
+            completedWorkSeconds: 40,
+            completedRecoveryIntervals: 0,
+            completedRecoverySeconds: 0,
+            completedDurationSeconds: 480,
+          ),
+        ),
+        rehit(
+          id: 'retrospective-partial-rehit',
+          date: DateTime(2026, 7, 15),
+          isUnplanned: true,
+          completion: const CardioCompletion(
+            protocol: CardioProtocol.rehit,
+            completedWorkIntervals: 1,
+            completedWorkSeconds: 20,
+            completedRecoveryIntervals: 0,
+            completedRecoverySeconds: 0,
+            completedDurationSeconds: 480,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(app(loader: (_) async => data));
+    await tester.pumpAndSettle();
+
+    expect(find.text('S7 - full · supplemental'), findsOneWidget);
+    expect(find.text('S7 - full · unplanned'), findsOneWidget);
+    expect(
+      find.textContaining('2 sprints · 0:40 work · 8:00 total'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('2 sprints · 0:40 work · 8:00 total (partial)'),
+      findsNothing,
+    );
+    expect(
+      find.textContaining('1 sprint · 0:20 work · 8:00 total (partial)'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'history distinguishes completed short recovery from a partial longer S6',
       (tester) async {
     tester.view.physicalSize = const Size(800, 3000);

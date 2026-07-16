@@ -132,11 +132,15 @@ void main() {
       ..remove('cardioCompletion')
       ..remove('cardioCompletedAsPrescribed')
       ..remove('completedAt')
-      ..remove('completedAtPrecision');
+      ..remove('completedAtPrecision')
+      ..remove('isSupplemental')
+      ..remove('isUnplanned');
 
     final restored = sessionLogFromJson(legacyLog);
     expect(restored.cardioCompletion, isNull);
     expect(restored.cardioCompletedAsPrescribed, isNull);
+    expect(restored.isSupplemental, isFalse);
+    expect(restored.isUnplanned, isFalse);
     expect(restored.completedAt, DateTime(2026, 7, 14));
     expect(
       restored.completedAtPrecision,
@@ -150,6 +154,74 @@ void main() {
       CompletionTimePrecision.dateOnlyInferred,
     );
     expect(restored.countsTowardQueueAndFloor, isTrue);
+  });
+
+  test('supplemental provenance round-trips and unplanned implies supplemental',
+      () {
+    SessionLog rehitLog({
+      required String id,
+      required bool isSupplemental,
+      bool isUnplanned = false,
+    }) =>
+        SessionLog(
+          id: id,
+          templateId: SessionTypeId.s7,
+          tier: SessionTier.full,
+          date: DateTime(2026, 7, 15),
+          completedAt: DateTime(2026, 7, 15, 18),
+          setLogs: const [],
+          plannedWorkSets: 0,
+          completedWorkSets: 0,
+          durationMinutes: 5,
+          countsAs: const {FloorCategory.intensity},
+          cardioCompletion: const CardioCompletion(
+            protocol: CardioProtocol.rehit,
+            completedWorkIntervals: 2,
+            completedWorkSeconds: 40,
+            completedRecoveryIntervals: 0,
+            completedRecoverySeconds: 0,
+            completedDurationSeconds: 300,
+          ),
+          cardioCompletedAsPrescribed: true,
+          isSupplemental: isSupplemental,
+          isUnplanned: isUnplanned,
+        );
+
+    final recommendedExtra = sessionLogFromJson(
+      _throughJson(
+        sessionLogToJson(
+          rehitLog(id: 'recommended-extra', isSupplemental: true),
+        ),
+      ),
+    );
+    expect(recommendedExtra.isSupplemental, isTrue);
+    expect(recommendedExtra.isUnplanned, isFalse);
+    expect(recommendedExtra.completesTodaysPlan, isFalse);
+
+    final unplanned = sessionLogFromJson(
+      _throughJson(
+        sessionLogToJson(
+          rehitLog(
+            id: 'unplanned',
+            isSupplemental: true,
+            isUnplanned: true,
+          ),
+        ),
+      ),
+    );
+    expect(unplanned.isSupplemental, isTrue);
+    expect(unplanned.isUnplanned, isTrue);
+
+    final malformedUnplannedJson = sessionLogToJson(
+      rehitLog(
+        id: 'malformed-unplanned',
+        isSupplemental: true,
+        isUnplanned: true,
+      ),
+    )..remove('isSupplemental');
+    final normalized = sessionLogFromJson(malformedUnplannedJson);
+    expect(normalized.isUnplanned, isTrue);
+    expect(normalized.isSupplemental, isTrue);
   });
 
   test('timestamp rows predating precision metadata remain exact', () {

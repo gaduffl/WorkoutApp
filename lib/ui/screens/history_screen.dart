@@ -100,7 +100,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       dense: true,
                       leading: l.travelMode ? const Icon(Icons.luggage_outlined) : null,
                       title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'
-                          '${l.travelMode ? ' · travel' : ''}'),
+                          '${l.travelMode ? ' · travel' : ''}'
+                          '${_sessionOriginSuffix(l)}'),
                       subtitle: Text(
                         '${_d(l.date)} - ${historySessionDoseSummary(l)}'
                         '${_sessionCompletionSuffix(l)}',
@@ -418,13 +419,23 @@ String _sets(double value) =>
 
 String _d(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+String _sessionOriginSuffix(SessionLog log) {
+  if (log.isUnplanned) return ' · unplanned';
+  if (log.isSupplemental) return ' · supplemental';
+  return '';
+}
+
 String _sessionCompletionSuffix(SessionLog log) {
   if (log.templateId == SessionTypeId.s6 &&
       log.cardioCompletedAsPrescribed == true &&
       !log.cardioDoseQualifies) {
     return ' (completed recovery · no base credit)';
   }
-  return log.completesTodaysPlan ? '' : ' (partial)';
+  final supplemental = log.isSupplemental || log.isUnplanned;
+  final complete = supplemental
+      ? log.countsTowardQueueAndFloor
+      : log.completesTodaysPlan;
+  return complete ? '' : ' (partial)';
 }
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
