@@ -18,7 +18,7 @@ const optionalRehitFinisherMessage =
 
 String planTimingLabel(SessionPlan plan) => switch (plan.sessionId) {
       SessionTypeId.s3 => 'CAROL bike preset · 30 min',
-      SessionTypeId.s7 => 'CAROL bike preset · 5:00–8:40',
+      SessionTypeId.s7 => 'CAROL bike preset · 08:40',
       _ => '${plan.tier.name} tier - ~${plan.estimatedDurationMin} min',
     };
 
@@ -27,7 +27,7 @@ String candidateTimingLabel(
   String reason,
 ) => switch (sessionId) {
       SessionTypeId.s3 => 'CAROL 30-minute preset · $reason',
-      SessionTypeId.s7 => 'CAROL preset (5:00–8:40) · $reason',
+      SessionTypeId.s7 => 'CAROL preset (08:40) · $reason',
       _ => reason,
     };
 
@@ -556,9 +556,9 @@ class _TodayScreenState extends State<TodayScreen> {
                       '~${trace.checkin.timeMinutes} min · Substitutes high-intensity cardio due to today\'s recovery/safety gate';
                 } else if (effectiveId == SessionTypeId.s7 && effectiveId != c.sessionId) {
                   modulationLabel = trace.checkin.timeMinutes < 35
-                      ? 'CAROL preset (5:00–8:40) · '
+                      ? 'CAROL preset (08:40) · '
                           'Substitutes queued 4×4 due to time'
-                      : 'CAROL preset (5:00–8:40) · '
+                      : 'CAROL preset (08:40) · '
                           'Substitutes 4×4 due to YELLOW readiness';
                 }
                 final def = sessionTypes[effectiveId]!;
