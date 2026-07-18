@@ -378,8 +378,26 @@ void main() {
           (exercise) => exercise.trackKey == 'atg_block',
         );
         expect(atg.targetRange, (entry.value, entry.value));
-        expect(atg.name, contains('upper prep'));
-        expect(atg.instruction, contains('shoulder/scapular rehearsal'));
+        expect(atg.name, 'ATG + upper-body prep');
+        for (final cue in entry.value == 3
+            ? [
+                '0:00–1:00 · Backward treadmill',
+                '1:00–1:30 · Tibialis raises (10–15)',
+                '1:30–2:00 · Calf raises (10–15)',
+                '2:00–2:30 · Shoulder circles (8 each direction)',
+                '2:30–3:00 · Scapular push-ups (6–10)',
+              ]
+            : [
+                '0:00–2:00 · Backward treadmill',
+                '2:00–2:45 · Tibialis raises (15–20)',
+                '2:45–3:30 · Calf raises (15–20)',
+                '3:30–4:15 · Shoulder circles (10 each direction)',
+                '4:15–5:00 · Scapular push-ups (8–12)',
+              ]) {
+          expect(atg.instruction, contains(cue));
+        }
+        expect(atg.instruction, contains('Replaces general movement prep.'));
+        expect(atg.instruction, isNot(contains('shoulder/scapular rehearsal')));
         expect(
           plan.exercises.where(
             (exercise) => exercise.trackKey.startsWith('warmup:'),
