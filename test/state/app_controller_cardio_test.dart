@@ -426,10 +426,10 @@ void main() {
       completedWorkIntervals: 1,
       completedDurationMinutes: 5,
     );
-    final full = cardio.completionFromEntry(
+    final full = cardio.completionFromElapsedSeconds(
       prescription: prescription,
       completedWorkIntervals: 2,
-      completedDurationMinutes: 5,
+      completedDurationSeconds: 520,
     );
 
     expect(controller.secondRehitEligibility.eligible, isFalse);
@@ -536,10 +536,10 @@ void main() {
       durationMinutes: 9,
       heartRateMaxBpm: controller.settings.hrMax,
     );
-    final completion = cardio.completionFromEntry(
+    final completion = cardio.completionFromElapsedSeconds(
       prescription: prescription,
       completedWorkIntervals: 2,
-      completedDurationMinutes: 5,
+      completedDurationSeconds: 520,
     );
 
     await controller.logUnplannedRehit(completion: completion);
