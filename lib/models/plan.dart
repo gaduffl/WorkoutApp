@@ -13,8 +13,8 @@ class PlannedExercise {
   final (int, int) targetRange;
   final double? loadTotal;
 
-  /// Human-readable load setup, e.g. "2x large @ 25 lb" or
-  /// "L: 45 / R: 50, swap after each set" (§2.6 rule 1 & 3).
+  /// Human-readable load setup, e.g. "2 × 25 lb (50 lb total; large pair)" or
+  /// "L: 45 / R: 50 (95 lb total), swap after each set" (§2.6 rule 1 & 3).
   final String? loadDisplay;
   final Rir rirTarget;
   final String? substitutedFrom;
@@ -40,6 +40,16 @@ class PlannedExercise {
   /// steps weight through real PowerBlock jumps instead of a flat ±5.
   /// Null for bodyweight / backpack-loaded / travel (free-entry) exercises.
   final List<double>? loadSteps;
+
+  /// Physical dumbbells represented by [loadTotal]. Stored loads always
+  /// remain totals; this metadata only lets the logger present that total as
+  /// the setup the person actually puts in their hands. A null value is a
+  /// legacy/free-entry plan and intentionally keeps the old total-only UI.
+  final int? dumbbellCount;
+
+  /// Whether a two-dumbbell setup may use an uneven pair. Null is retained
+  /// for legacy plans, which must not be reinterpreted from their old totals.
+  final bool? allowsUnevenPair;
 
   /// §2.5: work exercises that share a superset group are alternated with
   /// ~90 s rest after the *pair*. Null = run as straight sets. Warm-ups are
@@ -79,6 +89,8 @@ class PlannedExercise {
     this.progressionEligible = true,
     this.isTravel = false,
     this.loadSteps,
+    this.dumbbellCount,
+    this.allowsUnevenPair,
     this.supersetGroup,
     this.isCompoundWork = false,
     this.isFeederWarmup = false,
@@ -112,6 +124,8 @@ class PlannedExercise {
         progressionEligible: progressionEligible,
         isTravel: isTravel,
         loadSteps: loadSteps,
+        dumbbellCount: dumbbellCount,
+        allowsUnevenPair: allowsUnevenPair,
         supersetGroup: supersetGroup ?? this.supersetGroup,
         isCompoundWork: isCompoundWork,
         isFeederWarmup: isFeederWarmup,

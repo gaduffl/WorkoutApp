@@ -82,6 +82,8 @@ class CardioCompletion {
   final double? averageHeartRateBpm;
   final double? peakHeartRateBpm;
   final double? rpe;
+  final double? fitnessScore;
+  final double? peakPowerWatts;
 
   const CardioCompletion({
     required this.protocol,
@@ -93,6 +95,8 @@ class CardioCompletion {
     this.averageHeartRateBpm,
     this.peakHeartRateBpm,
     this.rpe,
+    this.fitnessScore,
+    this.peakPowerWatts,
   })  : assert(completedWorkIntervals >= 0),
         assert(completedWorkSeconds >= 0),
         assert(completedRecoveryIntervals >= 0),
@@ -101,7 +105,9 @@ class CardioCompletion {
             completedWorkSeconds + completedRecoverySeconds),
         assert(averageHeartRateBpm == null || averageHeartRateBpm > 0),
         assert(peakHeartRateBpm == null || peakHeartRateBpm > 0),
-        assert(rpe == null || (rpe >= 0 && rpe <= 10));
+        assert(rpe == null || (rpe >= 0 && rpe <= 10)),
+        assert(fitnessScore == null || fitnessScore >= 0),
+        assert(peakPowerWatts == null || peakPowerWatts > 0);
 
   /// Whether this attempt delivered the minimum dose that earns training
   /// credit. The stimuli stay intentionally separate: a short REHIT never
@@ -126,8 +132,9 @@ class CardioCompletion {
   /// the other direction, 30 minutes of a prescribed 35-minute S6 earns base
   /// credit but is still only a partial completion of that plan.
   ///
-  /// Heart-rate and RPE targets are coaching ranges rather than required
-  /// completion fields, so adherence here compares the prescribed dose only.
+  /// Heart-rate and RPE targets are coaching ranges, while fitness score and
+  /// peak power are result metrics. None determine credit or adherence, so
+  /// this compares the prescribed dose only.
   bool completesPrescription(CardioPrescription prescription) =>
       protocol.type == prescription.protocol.type &&
       completedWorkIntervals >= prescription.plannedWorkIntervals &&

@@ -1,5 +1,6 @@
 import '../../engine/stimulus_ledger_engine.dart';
 import '../../engine/training_status_engine.dart';
+import '../../models/cardio_protocol.dart';
 import '../../models/session_log.dart';
 import '../../models/session_type.dart';
 import '../../models/stimulus_ledger.dart';
@@ -250,7 +251,8 @@ String historySessionDoseSummary(SessionLog log) {
       return '${completion.completedWorkIntervals} '
           '${completion.completedWorkIntervals == 1 ? 'work interval' : 'work intervals'} · '
           '${_cardioDuration(completion.completedWorkSeconds)} work · '
-          '${_cardioDuration(completion.completedDurationSeconds)} total';
+          '${_cardioDuration(completion.completedDurationSeconds)} total'
+          '${_carolResultSuffix(completion)}';
     case SessionTypeId.s6:
       if (completion == null) return _legacyCardioDose(log);
       return '${_cardioDuration(completion.completedDurationSeconds)} continuous';
@@ -259,7 +261,8 @@ String historySessionDoseSummary(SessionLog log) {
       return '${completion.completedWorkIntervals} '
           '${completion.completedWorkIntervals == 1 ? 'sprint' : 'sprints'} · '
           '${_cardioDuration(completion.completedWorkSeconds)} work · '
-          '${_cardioDuration(completion.completedDurationSeconds)} total';
+          '${_cardioDuration(completion.completedDurationSeconds)} total'
+          '${_carolResultSuffix(completion)}';
     case SessionTypeId.s1:
     case SessionTypeId.s2:
     case SessionTypeId.s4:
@@ -270,6 +273,20 @@ String historySessionDoseSummary(SessionLog log) {
 
 String _legacyCardioDose(SessionLog log) =>
     '${log.durationMinutes} min logged · legacy cardio details unavailable';
+
+String _carolResultSuffix(CardioCompletion completion) {
+  final details = <String>[
+    if (completion.fitnessScore != null)
+      'Fitness Score ${_cardioMetric(completion.fitnessScore!)}',
+    if (completion.peakPowerWatts != null)
+      'Peak Power ${_cardioMetric(completion.peakPowerWatts!)} W',
+  ];
+  return details.isEmpty ? '' : ' · ${details.join(' · ')}';
+}
+
+String _cardioMetric(double value) => value == value.roundToDouble()
+    ? value.round().toString()
+    : value.toStringAsFixed(1);
 
 String _cardioDuration(int seconds) {
   final minutes = seconds ~/ 60;

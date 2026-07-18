@@ -395,6 +395,10 @@ void main() {
         completedRecoveryIntervals: 1,
         completedRecoverySeconds: 180,
         completedDurationSeconds: 600,
+        peakHeartRateBpm: 181,
+        rpe: 9.5,
+        fitnessScore: 42.5,
+        peakPowerWatts: 734.5,
       ),
     );
     final legacy = session(
@@ -423,7 +427,8 @@ void main() {
     expect(historySessionDoseSummary(base), '20:00 continuous');
     expect(
       historySessionDoseSummary(rehit),
-      '2 sprints · 0:40 work · 10:00 total',
+      '2 sprints · 0:40 work · 10:00 total · '
+          'Fitness Score 42.5 · Peak Power 734.5 W',
     );
     expect(
       historySessionDoseSummary(legacy),

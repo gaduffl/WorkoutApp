@@ -155,20 +155,23 @@ class EquipmentEngine {
     return '';
   }
 
-  /// §2.6 rule 1: display must name the blocks and per-dumbbell weight,
-  /// not just the total (e.g. "2x large @ 25 lb").
+  /// §2.6 rule 1: display names the physical setup, including how many
+  /// dumbbells are loaded, rather than presenting a two-DB total as though
+  /// it were one dumbbell.
   String describeLoad(ResolvedLoad load, EquipmentConfig cfg) {
     if (load.isSingleDb) {
       final block = _blockLabelFor(load.perDumbbellA, cfg);
-      return '$block @ ${_fmt(load.perDumbbellA)} lb';
+      return '1 × ${_fmt(load.perDumbbellA)} lb ($block dumbbell)';
     }
     if (load.uneven) {
       final lo = math.min(load.perDumbbellA, load.perDumbbellB!);
       final hi = math.max(load.perDumbbellA, load.perDumbbellB!);
-      return 'L: ${_fmt(lo)} / R: ${_fmt(hi)}, swap after each set';
+      return 'L: ${_fmt(lo)} / R: ${_fmt(hi)} '
+          '(${_fmt(load.total)} lb total), swap after each set';
     }
     final block = _blockLabelFor(load.perDumbbellA, cfg);
-    return '2x $block @ ${_fmt(load.perDumbbellA)} lb';
+    return '2 × ${_fmt(load.perDumbbellA)} lb '
+        '(${_fmt(load.total)} lb total; $block pair)';
   }
 
   String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();

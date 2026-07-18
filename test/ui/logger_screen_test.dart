@@ -90,6 +90,178 @@ void main() {
     expect(find.text('24 lb'), findsOneWidget); // back down one real step
   });
 
+  testWidgets('logger presents Goblet as one DB and deadlift as a matched pair',
+      (tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+    final physicalPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Physical loads',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          name: 'Goblet squat',
+          sets: 1,
+          targetRange: (6, 10),
+          loadTotal: 24,
+          dumbbellCount: 1,
+          allowsUnevenPair: false,
+          rirTarget: Rir.rir2,
+        ),
+        PlannedExercise(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          name: 'Elevated-start DB deadlift (on blocks)',
+          sets: 1,
+          targetRange: (6, 10),
+          loadTotal: 48,
+          dumbbellCount: 2,
+          allowsUnevenPair: true,
+          loadSteps: [12, 18, 20, 24, 30, 36, 40, 42, 48, 50],
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: physicalPlan)),
+      ),
+    );
+
+    expect(find.text('1 × 24 lb (small dumbbell)'), findsOneWidget);
+    await tester.tap(find.text('Log set'));
+    await tester.pump();
+    expect(find.text('2 × 24 lb (48 lb total; small pair)'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add).first);
+    await tester.pump();
+    // Total advances 48 -> 50, but the visible setup advances 24 -> 25 per DB.
+    expect(find.text('2 × 25 lb (50 lb total; large pair)'), findsOneWidget);
+  });
+
+  testWidgets('paired setup increment persists the unchanged total-load domain',
+      (tester) async {
+    final controller = captureController();
+    final pairedPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Paired load',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          name: 'Elevated-start DB deadlift (on blocks)',
+          sets: 1,
+          targetRange: (6, 10),
+          loadTotal: 48,
+          dumbbellCount: 2,
+          allowsUnevenPair: false,
+          loadSteps: [12, 18, 20, 24, 30, 36, 40, 42, 48, 50],
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: pairedPlan)),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.add).first);
+    await tester.pump();
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+
+    expect(controller.lastLoggedSets.single.weight, 50);
+  });
+
+  testWidgets(
+      'an active uneven-pair plan keeps its 24/25 setup after settings disable uneven mode',
+      (tester) async {
+    final controller = captureController();
+    controller.settings = controller.settings.copyWith(
+      equipment: controller.settings.equipment.copyWith(
+        unevenPairModeEnabled: false,
+      ),
+    );
+    final unevenPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Uneven paired load',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          name: 'Elevated-start DB deadlift (on blocks)',
+          sets: 1,
+          targetRange: (6, 10),
+          loadTotal: 49,
+          loadSteps: [48, 49, 50],
+          dumbbellCount: 2,
+          allowsUnevenPair: true,
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: unevenPlan)),
+      ),
+    );
+
+    expect(
+      find.text('L: 24 / R: 25 (49 lb total), swap after each set'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+    expect(controller.lastLoggedSets.single.weight, 49);
+  });
+
+  testWidgets('two-DB load setup fits a narrow phone without overflow',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = AppController(Repository(AppDatabase()));
+    final pairedPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Paired load',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'hinge',
+          pattern: MovementPattern.hinge,
+          name: 'Elevated-start DB deadlift (on blocks)',
+          sets: 1,
+          targetRange: (6, 10),
+          loadTotal: 48,
+          dumbbellCount: 2,
+          allowsUnevenPair: false,
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: pairedPlan)),
+      ),
+    );
+
+    expect(find.text('2 × 24 lb (48 lb total; small pair)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('superset pair is indicated and can be toggled to straight sets', (tester) async {
     await tester.pumpWidget(MaterialApp(home: LoggerScreen(plan: plan)));
 

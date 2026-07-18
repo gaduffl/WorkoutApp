@@ -82,6 +82,8 @@ void main() {
         averageHeartRateBpm: 157,
         peakHeartRateBpm: 178,
         rpe: 9.5,
+        fitnessScore: 41.5,
+        peakPowerWatts: 712.5,
       ),
     );
 
@@ -105,7 +107,20 @@ void main() {
     expect(restoredLog.cardioCompletion!.averageHeartRateBpm, 157);
     expect(restoredLog.cardioCompletion!.peakHeartRateBpm, 178);
     expect(restoredLog.cardioCompletion!.rpe, 9.5);
+    expect(restoredLog.cardioCompletion!.fitnessScore, 41.5);
+    expect(restoredLog.cardioCompletion!.peakPowerWatts, 712.5);
     expect(restoredLog.cardioCompletedAsPrescribed, isFalse);
+
+    final legacyJson = _throughJson(sessionLogToJson(log));
+    final legacyCompletion =
+        legacyJson['cardioCompletion'] as Map<String, dynamic>;
+    legacyCompletion
+      ..remove('fitnessScore')
+      ..remove('peakPowerWatts');
+    final restoredLegacyMetrics = sessionLogFromJson(legacyJson);
+    expect(restoredLegacyMetrics.cardioCompletion!.fitnessScore, isNull);
+    expect(restoredLegacyMetrics.cardioCompletion!.peakPowerWatts, isNull);
+    expect(restoredLegacyMetrics.cardioCompletion!.averageHeartRateBpm, 157);
   });
 
   test('legacy plan and log JSON default all new fields safely', () {
@@ -172,7 +187,7 @@ void main() {
           setLogs: const [],
           plannedWorkSets: 0,
           completedWorkSets: 0,
-          durationMinutes: 5,
+          durationMinutes: 9,
           countsAs: const {FloorCategory.intensity},
           cardioCompletion: const CardioCompletion(
             protocol: CardioProtocol.rehit,
@@ -180,7 +195,7 @@ void main() {
             completedWorkSeconds: 40,
             completedRecoveryIntervals: 0,
             completedRecoverySeconds: 0,
-            completedDurationSeconds: 300,
+            completedDurationSeconds: 520,
           ),
           cardioCompletedAsPrescribed: true,
           isSupplemental: isSupplemental,

@@ -45,10 +45,21 @@ void main() {
     });
 
     test('describeLoad names the actual blocks', () {
+      final single = engine.resolveSingleDb(24, cfg);
+      expect(
+        engine.describeLoad(single, cfg),
+        '1 × 24 lb (small dumbbell)',
+      );
       final at48 = engine.resolveTwoDb(48, cfg, allowUneven: false);
-      expect(engine.describeLoad(at48, cfg), '2x small @ 24 lb');
+      expect(
+        engine.describeLoad(at48, cfg),
+        '2 × 24 lb (48 lb total; small pair)',
+      );
       final at50 = engine.resolveTwoDb(50, cfg, allowUneven: false);
-      expect(engine.describeLoad(at50, cfg), '2x large @ 25 lb');
+      expect(
+        engine.describeLoad(at50, cfg),
+        '2 × 25 lb (50 lb total; large pair)',
+      );
     });
   });
 
@@ -80,6 +91,10 @@ void main() {
       final resolved = engine.resolveTwoDb(49, cfgUneven, allowUneven: true);
       expect(resolved.uneven, isTrue);
       expect({resolved.perDumbbellA, resolved.perDumbbellB}, {24, 25});
+      expect(
+        engine.describeLoad(resolved, cfgUneven),
+        'L: 24 / R: 25 (49 lb total), swap after each set',
+      );
     });
   });
 

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/cardio_engine.dart';
+import '../../engine/equipment_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../engine/strength_duration_engine.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
+import '../../models/equipment.dart';
 import '../../models/plan.dart';
 import '../../models/session_type.dart';
 import '../../models/set_log.dart';
@@ -376,6 +378,16 @@ class _LoggerScreenState extends State<LoggerScreen> {
   Widget build(BuildContext context) {
     final step = _steps[_current];
     final e = _exercise;
+    // Logger tests and legacy callers may render a plan outside the normal
+    // app provider. New plans resolve against the current equipment config;
+    // old plans safely retain their total-only display when it is absent.
+    final controller = Provider.of<AppController?>(context, listen: false);
+    final currentLoad = _weightByExercise[step.exIdx] ?? 0;
+    final currentLoadDisplay = _loadDisplay(
+      e,
+      currentLoad,
+      controller?.settings.equipment,
+    );
     final partner = _supersetPartnerName(step);
     final isLast = _current == _steps.length - 1;
 
@@ -423,7 +435,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
                       const SizedBox(height: 12),
                       Text(
                         'Target: ${e.targetLabel}'
-                        '${e.loadDisplay != null ? ' @ ${e.loadDisplay}' : ''}',
+                        '${currentLoadDisplay == null ? '' : ' @ $currentLoadDisplay'}',
                         style: Theme.of(context).textTheme.bodyLarge,
                         textAlign: TextAlign.center,
                       ),
@@ -437,7 +449,9 @@ class _LoggerScreenState extends State<LoggerScreen> {
                       ],
                       const SizedBox(height: 20),
                       if (e.loadTotal != null || e.loadSteps != null)
-                        _weightStepper()
+                        _weightStepper(
+                          currentLoadDisplay,
+                        )
                       else if (!e.isWarmup)
                         const Text('Bodyweight', style: TextStyle(fontWeight: FontWeight.bold)),
                       _valueStepper(),
@@ -519,19 +533,78 @@ class _LoggerScreenState extends State<LoggerScreen> {
     return null;
   }
 
-  Widget _weightStepper() {
-    final w = _weightByExercise[_steps[_current].exIdx] ?? 0;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(width: 90, child: Text('Weight')),
-        IconButton.filledTonal(onPressed: () => _stepWeight(-1), icon: const Icon(Icons.remove)),
-        SizedBox(
-          width: 96,
-          child: Text('${w.toStringAsFixed(0)} lb',
-              textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+  /// Resolves the in-hand setup every build so a real achievable increment is
+  /// immediately visible. The logged value itself remains [loadTotal]'s
+  /// historical total — only the label changes.
+  String? _loadDisplay(
+    PlannedExercise exercise,
+    double total,
+    EquipmentConfig? equipment,
+  ) {
+    if (exercise.loadTotal == null && exercise.loadSteps == null) return null;
+    final count = exercise.dumbbellCount;
+    if (count == 1 && equipment != null) {
+      return const EquipmentEngine().describeLoad(
+        const EquipmentEngine().resolveSingleDb(total, equipment),
+        equipment,
+      );
+    }
+    if (count == 2 && equipment != null) {
+      // This plan's achievable totals were generated with uneven-pair mode
+      // allowed. Keep that physical resolution stable for the active plan if
+      // the user later turns the global toggle off; otherwise 49 would be
+      // shown as a fallback 48 while 49 is still what gets logged.
+      final displayEquipment = exercise.allowsUnevenPair == true
+          ? equipment.copyWith(unevenPairModeEnabled: true)
+          : equipment;
+      return const EquipmentEngine().describeLoad(
+        const EquipmentEngine().resolveTwoDb(
+          total,
+          displayEquipment,
+          allowUneven: exercise.allowsUnevenPair ?? false,
         ),
-        IconButton.filledTonal(onPressed: () => _stepWeight(1), icon: const Icon(Icons.add)),
+        displayEquipment,
+      );
+    }
+    // Metadata absent means this was saved by an older build. Do not infer
+    // dumbbell count from its total: that would silently reinterpret history.
+    return '${_formatLoad(total)} lb';
+  }
+
+  String _formatLoad(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+
+  Widget _weightStepper(String? currentLoadDisplay) {
+    final w = _weightByExercise[_steps[_current].exIdx] ?? 0;
+    final label = switch (_exercise.dumbbellCount) {
+      1 => 'Dumbbell load',
+      2 => 'Dumbbells',
+      _ => 'Weight',
+    };
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label),
+        Row(
+          children: [
+            IconButton.filledTonal(
+              onPressed: () => _stepWeight(-1),
+              icon: const Icon(Icons.remove),
+            ),
+            Expanded(
+              child: Text(
+                currentLoadDisplay ?? '${_formatLoad(w)} lb',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: () => _stepWeight(1),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
       ],
     );
   }

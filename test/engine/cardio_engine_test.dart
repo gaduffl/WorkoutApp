@@ -49,7 +49,7 @@ void main() {
       }
     });
 
-    test('CAROL REHIT records only its two sprints and fixed preset minimum',
+    test('CAROL REHIT records its two sprints and fixed 08:40 preset',
         () {
       final prescription = engine.prescriptionFor(
         sessionId: SessionTypeId.s7,
@@ -58,7 +58,7 @@ void main() {
       );
 
       expect(prescription.protocol.type, CardioProtocolType.rehit);
-      expect(prescription.plannedDurationSeconds, 300);
+      expect(prescription.plannedDurationSeconds, 520);
       expect(prescription.plannedWorkIntervals, 2);
       expect(prescription.plannedWorkSeconds, 40);
       expect(prescription.plannedRecoveryIntervals, 0);
@@ -137,7 +137,7 @@ void main() {
       expect(fullPlan.completesPrescription(prescription), isTrue);
     });
 
-    test('REHIT leaves bike-owned timing opaque and defaults to five minutes',
+    test('REHIT leaves bike-owned timing opaque and prescribes 08:40',
         () {
       final prescription = engine.prescriptionFor(
         sessionId: SessionTypeId.s7,
@@ -166,21 +166,21 @@ void main() {
         isFalse,
       );
 
-      final fullPlan = engine.completionFromEntry(
+      final shortCompletedPreset = engine.completionFromEntry(
         prescription: prescription,
         completedWorkIntervals: 2,
         completedDurationMinutes: 5,
       );
-      expect(fullPlan.meetsCreditableDose, isTrue);
-      expect(fullPlan.completesPrescription(prescription), isTrue);
+      expect(shortCompletedPreset.meetsCreditableDose, isTrue);
+      expect(shortCompletedPreset.completesPrescription(prescription), isFalse);
 
-      final bikeUpperRange = engine.completionFromElapsedSeconds(
+      final fullPlan = engine.completionFromElapsedSeconds(
         prescription: prescription,
         completedWorkIntervals: 2,
         completedDurationSeconds: 8 * 60 + 40,
       );
-      expect(bikeUpperRange.completedDurationSeconds, 520);
-      expect(bikeUpperRange.completesPrescription(prescription), isTrue);
+      expect(fullPlan.completedDurationSeconds, 520);
+      expect(fullPlan.completesPrescription(prescription), isTrue);
     });
 
     test('continuous Zone 2 validation remains unchanged', () {
@@ -254,10 +254,10 @@ void main() {
           durationMinutes: id == SessionTypeId.s3 ? 30 : 5,
           heartRateMaxBpm: 180,
         );
-        final completion = engine.completionFromEntry(
+        final completion = engine.completionFromElapsedSeconds(
           prescription: prescription,
           completedWorkIntervals: prescription.plannedWorkIntervals,
-          completedDurationMinutes: prescription.plannedDurationSeconds ~/ 60,
+          completedDurationSeconds: prescription.plannedDurationSeconds,
         );
 
         expect(completion.meetsCreditableDose, isTrue, reason: id.name);
@@ -337,10 +337,10 @@ void main() {
         durationMinutes: 5,
         heartRateMaxBpm: 180,
       );
-      final completion = engine.completionFromEntry(
+      final completion = engine.completionFromElapsedSeconds(
         prescription: prescription,
         completedWorkIntervals: 2,
-        completedDurationMinutes: 5,
+        completedDurationSeconds: 520,
       );
       final recommendedExtra = log(
         SessionTypeId.s7,
@@ -371,10 +371,10 @@ void main() {
         durationMinutes: 5,
         heartRateMaxBpm: 180,
       );
-      final rehit = engine.completionFromEntry(
+      final rehit = engine.completionFromElapsedSeconds(
         prescription: rehitPrescription,
         completedWorkIntervals: 2,
-        completedDurationMinutes: 5,
+        completedDurationSeconds: 520,
       );
       final fourByFourPrescription = engine.prescriptionFor(
         sessionId: SessionTypeId.s3,
@@ -407,6 +407,36 @@ void main() {
         ),
         throwsArgumentError,
       );
+      expect(
+        () => engine.completionFromElapsedSeconds(
+          prescription: prescription,
+          completedWorkIntervals: 2,
+          completedDurationSeconds: 520,
+          fitnessScore: double.infinity,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => engine.completionFromElapsedSeconds(
+          prescription: prescription,
+          completedWorkIntervals: 2,
+          completedDurationSeconds: 520,
+          peakPowerWatts: 0,
+        ),
+        throwsArgumentError,
+      );
+
+      final resultMetrics = engine.completionFromElapsedSeconds(
+        prescription: prescription,
+        completedWorkIntervals: 2,
+        completedDurationSeconds: 520,
+        fitnessScore: 42.5,
+        peakPowerWatts: 734.5,
+      );
+      expect(resultMetrics.fitnessScore, 42.5);
+      expect(resultMetrics.peakPowerWatts, 734.5);
+      expect(resultMetrics.meetsCreditableDose, isTrue);
+      expect(resultMetrics.completesPrescription(prescription), isTrue);
       expect(
         () => engine.completionFromEntry(
           prescription: prescription,

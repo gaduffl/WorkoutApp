@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/cardio_protocol.dart';
 import '../../models/history_data.dart';
 import '../../models/movement_pattern.dart';
 import '../../models/recovery_snapshot.dart';
@@ -440,7 +441,117 @@ String _sessionCompletionSuffix(SessionLog log) {
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
-// ---------- calendar heat (12 weeks, sequential single hue) ----------
+// ---------- calendar heat (12 weeks, strength + cardio categories) ----------
+
+/// The heatmap distinguishes training stimulus without converting cardio
+/// minutes into strength-set equivalents.
+enum HistoryHeatCategory { none, strength, zone2, vo2Rehit }
+
+/// Pure per-day evidence used by the history heatmap. Keeping this outside
+/// the widget makes the priority rule and legacy/partial cardio handling
+/// independently testable.
+class HistoryHeatDay {
+  final int strengthSets;
+  final List<_CardioHeatDose> _cardio;
+
+  const HistoryHeatDay._({
+    required this.strengthSets,
+    required List<_CardioHeatDose> cardio,
+  }) : _cardio = cardio;
+
+  static const empty = HistoryHeatDay._(
+    strengthSets: 0,
+    cardio: [],
+  );
+
+  bool get hasZone2 =>
+      _cardio.any((dose) => dose.category == HistoryHeatCategory.zone2);
+  bool get hasVo2Rehit =>
+      _cardio.any((dose) => dose.category == HistoryHeatCategory.vo2Rehit);
+
+  /// A single cell has one category even when multiple sessions were logged.
+  /// High intensity must not be visually hidden by a same-day base ride.
+  HistoryHeatCategory get category => hasVo2Rehit
+      ? HistoryHeatCategory.vo2Rehit
+      : hasZone2
+          ? HistoryHeatCategory.zone2
+          : strengthSets > 0
+              ? HistoryHeatCategory.strength
+              : HistoryHeatCategory.none;
+
+  String tooltip(DateTime date) {
+    final parts = <String>[];
+    if (strengthSets > 0) parts.add('$strengthSets strength ${strengthSets == 1 ? 'set' : 'sets'}');
+    final byCategory = <HistoryHeatCategory, int>{};
+    for (final dose in _cardio) {
+      byCategory[dose.category] = (byCategory[dose.category] ?? 0) + dose.seconds;
+    }
+    if (byCategory.containsKey(HistoryHeatCategory.zone2)) {
+      parts.add('Zone 2 ${_heatDuration(byCategory[HistoryHeatCategory.zone2]!)}');
+    }
+    if (byCategory.containsKey(HistoryHeatCategory.vo2Rehit)) {
+      parts.add('VO₂/REHIT ${_heatDuration(byCategory[HistoryHeatCategory.vo2Rehit]!)}');
+    }
+    return '${_d(date)}: ${parts.isEmpty ? 'No logged training' : parts.join(' · ')}';
+  }
+
+  static Map<String, HistoryHeatDay> project(List<SessionLog> logs) {
+    final strength = <String, int>{};
+    final cardio = <String, List<_CardioHeatDose>>{};
+    for (final log in logs) {
+      final key = '${log.date.year}-${log.date.month}-${log.date.day}';
+      if (log.completedWorkSets > 0) {
+        strength[key] = (strength[key] ?? 0) + log.completedWorkSets;
+      }
+      final dose = _cardioDoseFor(log);
+      if (dose != null) cardio.putIfAbsent(key, () => []).add(dose);
+    }
+    final keys = {...strength.keys, ...cardio.keys};
+    return {
+      for (final key in keys)
+        key: HistoryHeatDay._(
+          strengthSets: strength[key] ?? 0,
+          cardio: List.unmodifiable(cardio[key] ?? const <_CardioHeatDose>[]),
+        ),
+    };
+  }
+
+  static _CardioHeatDose? _cardioDoseFor(SessionLog log) {
+    final protocol = log.cardioCompletion?.protocol.type;
+    final isHighIntensity = log.rehitFinisherCompleted ||
+        log.templateId == SessionTypeId.s3 ||
+        log.templateId == SessionTypeId.s7 ||
+        protocol == CardioProtocolType.norwegian4x4 ||
+        protocol == CardioProtocolType.rehit;
+    final category = isHighIntensity
+        ? HistoryHeatCategory.vo2Rehit
+        : (log.templateId == SessionTypeId.s6 ||
+                protocol == CardioProtocolType.zone2Base)
+            ? HistoryHeatCategory.zone2
+            : null;
+    if (category == null) return null;
+    // A structured partial is still a genuine logged attempt. Legacy cardio
+    // rows have no seconds detail, so their logged duration remains honest.
+    final seconds = log.cardioCompletion?.completedDurationSeconds ??
+        log.durationMinutes * 60;
+    return _CardioHeatDose(category, seconds);
+  }
+}
+
+class _CardioHeatDose {
+  final HistoryHeatCategory category;
+  final int seconds;
+  const _CardioHeatDose(this.category, this.seconds);
+}
+
+String _heatDuration(int seconds) {
+  if (seconds <= 0) return 'logged';
+  final minutes = seconds ~/ 60;
+  final remainder = seconds % 60;
+  return remainder == 0
+      ? '${minutes}m'
+      : '$minutes:${remainder.toString().padLeft(2, '0')}';
+}
 
 class _CalendarHeatCard extends StatelessWidget {
   final List<SessionLog> logs;
@@ -454,12 +565,10 @@ class _CalendarHeatCard extends StatelessWidget {
     // grid ends on today's week (Mon-first), 12 columns of weeks
     final weekday = today.weekday; // 1 = Mon
     final gridEnd = today.add(Duration(days: 7 - weekday));
-    final setsByDay = <String, int>{};
-    for (final l in logs) {
-      setsByDay['${l.date.year}-${l.date.month}-${l.date.day}'] =
-          (setsByDay['${l.date.year}-${l.date.month}-${l.date.day}'] ?? 0) + l.completedWorkSets;
-    }
-    final maxSets = setsByDay.values.fold(1, (a, b) => a > b ? a : b);
+    final days = HistoryHeatDay.project(logs);
+    final maxSets = days.values
+        .map((day) => day.strengthSets)
+        .fold(1, (a, b) => a > b ? a : b);
 
     return Card(
       child: Padding(
@@ -479,12 +588,12 @@ class _CalendarHeatCard extends StatelessWidget {
                       children: List.generate(7, (d) {
                         final day = gridEnd.subtract(Duration(days: (11 - w) * 7 + (6 - d)));
                         final future = day.isAfter(today);
-                        final sets = setsByDay['${day.year}-${day.month}-${day.day}'] ?? 0;
-                        final t = sets == 0 ? 0.0 : 0.35 + 0.65 * (sets / maxSets);
+                        final evidence = days['${day.year}-${day.month}-${day.day}'] ??
+                            HistoryHeatDay.empty;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 1.5),
                           child: Tooltip(
-                            message: '${_d(day)}: $sets sets',
+                            message: evidence.tooltip(day),
                             child: AspectRatio(
                               aspectRatio: 1,
                               child: DecoratedBox(
@@ -492,9 +601,7 @@ class _CalendarHeatCard extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(3),
                                   color: future
                                       ? Colors.transparent
-                                      : sets == 0
-                                          ? scheme.surfaceContainerHighest
-                                          : scheme.primary.withValues(alpha: t),
+                                      : _heatColor(evidence, scheme, maxSets),
                                   border: _sameDay(day, today)
                                       ? Border.all(color: scheme.onSurface, width: 1)
                                       : null,
@@ -510,12 +617,75 @@ class _CalendarHeatCard extends StatelessWidget {
               }),
             ),
             const SizedBox(height: 8),
-            Text('Cell shade = completed work sets that day', style: Theme.of(context).textTheme.bodySmall),
+            Wrap(
+              spacing: 10,
+              runSpacing: 4,
+              children: [
+                _HeatLegend(
+                  key: const ValueKey('history-heat-legend-strength'),
+                  label: 'Strength',
+                  color: scheme.primary,
+                ),
+                _HeatLegend(
+                  key: const ValueKey('history-heat-legend-zone2'),
+                  label: 'Zone 2',
+                  color: scheme.secondary,
+                ),
+                _HeatLegend(
+                  key: const ValueKey('history-heat-legend-vo2-rehit'),
+                  label: 'VO₂/REHIT',
+                  color: scheme.tertiary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Strength shade = completed sets · cardio color = session type; tooltip shows logged dose',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),
     );
   }
+
+  Color _heatColor(
+    HistoryHeatDay day,
+    ColorScheme scheme,
+    int maxSets,
+  ) => switch (day.category) {
+        HistoryHeatCategory.none => scheme.surfaceContainerHighest,
+        HistoryHeatCategory.strength => scheme.primary.withValues(
+            alpha: 0.35 + 0.65 * (day.strengthSets / maxSets),
+          ),
+        HistoryHeatCategory.zone2 => scheme.secondary.withValues(alpha: 0.78),
+        HistoryHeatCategory.vo2Rehit => scheme.tertiary.withValues(alpha: 0.86),
+      };
+}
+
+class _HeatLegend extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _HeatLegend({
+    super.key,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 4),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
 }
 
 // ---------- per-pattern progression sparklines ----------

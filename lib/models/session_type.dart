@@ -105,9 +105,8 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
   SessionTypeId.s7: const SessionTypeDef(
     id: SessionTypeId.s7,
     name: 'CAROL REHIT Intense',
-    // CAROL currently reports 5:00–8:40 for this fixed preset. Reserve the
-    // conservative rounded 9-minute upper bound in strength/time budgeting,
-    // while 5 minutes is the minimum bike-guided completion duration.
+    // CAROL reports 8:40 for this fixed preset. Keep the rounded 9-minute
+    // reservation in strength/time budgeting.
     fullDurationMin: 9,
     minDurationMin: 5,
     legHeavy: false,

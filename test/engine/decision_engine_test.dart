@@ -731,12 +731,18 @@ void main() {
     // squat (goblet, single-DB, 24 lb): ramp rounds down on the single-DB set
     final ramp = ex.where((e) => e.isWarmup && e.name.contains('Goblet squat')).toList();
     expect(ramp.map((e) => e.loadTotal), [9, 12, 18]);
+    expect(ramp.every((e) => e.dumbbellCount == 1), isTrue);
     final squatIdx = ex.indexWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
     expect(squatIdx, greaterThan(0));
+    expect(ex[squatIdx].dumbbellCount, 1);
     // hinge (2-DB, 90 lb): one 60% feeder -> 54 rounds down to 50 matched
     final hingeIdx = ex.indexWhere((e) => e.pattern == MovementPattern.hinge && !e.isWarmup);
+    expect(ex[hingeIdx].dumbbellCount, 2);
+    expect(ex[hingeIdx].allowsUnevenPair, isTrue);
     expect(ex[hingeIdx - 1].isWarmup, isTrue);
     expect(ex[hingeIdx - 1].loadTotal, 50);
+    expect(ex[hingeIdx - 1].dumbbellCount, 2);
+    expect(ex[hingeIdx - 1].allowsUnevenPair, isTrue);
     // warm-ups never count toward the §8 completion denominator
     expect(output.trace.plan!.plannedWorkSets, 6);
   });
@@ -756,6 +762,17 @@ void main() {
     expect(ex.first.trackKey, 'atg_block');
     expect(ex.first.isWarmup, isTrue);
     expect(ex.first.targetRange, (5, 5));
+    expect(ex.first.name, 'ATG + upper-body prep');
+    for (final cue in [
+      '0:00–2:00 · Backward treadmill',
+      '2:00–2:45 · Tibialis raises (15–20)',
+      '2:45–3:30 · Calf raises (15–20)',
+      '3:30–4:15 · Shoulder circles (10 each direction)',
+      '4:15–5:00 · Scapular push-ups (8–12)',
+      'Replaces general movement prep.',
+    ]) {
+      expect(ex.first.instruction, contains(cue));
+    }
     expect(ex.any((e) => e.name.contains('40%')), isTrue);
     expect(ex.any((e) => e.name.contains('80%')), isTrue);
     // The first compound gets the full 40/60/80 ramp.
@@ -942,14 +959,27 @@ void main() {
       sessionLogs: floorSatisfiedLogs(),
       settings: const UserSettings(travelMode: true),
     ));
-    final s4Names = s4.trace.plan!.exercises.map((e) => e.name).toList();
-    expect(
-      s4Names,
-      contains(
-        'Travel ATG + upper prep: backward walking, wall tibialis/calf raises, shoulder circles, scapular push-ups',
-      ),
+    final s4Prep = s4.trace.plan!.exercises.singleWhere(
+      (exercise) => exercise.trackKey == 'atg_block',
     );
-    expect(s4Names.any((name) => name.contains('treadmill') || name.contains('slant-board')), isFalse);
+    expect(s4Prep.name, 'Travel ATG + upper-body prep');
+    expect(s4Prep.targetRange, (5, 5));
+    for (final cue in [
+      '0:00–2:00 · Safe backward walking',
+      '2:00–2:45 · Wall tibialis raises (15–20)',
+      '2:45–3:30 · Wall calf raises (15–20)',
+      '3:30–4:15 · Shoulder circles (10 each direction)',
+      '4:15–5:00 · Scapular push-ups (8–12)',
+      'No equipment; replaces general movement prep.',
+    ]) {
+      expect(s4Prep.instruction, contains(cue));
+    }
+    expect(
+      s4.trace.plan!.exercises
+          .map((exercise) => exercise.name)
+          .any((name) => name.contains('treadmill') || name.contains('slant-board')),
+      isFalse,
+    );
 
     final s5 = decisionEngine.decide(buildInput(
       time: 35,
@@ -2081,7 +2111,7 @@ void main() {
     final rehit = outputFor(SessionTypeId.s7, 35).trace.plan!;
     final p7 = rehit.cardioPrescription!;
     expect(p7.protocol.type, CardioProtocolType.rehit);
-    expect(p7.plannedDurationSeconds, 300);
+    expect(p7.plannedDurationSeconds, 520);
     expect(p7.plannedWorkIntervals, 2);
     expect(p7.plannedWorkSeconds, 40);
     expect(p7.plannedRecoveryIntervals, 0);

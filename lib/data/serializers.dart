@@ -243,6 +243,8 @@ Map<String, dynamic> cardioCompletionToJson(CardioCompletion completion) => {
       'averageHeartRateBpm': completion.averageHeartRateBpm,
       'peakHeartRateBpm': completion.peakHeartRateBpm,
       'rpe': completion.rpe,
+      'fitnessScore': completion.fitnessScore,
+      'peakPowerWatts': completion.peakPowerWatts,
     };
 
 CardioCompletion cardioCompletionFromJson(Map<String, dynamic> j) =>
@@ -258,6 +260,8 @@ CardioCompletion cardioCompletionFromJson(Map<String, dynamic> j) =>
           (j['averageHeartRateBpm'] as num?)?.toDouble(),
       peakHeartRateBpm: (j['peakHeartRateBpm'] as num?)?.toDouble(),
       rpe: (j['rpe'] as num?)?.toDouble(),
+      fitnessScore: (j['fitnessScore'] as num?)?.toDouble(),
+      peakPowerWatts: (j['peakPowerWatts'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> sessionLogToJson(SessionLog l) => {
@@ -474,6 +478,8 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'progressionEligible': e.progressionEligible,
       'isTravel': e.isTravel,
       'loadSteps': e.loadSteps,
+      'dumbbellCount': e.dumbbellCount,
+      'allowsUnevenPair': e.allowsUnevenPair,
       'supersetGroup': e.supersetGroup,
       'isCompoundWork': e.isCompoundWork,
       'isFeederWarmup': e.isFeederWarmup,
@@ -500,6 +506,8 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       progressionEligible: j['progressionEligible'] as bool? ?? true,
       isTravel: j['isTravel'] as bool? ?? false,
       loadSteps: (j['loadSteps'] as List?)?.map((e) => (e as num).toDouble()).toList(),
+      dumbbellCount: j['dumbbellCount'] as int?,
+      allowsUnevenPair: j['allowsUnevenPair'] as bool?,
       supersetGroup: j['supersetGroup'] as int?,
       isCompoundWork: _plannedExerciseIsCompoundWorkFromJson(j),
       isFeederWarmup: j['isFeederWarmup'] as bool? ?? false,
