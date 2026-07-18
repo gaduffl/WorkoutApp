@@ -174,24 +174,35 @@ void main() {
           )
           .controller!
           .text,
-      '5:00',
+      '08:40',
+    );
+    final durationField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Duration shown by CAROL (M:SS)'),
+    );
+    expect(durationField.keyboardType, TextInputType.number);
+    expect(find.widgetWithText(TextField, 'Average HR (optional)'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Peak HR (optional)'), findsNothing);
+    expect(find.widgetWithText(TextField, 'RPE 0–10 (optional)'), findsNothing);
+    expect(
+      find.widgetWithText(TextField, 'Fitness Score (optional)'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(TextField, 'Peak Power (W, optional)'),
+      findsOneWidget,
     );
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Duration shown by CAROL (M:SS)'),
-      '8:40',
+      '0840',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Average HR (optional)'),
-      '150',
+      find.widgetWithText(TextField, 'Fitness Score (optional)'),
+      '42.5',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Peak HR (optional)'),
-      '180',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'RPE 0–10 (optional)'),
-      '9.5',
+      find.widgetWithText(TextField, 'Peak Power (W, optional)'),
+      '734.5',
     );
     await tester.tap(find.text('Save attempt'));
     await tester.pump();
@@ -203,9 +214,11 @@ void main() {
     expect(controller.completion!.completedRecoveryIntervals, 0);
     expect(controller.completion!.completedRecoverySeconds, 0);
     expect(controller.completion!.completedDurationSeconds, 520);
-    expect(controller.completion!.averageHeartRateBpm, 150);
-    expect(controller.completion!.peakHeartRateBpm, 180);
-    expect(controller.completion!.rpe, 9.5);
+    expect(controller.completion!.averageHeartRateBpm, isNull);
+    expect(controller.completion!.peakHeartRateBpm, isNull);
+    expect(controller.completion!.rpe, isNull);
+    expect(controller.completion!.fitnessScore, 42.5);
+    expect(controller.completion!.peakPowerWatts, 734.5);
     expect(controller.completion!.meetsCreditableDose, isTrue);
     expect(
       tester
