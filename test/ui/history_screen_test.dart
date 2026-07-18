@@ -47,6 +47,135 @@ void main() {
     );
   }
 
+  SessionLog heatLog({
+    required String id,
+    required DateTime date,
+    SessionTypeId type = SessionTypeId.s1,
+    int strengthSets = 0,
+    int durationMinutes = 20,
+    CardioCompletion? cardioCompletion,
+    bool rehitFinisherCompleted = false,
+  }) =>
+      SessionLog(
+        id: id,
+        templateId: type,
+        tier: SessionTier.full,
+        date: date,
+        completedAt: date.add(const Duration(hours: 8)),
+        setLogs: const [],
+        plannedWorkSets: strengthSets,
+        completedWorkSets: strengthSets,
+        durationMinutes: durationMinutes,
+        countsAs: const {},
+        cardioCompletion: cardioCompletion,
+        rehitFinisherCompleted: rehitFinisherCompleted,
+      );
+
+  test('heatmap projection keeps cardio attempts visible with VO₂ priority', () {
+    final zone2 = heatLog(
+      id: 'partial-zone2',
+      date: DateTime(2026, 7, 11),
+      type: SessionTypeId.s6,
+      cardioCompletion: const CardioCompletion(
+        protocol: CardioProtocol.zone2Base,
+        completedWorkIntervals: 1,
+        completedWorkSeconds: 600,
+        completedRecoveryIntervals: 0,
+        completedRecoverySeconds: 0,
+        completedDurationSeconds: 600,
+      ),
+    );
+    final vo2 = heatLog(
+      id: 'partial-rehit',
+      date: DateTime(2026, 7, 12),
+      type: SessionTypeId.s7,
+      durationMinutes: 8,
+      cardioCompletion: const CardioCompletion(
+        protocol: CardioProtocol.rehit,
+        completedWorkIntervals: 1,
+        completedWorkSeconds: 20,
+        completedRecoveryIntervals: 1,
+        completedRecoverySeconds: 180,
+        completedDurationSeconds: 480,
+      ),
+    );
+    final mixedStrengthFinisher = heatLog(
+      id: 'strength-rehit',
+      date: DateTime(2026, 7, 13),
+      strengthSets: 3,
+      durationMinutes: 8,
+      rehitFinisherCompleted: true,
+      cardioCompletion: const CardioCompletion(
+        protocol: CardioProtocol.rehit,
+        completedWorkIntervals: 2,
+        completedWorkSeconds: 40,
+        completedRecoveryIntervals: 2,
+        completedRecoverySeconds: 360,
+        completedDurationSeconds: 480,
+      ),
+    );
+    final mixedZone2 = heatLog(
+      id: 'mixed-zone2',
+      date: DateTime(2026, 7, 13),
+      type: SessionTypeId.s6,
+      cardioCompletion: const CardioCompletion(
+        protocol: CardioProtocol.zone2Base,
+        completedWorkIntervals: 1,
+        completedWorkSeconds: 1200,
+        completedRecoveryIntervals: 0,
+        completedRecoverySeconds: 0,
+        completedDurationSeconds: 1200,
+      ),
+    );
+
+    final projected = HistoryHeatDay.project([
+      heatLog(id: 'strength', date: DateTime(2026, 7, 10), strengthSets: 2),
+      zone2,
+      vo2,
+      mixedStrengthFinisher,
+      mixedZone2,
+    ]);
+
+    expect(projected['2026-7-10']!.category, HistoryHeatCategory.strength);
+    expect(projected['2026-7-11']!.category, HistoryHeatCategory.zone2);
+    expect(projected['2026-7-12']!.category, HistoryHeatCategory.vo2Rehit);
+    expect(projected['2026-7-13']!.category, HistoryHeatCategory.vo2Rehit);
+    expect(
+      projected['2026-7-13']!.tooltip(DateTime(2026, 7, 13)),
+      contains('3 strength sets · Zone 2 20m · VO₂/REHIT 8m'),
+    );
+  });
+
+  testWidgets('heatmap legend has three distinct category colors and copy',
+      (tester) async {
+    await tester.pumpWidget(app(loader: (_) async => dataWith()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Strength'), findsOneWidget);
+    expect(find.text('Zone 2'), findsOneWidget);
+    expect(find.text('VO₂/REHIT'), findsOneWidget);
+    expect(
+      find.text(
+        'Strength shade = completed sets · cardio color = session type; tooltip shows logged dose',
+      ),
+      findsOneWidget,
+    );
+    final colors = [
+      'history-heat-legend-strength',
+      'history-heat-legend-zone2',
+      'history-heat-legend-vo2-rehit',
+    ].map((key) {
+      final container = tester.widget<Container>(
+        find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(Container),
+        ),
+      );
+      return (container.decoration! as BoxDecoration).color;
+    }).toSet();
+    expect(colors, hasLength(3));
+  });
+
   testWidgets('shows a stable loading state', (tester) async {
     final pending = Completer<HistoryData>();
     await tester.pumpWidget(app(loader: (_) => pending.future));
@@ -362,6 +491,11 @@ void main() {
             completedRecoveryIntervals: 0,
             completedRecoverySeconds: 0,
             completedDurationSeconds: 480,
+            averageHeartRateBpm: 151,
+            peakHeartRateBpm: 181,
+            rpe: 9.5,
+            fitnessScore: 42.5,
+            peakPowerWatts: 734.5,
           ),
         ),
         rehit(
@@ -386,9 +520,15 @@ void main() {
     expect(find.text('S7 - full · supplemental'), findsOneWidget);
     expect(find.text('S7 - full · unplanned'), findsOneWidget);
     expect(
-      find.textContaining('2 sprints · 0:40 work · 8:00 total'),
+      find.textContaining(
+        '2 sprints · 0:40 work · 8:00 total · '
+        'Fitness Score 42.5 · Peak Power 734.5 W',
+      ),
       findsOneWidget,
     );
+    expect(find.textContaining('Peak HR'), findsNothing);
+    expect(find.textContaining('Average HR'), findsNothing);
+    expect(find.textContaining('RPE 9.5'), findsNothing);
     expect(
       find.textContaining('2 sprints · 0:40 work · 8:00 total (partial)'),
       findsNothing,
