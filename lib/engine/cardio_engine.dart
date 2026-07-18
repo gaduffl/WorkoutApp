@@ -96,7 +96,7 @@ class CardioEngine {
           // plus the total duration displayed by the bike.
           plannedRecoveryIntervals: 0,
           plannedRecoverySeconds: 0,
-          plannedDurationSeconds: 5 * 60,
+          plannedDurationSeconds: 8 * 60 + 40,
           targetRpeMin: 9,
           targetRpeMax: 10,
         ),
@@ -118,6 +118,8 @@ class CardioEngine {
     double? averageHeartRateBpm,
     double? peakHeartRateBpm,
     double? rpe,
+    double? fitnessScore,
+    double? peakPowerWatts,
   }) {
     if (completedDurationMinutes <= 0 || completedDurationMinutes > 24 * 60) {
       throw ArgumentError.value(
@@ -133,6 +135,8 @@ class CardioEngine {
       averageHeartRateBpm: averageHeartRateBpm,
       peakHeartRateBpm: peakHeartRateBpm,
       rpe: rpe,
+      fitnessScore: fitnessScore,
+      peakPowerWatts: peakPowerWatts,
     );
   }
 
@@ -146,6 +150,8 @@ class CardioEngine {
     double? averageHeartRateBpm,
     double? peakHeartRateBpm,
     double? rpe,
+    double? fitnessScore,
+    double? peakPowerWatts,
   }) {
     if (completedWorkIntervals <= 0 ||
         completedWorkIntervals > prescription.plannedWorkIntervals) {
@@ -206,6 +212,8 @@ class CardioEngine {
       averageHeartRateBpm: averageHeartRateBpm,
       peakHeartRateBpm: peakHeartRateBpm,
       rpe: rpe,
+      fitnessScore: fitnessScore,
+      peakPowerWatts: peakPowerWatts,
     );
     validateCompletion(
       prescription: prescription,
@@ -288,6 +296,14 @@ class CardioEngine {
         'Must be between 0 and 10',
       );
     }
+    _validateNonNegativeFinite(
+      completion.fitnessScore,
+      'fitnessScore',
+    );
+    _validatePositiveFinite(
+      completion.peakPowerWatts,
+      'peakPowerWatts',
+    );
   }
 
   void validateSessionMatch({
@@ -315,6 +331,18 @@ class CardioEngine {
         name,
         'Must be between 30 and 260 bpm',
       );
+    }
+  }
+
+  void _validateNonNegativeFinite(double? value, String name) {
+    if (value != null && (!value.isFinite || value < 0)) {
+      throw ArgumentError.value(value, name, 'Must be non-negative and finite');
+    }
+  }
+
+  void _validatePositiveFinite(double? value, String name) {
+    if (value != null && (!value.isFinite || value <= 0)) {
+      throw ArgumentError.value(value, name, 'Must be positive and finite');
     }
   }
 }
