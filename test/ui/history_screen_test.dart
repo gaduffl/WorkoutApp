@@ -148,6 +148,11 @@ void main() {
 
   testWidgets('heatmap legend has three distinct category colors and copy',
       (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(app(loader: (_) async => dataWith()));
     await tester.pumpAndSettle();
 
