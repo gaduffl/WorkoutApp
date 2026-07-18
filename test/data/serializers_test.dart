@@ -92,10 +92,35 @@ void main() {
     ))
       ..remove('metric')
       ..remove('targetRangeLow')
-      ..remove('targetRangeHigh');
+      ..remove('targetRangeHigh')
+      ..remove('dumbbellCount')
+      ..remove('allowsUnevenPair');
     final restoredPlan = plannedExerciseFromJson(legacyPlan);
     expect(restoredPlan.metric, ExerciseMetric.reps);
     expect(restoredPlan.targetRange, (6, 10));
+    expect(restoredPlan.dumbbellCount, isNull);
+    expect(restoredPlan.allowsUnevenPair, isNull);
+  });
+
+  test('dumbbell setup metadata round-trips without changing total load', () {
+    const elevatedDeadlift = PlannedExercise(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      name: 'Elevated-start DB deadlift (on blocks)',
+      sets: 3,
+      targetRange: (6, 10),
+      loadTotal: 48,
+      dumbbellCount: 2,
+      allowsUnevenPair: true,
+      rirTarget: Rir.rir2,
+    );
+
+    final restored = plannedExerciseFromJson(
+      plannedExerciseToJson(elevatedDeadlift),
+    );
+    expect(restored.loadTotal, 48);
+    expect(restored.dumbbellCount, 2);
+    expect(restored.allowsUnevenPair, isTrue);
   });
 
   test('duration-budget metadata round-trips and remains legacy-safe', () {
