@@ -719,17 +719,35 @@ class DecisionEngine {
               'Within $atgMinutes min: use only pain-free movement, breathing/bracing, and non-reproducing lower-body or scapular rehearsal. Skip every flagged or pain-provoking movement.';
         } else {
           prepName = input.settings.travelMode
-              ? 'Travel ATG + upper prep: backward walking, wall tibialis/calf raises, shoulder circles, scapular push-ups'
-              : atgMinutes == 3
-                  ? 'ATG + upper prep: backward treadmill 1 min, tibialis/calf raises, shoulder circles, scapular push-ups'
-                  : 'ATG + upper prep: backward treadmill 2-3 min, tibialis/calf raises, shoulder circles, scapular push-ups';
+              ? 'Travel ATG + upper-body prep'
+              : 'ATG + upper-body prep';
           prepInstruction = input.settings.travelMode
               ? atgMinutes == 3
-                  ? 'Within 3 min: safe backward walking, lower-leg work, then shoulder/scapular rehearsal. No equipment; replaces general movement prep.'
-                  : 'Within 5 min: safe backward walking, lower-leg work, then shoulder/scapular rehearsal. No equipment; replaces general movement prep.'
+                  ? '0:00–1:00 · Safe backward walking\n'
+                      '1:00–1:30 · Wall tibialis raises (10–15)\n'
+                      '1:30–2:00 · Wall calf raises (10–15)\n'
+                      '2:00–2:30 · Shoulder circles (8 each direction)\n'
+                      '2:30–3:00 · Scapular push-ups (6–10)\n'
+                      'No equipment; replaces general movement prep.'
+                  : '0:00–2:00 · Safe backward walking\n'
+                      '2:00–2:45 · Wall tibialis raises (15–20)\n'
+                      '2:45–3:30 · Wall calf raises (15–20)\n'
+                      '3:30–4:15 · Shoulder circles (10 each direction)\n'
+                      '4:15–5:00 · Scapular push-ups (8–12)\n'
+                      'No equipment; replaces general movement prep.'
               : atgMinutes == 3
-                  ? 'Within 3 min: 1 min backward treadmill, 1 min tibialis/calf work, 1 min shoulder/scapular rehearsal. Replaces general movement prep.'
-                  : 'Within 5 min: 2-3 min backward treadmill, then tibialis/calf work and shoulder/scapular rehearsal. Replaces general movement prep.';
+                  ? '0:00–1:00 · Backward treadmill\n'
+                      '1:00–1:30 · Tibialis raises (10–15)\n'
+                      '1:30–2:00 · Calf raises (10–15)\n'
+                      '2:00–2:30 · Shoulder circles (8 each direction)\n'
+                      '2:30–3:00 · Scapular push-ups (6–10)\n'
+                      'Replaces general movement prep.'
+                  : '0:00–2:00 · Backward treadmill\n'
+                      '2:00–2:45 · Tibialis raises (15–20)\n'
+                      '2:45–3:30 · Calf raises (15–20)\n'
+                      '3:30–4:15 · Shoulder circles (10 each direction)\n'
+                      '4:15–5:00 · Scapular push-ups (8–12)\n'
+                      'Replaces general movement prep.';
         }
         exercises.add(PlannedExercise(
           trackKey: 'atg_block',
@@ -1964,6 +1982,8 @@ class DecisionEngine {
       loadTotal: load,
       loadDisplay: equipmentEngine.describeLoad(resolved, cfg),
       loadSteps: achievable,
+      dumbbellCount: work.dumbbellCount,
+      allowsUnevenPair: work.allowsUnevenPair,
       rirTarget: Rir.rir3plus,
       isWarmup: true,
       instruction: 'Rest <= 45 s',
@@ -2040,7 +2060,11 @@ class DecisionEngine {
     double? loadTotal;
     String? loadDisplay;
     List<double>? loadSteps;
+    int? dumbbellCount;
+    bool? allowsUnevenPair;
     if (!step.backpackLoaded && step.dumbbells > 0) {
+      dumbbellCount = step.dumbbells;
+      allowsUnevenPair = step.dumbbells == 2 && !step.unilateral;
       loadTotal = state.currentLoad * loadMultiplier;
       final achievable = step.dumbbells == 1
           ? equipmentEngine.singleDbAchievableTotals(equipmentConfig)
@@ -2066,6 +2090,8 @@ class DecisionEngine {
       loadTotal: loadTotal,
       loadDisplay: loadDisplay,
       loadSteps: loadSteps,
+      dumbbellCount: dumbbellCount,
+      allowsUnevenPair: allowsUnevenPair,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
       instruction: instruction ??
