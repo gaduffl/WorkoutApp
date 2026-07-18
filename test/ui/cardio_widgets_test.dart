@@ -17,6 +17,35 @@ import 'package:morningcoach/ui/widgets/cardio_widgets.dart';
 void main() {
   const cardio = CardioEngine();
 
+  test('CAROL duration formatter inserts a colon and preserves editing', () {
+    const formatter = CarolDurationInputFormatter();
+    const empty = TextEditingValue();
+    final entered = formatter.formatEditUpdate(
+      empty,
+      const TextEditingValue(
+        text: '0840',
+        selection: TextSelection.collapsed(offset: 4),
+      ),
+    );
+    expect(entered.text, '08:40');
+    expect(entered.selection.baseOffset, 5);
+
+    final edited = formatter.formatEditUpdate(
+      entered,
+      const TextEditingValue(
+        text: '08:4',
+        selection: TextSelection.collapsed(offset: 4),
+      ),
+    );
+    expect(edited.text, '08:4');
+
+    final rejected = formatter.formatEditUpdate(
+      entered,
+      const TextEditingValue(text: '08x40'),
+    );
+    expect(rejected, entered);
+  });
+
   test('summary copy distinguishes all three cardio stimuli', () {
     final fourByFour = cardioPrescriptionSummaryLines(cardio.prescriptionFor(
       sessionId: SessionTypeId.s3,
@@ -52,7 +81,13 @@ void main() {
     expect(
       base,
       contains(
-        '60:00 · Continuous: ease into target effort within the prescribed duration',
+        '0:00–60:00 · Ride continuously in Zone 2.\nStart near 130 bpm; adjust resistance/cadence to stay at 130–150 bpm (RPE 3–4).',
+      ),
+    );
+    expect(
+      base.join('\n'),
+      isNot(
+        contains('Continuous: ease into target effort within the prescribed duration'),
       ),
     );
     final recoveryBase = cardioPrescriptionSummaryLines(cardio.prescriptionFor(
@@ -121,8 +156,65 @@ void main() {
     expect(recovery.map((segment) => segment.durationSeconds), [1200]);
     expect(
       recovery.single.label,
-      'Continuous: ease into target effort within the prescribed duration',
+      'Ride continuously in Zone 2.\nStart near 130 bpm; adjust resistance/cadence to stay at 130–150 bpm (RPE 3–4).',
     );
+    expect(
+      recovery.single.summaryLine,
+      '0:00–20:00 · Ride continuously in Zone 2.\nStart near 130 bpm; adjust resistance/cadence to stay at 130–150 bpm (RPE 3–4).',
+    );
+    expect(recovery.single.summaryLine, isNot(contains('warm-up')));
+
+    for (final minutes in [20, 35, 60]) {
+      final timeline = cardioProtocolTimeline(cardio.prescriptionFor(
+        sessionId: SessionTypeId.s6,
+        durationMinutes: minutes,
+        heartRateMaxBpm: 200,
+      ));
+      expect(timeline, hasLength(1));
+      expect(
+        timeline.single.summaryLine,
+        '0:00–$minutes:00 · Ride continuously in Zone 2.\nStart near 130 bpm; adjust resistance/cadence to stay at 130–150 bpm (RPE 3–4).',
+      );
+      expect(timeline.single.summaryLine, isNot(contains('warm-up')));
+      expect(timeline.single.summaryLine, isNot(contains('Warm-up')));
+    }
+
+    const noTargetPrescription = CardioPrescription(
+      protocol: CardioProtocol.zone2Base,
+      plannedWorkIntervals: 1,
+      plannedWorkSeconds: 20 * 60,
+      plannedRecoveryIntervals: 0,
+      plannedRecoverySeconds: 0,
+      plannedDurationSeconds: 20 * 60,
+    );
+    expect(
+      cardioProtocolTimeline(noTargetPrescription).single.summaryLine,
+      '0:00–20:00 · Ride continuously in Zone 2.\nAdjust resistance/cadence as needed to keep the effort comfortably sustainable.',
+    );
+  });
+
+  testWidgets('Zone 2 card shows a self-contained continuous target',
+      (tester) async {
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s6,
+      durationMinutes: 35,
+      heartRateMaxBpm: 180,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CardioPrescriptionCard(prescription: prescription),
+        ),
+      ),
+    );
+
+    expect(
+      find.text(
+        '0:00–35:00 · Ride continuously in Zone 2.\nStart near 117 bpm; adjust resistance/cadence to stay at 117–135 bpm (RPE 3–4).',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Warm-up'), findsNothing);
   });
 
   test('Today labels non-target S6 as recovery rather than queue work', () {
@@ -213,10 +305,22 @@ void main() {
       find.widgetWithText(TextField, 'Duration shown by CAROL (M:SS)'),
     );
     expect(durationField.controller!.text, '30:00');
-    expect(durationField.keyboardType, TextInputType.datetime);
-    expect(find.widgetWithText(TextField, 'Average HR (optional)'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Peak HR (optional)'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'RPE 0–10 (optional)'), findsOneWidget);
+    expect(durationField.keyboardType, TextInputType.number);
+    expect(
+      durationField.inputFormatters,
+      contains(isA<CarolDurationInputFormatter>()),
+    );
+    expect(find.widgetWithText(TextField, 'Average HR (optional)'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Peak HR (optional)'), findsNothing);
+    expect(find.widgetWithText(TextField, 'RPE 0–10 (optional)'), findsNothing);
+    expect(
+      find.widgetWithText(TextField, 'Fitness Score (optional)'),
+      findsNothing,
+    );
+    expect(
+      find.widgetWithText(TextField, 'Peak Power (W, optional)'),
+      findsNothing,
+    );
     expect(find.text('Save attempt'), findsOneWidget);
 
     await tester.tap(find.text('Cancel'));
@@ -243,6 +347,33 @@ void main() {
     expect(find.text('Coaching target: RPE 9–10'), findsOneWidget);
     expect(find.textContaining('Timeline'), findsNothing);
     expect(find.textContaining('Easy recovery'), findsNothing);
+  });
+
+  testWidgets('Zone 2 keeps its optional HR and RPE feedback fields',
+      (tester) async {
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s6,
+      durationMinutes: 35,
+      heartRateMaxBpm: 200,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: _CompletionDialogHost(prescription: prescription)),
+    );
+
+    await tester.tap(find.text('Open completion form'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextField, 'Average HR (optional)'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Peak HR (optional)'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'RPE 0–10 (optional)'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextField, 'Fitness Score (optional)'),
+      findsNothing,
+    );
+    expect(
+      find.widgetWithText(TextField, 'Peak Power (W, optional)'),
+      findsNothing,
+    );
   });
 
   testWidgets('CAROL completion form defaults to bike preset duration',
@@ -280,16 +411,21 @@ void main() {
     final defaultDuration = tester.widget<TextField>(
       find.widgetWithText(TextField, 'Duration shown by CAROL (M:SS)'),
     );
-    expect(defaultDuration.controller!.text, '5:00');
-    await enterAttempt('8:60');
+    expect(defaultDuration.controller!.text, '08:40');
+    expect(defaultDuration.keyboardType, TextInputType.number);
+    await enterAttempt('084');
+    expect(defaultDuration.controller!.text, '08:4');
     expect(find.textContaining('seconds 00–59'), findsOneWidget);
-    await enterAttempt('8:40');
+    await enterAttempt('0860');
+    expect(defaultDuration.controller!.text, '08:60');
+    expect(find.textContaining('seconds 00–59'), findsOneWidget);
+    await enterAttempt('0840');
     expect(find.text('Accepted: 8:40'), findsOneWidget);
 
     await openDialog();
     await tester.tap(find.text('Save attempt'));
     await tester.pumpAndSettle();
-    expect(find.text('Accepted: 5:00'), findsOneWidget);
+    expect(find.text('Accepted: 8:40'), findsOneWidget);
   });
 }
 
