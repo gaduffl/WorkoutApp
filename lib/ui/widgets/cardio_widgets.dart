@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../engine/cardio_engine.dart';
 import '../../models/cardio_protocol.dart';
@@ -15,7 +16,47 @@ String cardioTalkTestCue(CardioProtocolType type) => switch (type) {
 const carolFourByFourInstruction =
     'On CAROL, select “4×4 Norwegian Zone 5 Intervals” and complete the bike-guided 30-minute preset.';
 const carolRehitInstruction =
-    'On CAROL, select “REHIT Intense (2×20-second sprints)” and complete the bike-guided preset. CAROL controls its 5:00–8:40 timing.';
+    'On CAROL, select “REHIT Intense (2×20-second sprints)” and complete the fixed 08:40 bike-guided preset.';
+
+/// Lets a number-only keyboard enter CAROL's `MM:SS` value without exposing
+/// a colon key. The colon is inserted after the first two digits, while an
+/// already formatted value remains normally editable and pasteable.
+class CarolDurationInputFormatter extends TextInputFormatter {
+  const CarolDurationInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    if (text.isEmpty) return newValue;
+    if (!RegExp(r'^[0-9:]*$').hasMatch(text)) return oldValue;
+
+    if (text.contains(':')) {
+      final parts = text.split(':');
+      if (parts.length != 2 ||
+          parts.first.length > 2 ||
+          parts.last.length > 2 ||
+          text.length > 5) {
+        return oldValue;
+      }
+      return newValue;
+    }
+
+    if (text.length > 4) return oldValue;
+    if (text.length <= 2) return newValue;
+
+    final formatted = '${text.substring(0, 2)}:${text.substring(2)}';
+    final rawOffset =
+        newValue.selection.baseOffset.clamp(0, text.length).toInt();
+    final formattedOffset = rawOffset > 2 ? rawOffset + 1 : rawOffset;
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formattedOffset),
+    );
+  }
+}
 
 /// One in-budget step of the protocol card's actionable timeline.
 class CardioTimelineSegment {
@@ -27,7 +68,7 @@ class CardioTimelineSegment {
     required this.durationSeconds,
   });
 
-  String get summaryLine => '${_clock(durationSeconds)} · $label';
+  String get summaryLine => '0:00–${_clock(durationSeconds)} · $label';
 }
 
 /// Zone 2 is app-timed continuous work. CAROL owns every internal segment of
@@ -44,12 +85,35 @@ List<CardioTimelineSegment> cardioProtocolTimeline(
     case CardioProtocolType.zone2Base:
       return [
         CardioTimelineSegment(
-          label:
-              'Continuous: ease into target effort within the prescribed duration',
+          label: _zone2ContinuousInstruction(prescription),
           durationSeconds: prescription.plannedDurationSeconds,
         ),
       ];
   }
+}
+
+String _zone2ContinuousInstruction(CardioPrescription prescription) {
+  final hrMin = prescription.targetHeartRateMinBpm;
+  final hrMax = prescription.targetHeartRateMaxBpm;
+  final rpeMin = prescription.targetRpeMin;
+  final rpeMax = prescription.targetRpeMax;
+  final rpeRange = rpeMin != null && rpeMax != null
+      ? ' (RPE ${_number(rpeMin)}–${_number(rpeMax)})'
+      : '';
+
+  final targetCue = switch ((hrMin, hrMax, rpeMin, rpeMax)) {
+    (final min?, final max?, _, _) =>
+      'Start near ${min.round()} bpm; adjust resistance/cadence to stay at ${min.round()}–${max.round()} bpm$rpeRange.',
+    (_, _, final min?, final max?) =>
+      'Start near RPE ${_number(min)}; adjust resistance/cadence to stay at RPE ${_number(min)}–${_number(max)}.',
+    (final min?, _, _, _) =>
+      'Start near ${min.round()} bpm; adjust resistance/cadence to keep the effort comfortably sustainable.',
+    (_, final max?, _, _) =>
+      'Stay at or below ${max.round()} bpm; adjust resistance/cadence to keep the effort comfortably sustainable.',
+    _ =>
+      'Adjust resistance/cadence as needed to keep the effort comfortably sustainable.',
+  };
+  return 'Ride continuously in Zone 2.\n$targetCue';
 }
 
 List<String> cardioPrescriptionSummaryLines(
@@ -192,6 +256,8 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
   final _averageHr = TextEditingController();
   final _peakHr = TextEditingController();
   final _rpe = TextEditingController();
+  final _fitnessScore = TextEditingController();
+  final _peakPower = TextEditingController();
   String? _error;
 
   bool get _isContinuous =>
@@ -199,6 +265,9 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
 
   bool get _isCarolPreset =>
       widget.prescription.protocol.type != CardioProtocolType.zone2Base;
+
+  bool get _isRehit =>
+      widget.prescription.protocol.type == CardioProtocolType.rehit;
 
   @override
   void initState() {
@@ -208,7 +277,7 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
     );
     _duration = TextEditingController(
       text: _isCarolPreset
-          ? _clock(widget.prescription.plannedDurationSeconds)
+          ? _carolClock(widget.prescription.plannedDurationSeconds)
           : ((widget.prescription.plannedDurationSeconds + 59) ~/ 60)
               .toString(),
     );
@@ -221,15 +290,25 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
     _averageHr.dispose();
     _peakHr.dispose();
     _rpe.dispose();
+    _fitnessScore.dispose();
+    _peakPower.dispose();
     super.dispose();
   }
 
   void _save() {
     try {
       final intervals = _isContinuous ? 1 : int.parse(_intervals.text.trim());
-      final averageHr = _optionalDouble(_averageHr, 'Average HR');
-      final peakHr = _optionalDouble(_peakHr, 'Peak HR');
-      final rpe = _optionalDouble(_rpe, 'RPE');
+      final averageHr =
+          _isContinuous ? _optionalDouble(_averageHr, 'Average HR') : null;
+      final peakHr =
+          _isContinuous ? _optionalDouble(_peakHr, 'Peak HR') : null;
+      final rpe = _isContinuous ? _optionalDouble(_rpe, 'RPE') : null;
+      final fitnessScore = _isRehit
+          ? _optionalDouble(_fitnessScore, 'Fitness Score')
+          : null;
+      final peakPower = _isRehit
+          ? _optionalDouble(_peakPower, 'Peak Power')
+          : null;
       final completion = _isCarolPreset
           ? const CardioEngine().completionFromElapsedSeconds(
               prescription: widget.prescription,
@@ -238,6 +317,8 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
               averageHeartRateBpm: averageHr,
               peakHeartRateBpm: peakHr,
               rpe: rpe,
+              fitnessScore: fitnessScore,
+              peakPowerWatts: peakPower,
             )
           : const CardioEngine().completionFromEntry(
               prescription: widget.prescription,
@@ -267,7 +348,13 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
   }
 
   int _carolDurationSeconds() {
-    final parts = _duration.text.trim().split(':');
+    final raw = _duration.text.trim();
+    final normalized = raw.contains(':')
+        ? raw
+        : raw.length == 4 && RegExp(r'^\d{4}$').hasMatch(raw)
+            ? '${raw.substring(0, 2)}:${raw.substring(2)}'
+            : raw;
+    final parts = normalized.split(':');
     if (parts.length != 2) {
       throw const FormatException('CAROL duration as M:SS');
     }
@@ -275,6 +362,7 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
     final seconds = int.tryParse(parts[1]);
     if (minutes == null ||
         seconds == null ||
+        parts[1].length != 2 ||
         minutes < 0 ||
         seconds < 0 ||
         seconds > 59 ||
@@ -313,9 +401,10 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
             ],
             TextField(
               controller: _duration,
-              keyboardType: _isCarolPreset
-                  ? TextInputType.datetime
-                  : TextInputType.number,
+              keyboardType: TextInputType.number,
+              inputFormatters: _isCarolPreset
+                  ? const [CarolDurationInputFormatter()]
+                  : null,
               decoration: InputDecoration(
                 labelText: _isCarolPreset
                     ? 'Duration shown by CAROL (M:SS)'
@@ -323,26 +412,49 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
               ),
             ),
             spacing,
-            TextField(
-              controller: _averageHr,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Average HR (optional)'),
-            ),
-            spacing,
-            TextField(
-              controller: _peakHr,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Peak HR (optional)'),
-            ),
-            spacing,
-            TextField(
-              controller: _rpe,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'RPE 0–10 (optional)'),
-            ),
+            if (_isContinuous) ...[
+              TextField(
+                controller: _averageHr,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration:
+                    const InputDecoration(labelText: 'Average HR (optional)'),
+              ),
+              spacing,
+              TextField(
+                controller: _peakHr,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration:
+                    const InputDecoration(labelText: 'Peak HR (optional)'),
+              ),
+              spacing,
+              TextField(
+                controller: _rpe,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration:
+                    const InputDecoration(labelText: 'RPE 0–10 (optional)'),
+              ),
+            ] else if (_isRehit) ...[
+              TextField(
+                controller: _fitnessScore,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Fitness Score (optional)',
+                ),
+              ),
+              spacing,
+              TextField(
+                controller: _peakPower,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Peak Power (W, optional)',
+                ),
+              ),
+            ],
             if (_error != null) ...[
               spacing,
               Text(
@@ -374,6 +486,13 @@ String _clock(int seconds) {
   final minutes = seconds ~/ 60;
   final remainder = seconds % 60;
   return '$minutes:${remainder.toString().padLeft(2, '0')}';
+}
+
+String _carolClock(int seconds) {
+  final minutes = seconds ~/ 60;
+  final remainder = seconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${remainder.toString().padLeft(2, '0')}';
 }
 
 String _plainDuration(int seconds) {
