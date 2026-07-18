@@ -548,7 +548,9 @@ String _heatDuration(int seconds) {
   if (seconds <= 0) return 'logged';
   final minutes = seconds ~/ 60;
   final remainder = seconds % 60;
-  return remainder == 0 ? '${minutes}m' : '${minutes}:${remainder.toString().padLeft(2, '0')}';
+  return remainder == 0
+      ? '${minutes}m'
+      : '$minutes:${remainder.toString().padLeft(2, '0')}';
 }
 
 class _CalendarHeatCard extends StatelessWidget {
