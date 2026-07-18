@@ -169,6 +169,8 @@ class CardioEngine {
         'Must be between 1 second and 24 hours',
       );
     }
+    _validateNonNegativeFinite(fitnessScore, 'fitnessScore');
+    _validatePositiveFinite(peakPowerWatts, 'peakPowerWatts');
 
     late final int completedWorkSeconds;
     late final int completedRecoveryIntervals;
