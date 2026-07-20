@@ -476,12 +476,12 @@ void main() {
     final logs = [
       cardio(
         SessionTypeId.s7,
-        today.subtract(const Duration(days: 2)),
+        today.subtract(const Duration(days: 3)),
         10,
       ),
       cardio(
         SessionTypeId.s7,
-        today.subtract(const Duration(days: 4)),
+        today.subtract(const Duration(days: 6)),
         10,
       ),
     ];
