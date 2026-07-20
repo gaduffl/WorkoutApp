@@ -94,9 +94,8 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     id: SessionTypeId.s6,
     name: 'Zone 2',
     fullDurationMin: 60,
-    // Thirty minutes is the base-target credit threshold. Decision may emit
-    // an explicit 20-minute recovery prescription inside the immutable hard
-    // time window, but that shorter dose earns no base-target credit.
+    // Short continuous work remains a valid recovery/ledger event. Only a
+    // 60-minute continuous exposure satisfies the app's weekly base target.
     minDurationMin: 30,
     legHeavy: false,
     countsAs: {FloorCategory.aerobic},
