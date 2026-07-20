@@ -11,13 +11,12 @@ void main() {
   const statusEngine = TrainingStatusEngine();
   final asOf = DateTime(2026, 7, 15, 12);
 
-  TrainingStatus status({
+  TrainingStatus status(
+    Iterable<AerobicStimulusEvent> aerobic, {
     Iterable<MuscleStimulusEvent> muscle = const [],
-    Iterable<AerobicStimulusEvent> aerobic = const [],
-    TrainingTargets? targets,
   }) =>
       statusEngine.build(
-        targets: targets ?? TrainingTargets(),
+        targets: TrainingTargets(),
         ledger: ledgerEngine.build(
           muscleEvents: muscle,
           aerobicEvents: aerobic,
@@ -25,17 +24,13 @@ void main() {
         ),
       );
 
-  AerobicTrainingStatus aerobicStatus(
-    TrainingStatus value,
-    AerobicTargetKind kind,
-  ) =>
-      value.aerobic.firstWhere((entry) => entry.target == kind);
+  AerobicTrainingStatus target(TrainingStatus status, AerobicTargetKind kind) =>
+      status.aerobic.firstWhere((value) => value.target == kind);
 
-  test('empty history yields default 28-day muscle and cardio deficits', () {
-    final result = status();
-
+  test('empty history retains default 28-day muscle targets', () {
+    final result = status(const []);
     expect(result.muscleEvaluationWindowDays, 28);
-    expect(result.muscle.length, MajorMuscleGroup.values.length);
+    expect(result.muscle, hasLength(MajorMuscleGroup.values.length));
     for (final muscle in result.muscle) {
       expect(muscle.completedEffectiveSets, 0);
       expect(muscle.minimumTargetEffectiveSets, 32);
@@ -43,37 +38,11 @@ void main() {
       expect(muscle.maximumTargetEffectiveSets, 48);
       expect(muscle.deficitToMinimumEffectiveSets, 32);
     }
-
-    final fourByFour = aerobicStatus(
-      result,
-      AerobicTargetKind.norwegian4x4Anchor,
-    );
-    expect(fourByFour.targetExposures, 1);
-    expect(fourByFour.exposureDeficit, 1);
-
-    final fallback = aerobicStatus(
-      result,
-      AerobicTargetKind.rehitSeparateDayFallback,
-    );
-    expect(fallback.targetExposures, 2);
-    expect(fallback.exposureDeficit, 2);
-    expect(fallback.targetDistinctDays, 2);
-    expect(fallback.distinctDayDeficit, 2);
-
-    expect(
-      aerobicStatus(result, AerobicTargetKind.longBaseExposure)
-          .exposureDeficit,
-      1,
-    );
-    expect(
-      aerobicStatus(result, AerobicTargetKind.shortBaseExposure)
-          .exposureDeficit,
-      1,
-    );
   });
 
-  test('28-day strength totals produce per-muscle target deficits', () {
+  test('28-day chest and back totals retain their effective-set deficits', () {
     final result = status(
+      const [],
       muscle: [
         for (var i = 0; i < 30; i++)
           MuscleStimulusEvent(
@@ -89,12 +58,11 @@ void main() {
           ),
       ],
     );
-
     final chest = result.muscle.firstWhere(
-      (entry) => entry.muscleGroup == MajorMuscleGroup.chest,
+      (value) => value.muscleGroup == MajorMuscleGroup.chest,
     );
     final back = result.muscle.firstWhere(
-      (entry) => entry.muscleGroup == MajorMuscleGroup.back,
+      (value) => value.muscleGroup == MajorMuscleGroup.back,
     );
     expect(chest.completedEffectiveSets, 30);
     expect(chest.deficitToMinimumEffectiveSets, 2);
@@ -102,119 +70,69 @@ void main() {
     expect(back.deficitToMinimumEffectiveSets, 0);
   });
 
-  test('one REHIT does not satisfy 4x4 or either base target', () {
-    final result = status(
-      aerobic: [
-        AerobicStimulusEvent(
-          sourceId: 'rehit-only',
-          protocol: CardioProtocolType.rehit,
-          performedAt: asOf,
-          durationMinutes: 10,
-        ),
-      ],
-    );
-
-    expect(
-      aerobicStatus(result, AerobicTargetKind.norwegian4x4Anchor)
-          .exposureDeficit,
-      1,
-    );
-    final fallback = aerobicStatus(
-      result,
-      AerobicTargetKind.rehitSeparateDayFallback,
-    );
-    expect(fallback.exposureDeficit, 1);
-    expect(fallback.distinctDayDeficit, 1);
-    expect(
-      aerobicStatus(result, AerobicTargetKind.longBaseExposure)
-          .exposureDeficit,
-      1,
-    );
-    expect(
-      aerobicStatus(result, AerobicTargetKind.shortBaseExposure)
-          .exposureDeficit,
-      1,
-    );
+  test('default targets expose three distinct high-intensity days and one 4x4 preference', () {
+    final result = status(const []);
+    expect(target(result, AerobicTargetKind.highIntensityDistinctDays).targetDistinctDays, 3);
+    expect(target(result, AerobicTargetKind.highIntensityDistinctDays).distinctDayDeficit, 3);
+    expect(target(result, AerobicTargetKind.norwegian4x4Preference).exposureDeficit, 1);
+    expect(target(result, AerobicTargetKind.longBaseExposure).exposureDeficit, 1);
+    expect(result.aerobic, hasLength(3));
   });
 
-  test('two same-day REHITs do not satisfy separate-day fallback', () {
-    final result = status(
-      aerobic: [
-        for (final hour in const [8, 17])
+  test('4x4 plus two REHIT days satisfies the union frequency target', () {
+    final result = status([
+      AerobicStimulusEvent(sourceId: '4x4', protocol: CardioProtocolType.norwegian4x4, performedAt: asOf, durationMinutes: 35),
+      AerobicStimulusEvent(sourceId: 'rehit-one', protocol: CardioProtocolType.rehit, performedAt: asOf.subtract(const Duration(days: 1)), durationMinutes: 10),
+      AerobicStimulusEvent(sourceId: 'rehit-two', protocol: CardioProtocolType.rehit, performedAt: asOf.subtract(const Duration(days: 2)), durationMinutes: 10),
+    ]);
+    final intensity = target(result, AerobicTargetKind.highIntensityDistinctDays);
+    expect(intensity.completedDistinctDays, 3);
+    expect(intensity.distinctDayDeficit, 0);
+    expect(target(result, AerobicTargetKind.norwegian4x4Preference).exposureDeficit, 0);
+  });
+
+  test('same-day high-intensity protocols count once and 4x4 plus REHIT leaves one day due', () {
+    final result = status([
+      AerobicStimulusEvent(sourceId: '4x4', protocol: CardioProtocolType.norwegian4x4, performedAt: asOf, durationMinutes: 35),
+      AerobicStimulusEvent(sourceId: 'same-day-rehit', protocol: CardioProtocolType.rehit, performedAt: asOf, durationMinutes: 10),
+      AerobicStimulusEvent(sourceId: 'next-day-rehit', protocol: CardioProtocolType.rehit, performedAt: asOf.subtract(const Duration(days: 1)), durationMinutes: 10),
+    ]);
+    final intensity = target(result, AerobicTargetKind.highIntensityDistinctDays);
+    expect(intensity.completedDistinctDays, 2);
+    expect(intensity.distinctDayDeficit, 1);
+  });
+
+  test('only a 60-minute session fills the sole continuous base target', () {
+    TrainingStatus withBase(int minutes) => status([
           AerobicStimulusEvent(
-            sourceId: 'rehit-$hour',
-            protocol: CardioProtocolType.rehit,
-            performedAt: DateTime(2026, 7, 14, hour),
-            durationMinutes: 10,
+            sourceId: 'base-$minutes',
+            protocol: CardioProtocolType.zone2Base,
+            performedAt: asOf,
+            durationMinutes: minutes,
           ),
-      ],
-    );
-    final fallback = aerobicStatus(
-      result,
-      AerobicTargetKind.rehitSeparateDayFallback,
-    );
+        ]);
 
-    expect(fallback.completedExposures, 2);
-    expect(fallback.exposureDeficit, 0);
-    expect(fallback.completedDistinctDays, 1);
-    expect(fallback.distinctDayDeficit, 1);
+    expect(
+      target(withBase(35), AerobicTargetKind.longBaseExposure).exposureDeficit,
+      1,
+    );
+    final sixty = target(withBase(60), AerobicTargetKind.longBaseExposure);
+    expect(sixty.completedExposures, 1);
+    expect(sixty.exposureDeficit, 0);
   });
 
-  group('base exposure allocation', () {
-    TrainingStatus withBaseDurations(List<int> durations) => status(
-          aerobic: [
-            for (var i = 0; i < durations.length; i++)
-              AerobicStimulusEvent(
-                sourceId: 'base-$i',
-                protocol: CardioProtocolType.zone2Base,
-                performedAt: asOf.subtract(Duration(hours: i)),
-                durationMinutes: durations[i],
-              ),
-          ],
-        );
-
-    test('one 60-minute session fills long but leaves short deficit', () {
-      final result = withBaseDurations([60]);
-      expect(
-        aerobicStatus(result, AerobicTargetKind.longBaseExposure)
-            .exposureDeficit,
-        0,
-      );
-      expect(
-        aerobicStatus(result, AerobicTargetKind.shortBaseExposure)
-            .exposureDeficit,
-        1,
-      );
-    });
-
-    test('one 60 plus one 35-minute session fills both targets', () {
-      final result = withBaseDurations([60, 35]);
-      expect(
-        aerobicStatus(result, AerobicTargetKind.longBaseExposure)
-            .exposureDeficit,
-        0,
-      );
-      expect(
-        aerobicStatus(result, AerobicTargetKind.shortBaseExposure)
-            .exposureDeficit,
-        0,
-      );
-    });
-
-    test('two 60-minute sessions fill long and short without double counting', () {
-      final result = withBaseDurations([60, 60]);
-      final long = aerobicStatus(
-        result,
-        AerobicTargetKind.longBaseExposure,
-      );
-      final short = aerobicStatus(
-        result,
-        AerobicTargetKind.shortBaseExposure,
-      );
-      expect(long.completedExposures, 1);
-      expect(long.exposureDeficit, 0);
-      expect(short.completedExposures, 1);
-      expect(short.exposureDeficit, 0);
-    });
+  test('continuous base exposure count is capped at its configured target', () {
+    final result = status([
+      for (var day = 0; day < 2; day++)
+        AerobicStimulusEvent(
+          sourceId: 'base-$day',
+          protocol: CardioProtocolType.zone2Base,
+          performedAt: asOf.subtract(Duration(days: day)),
+          durationMinutes: 60,
+        ),
+    ]);
+    final base = target(result, AerobicTargetKind.longBaseExposure);
+    expect(base.completedExposures, 1);
+    expect(base.exposureDeficit, 0);
   });
 }
