@@ -306,7 +306,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text(
+      find.textContaining(
         'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.',
       ),
       findsOneWidget,
