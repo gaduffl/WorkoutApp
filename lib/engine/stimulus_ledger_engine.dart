@@ -411,10 +411,23 @@ class StimulusLedgerEngine {
       );
     }
 
+    int highIntensityDistinctDays(int days) => _distinctDays(
+          eligibleAerobicEvents
+              .where(
+                (event) =>
+                    (event.protocol == CardioProtocolType.norwegian4x4 ||
+                        event.protocol == CardioProtocolType.rehit) &&
+                    _inRollingWindow(event.performedAt, asOf, days),
+              )
+              .map((event) => event.performedAt),
+        );
+
     return StimulusLedgerSnapshot(
       asOf: asOf,
       muscles: muscles,
       aerobic: aerobic,
+      highIntensityDistinctDays7d: highIntensityDistinctDays(7),
+      highIntensityDistinctDays28d: highIntensityDistinctDays(28),
     );
   }
 
