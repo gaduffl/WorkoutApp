@@ -18,19 +18,19 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
     case RuleKey.norwegian4x4Due:
       return lang == AppLanguage.de
           ? 'Im rollierenden 7-Tage-Fenster fehlt der bevorzugte 4x4-Reiz, daher hat er heute Vorrang.'
-          : 'The preferred 4x4 stimulus is missing from the rolling 7-day window, so it takes priority today.';
+          : 'A high-intensity day is due and the preferred 4x4 is still missing from the rolling 7-day window, so it takes priority today.';
     case RuleKey.rehitFallbackDue:
       return lang == AppLanguage.de
-          ? 'Für 4x4 reicht die Zeit heute nicht; das vom CAROL-Bike geführte Preset CAROL REHIT Intense ergänzt den vorübergehenden Ersatz an einem separaten Tag.'
-          : 'Today is too short for 4x4, so the bike-guided CAROL REHIT Intense preset advances the temporary fallback on a separate day.';
+          ? 'Das vom CAROL-Bike geführte Preset CAROL REHIT Intense füllt heute einen noch offenen, separaten Hochintensitätstag.'
+          : 'The bike-guided CAROL REHIT Intense preset fills one still-due distinct high-intensity day today.';
     case RuleKey.baseLongDeficit:
       return lang == AppLanguage.de
           ? 'Die lange 60-Minuten-Grundlageneinheit fehlt im rollierenden 7-Tage-Fenster.'
           : 'The 60-minute base exposure is missing from the rolling 7-day window.';
     case RuleKey.baseShortDeficit:
       return lang == AppLanguage.de
-          ? 'Nach Zuordnung der langen Einheit fehlt noch eine separate 30+-Minuten-Grundlageneinheit.'
-          : 'After allocating the long session, a separate 30+ minute base exposure is still missing.';
+          ? 'Archivierte Begründung aus einer früheren Zielversion.'
+          : 'Archived rationale from an earlier target version.';
     case RuleKey.muscleStimulusDeficit:
       return lang == AppLanguage.de
           ? 'Der Plan schließt den größten wirksamen Satzrückstand bei ${p['muscles'] ?? 'den Zielmuskeln'}.'
