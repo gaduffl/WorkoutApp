@@ -37,6 +37,7 @@ import '../models/session_log.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
 import '../models/training_targets.dart';
+import '../models/training_status.dart';
 import '../models/user_settings.dart';
 
 /// Ties the pure engine + persistence layer to the UI. All decision logic
@@ -95,9 +96,14 @@ class AppController extends ChangeNotifier {
       isHighIntensityUsableNow(nowLocal: nowLocal);
 
   /// Loaded from whole local calendar days so the shared recovery policy can
-  /// apply its precision-aware trailing-48-hour filter. Three days
-  /// deliberately over-fetches enough history even late in the local day.
+  /// apply its precision-aware trailing-48-hour filter and the rolling
+  /// seven-day high-intensity target.
   List<SessionLog> _recentLogs = [];
+
+  @visibleForTesting
+  void replaceRecentLogsForTesting(Iterable<SessionLog> logs) {
+    _recentLogs = List<SessionLog>.unmodifiable(logs);
+  }
 
   List<SessionLog> get _todaysLogs =>
       _recentLogs.where((l) => _isSameDate(l.date, today())).toList();
@@ -283,6 +289,21 @@ class AppController extends ChangeNotifier {
               (rule) => rule.key == RuleKey.deloadActive,
             ) ??
             false);
+    final targetLedger = const StimulusLedgerEngine().buildFromSessionLogs(
+      logs: visibleLogs,
+      asOf: nowLocal,
+    );
+    final targetStatus = const TrainingStatusEngine().build(
+      targets: TrainingTargets(),
+      ledger: targetLedger,
+    );
+    final highIntensityTargetDue = targetStatus.aerobic
+            .firstWhere(
+              (status) =>
+                  status.target == AerobicTargetKind.highIntensityDistinctDays,
+            )
+            .distinctDayDeficit >
+        0;
 
     return const RehitEligibilityEngine().evaluate(
       RehitEligibilityInput(
@@ -302,6 +323,7 @@ class AppController extends ChangeNotifier {
         rehitAlreadyCompletedToday: todaysLogs.any(_isQualifyingRehit),
         rehitUnavailableDueToTravel:
             highIntensitySafety.travelUnavailable,
+        highIntensityTargetDue: highIntensityTargetDue,
         nowLocal: nowLocal,
       ),
     );
@@ -312,6 +334,13 @@ class AppController extends ChangeNotifier {
 
   /// Compatibility convenience; all behavior delegates to the shared result.
   bool get canOfferSecondRehit => secondRehitEligibility.eligible;
+
+  String _rehitEligibilityMessage(RehitEligibilityResult result) {
+    if (result.closedReasons.contains(RehitClosedReason.highIntensityTargetMet)) {
+      return 'The three-distinct-day high-intensity target in the rolling 7-day window is already met.';
+    }
+    return result.closedReasons.map((reason) => reason.name).join(', ');
+  }
 
   @visibleForTesting
   bool isQualifyingRehitForTesting(SessionLog log) =>
@@ -543,7 +572,9 @@ class AppController extends ChangeNotifier {
     queueState = await repo.loadQueueState();
     exerciseStates = await repo.loadExerciseStates();
     todayTrace = await repo.loadDecisionTraceForDate(today());
-    _recentLogs = await repo.loadSessionLogsSince(today().subtract(const Duration(days: 3)));
+    _recentLogs = await repo.loadSessionLogsSince(
+      today().subtract(const Duration(days: 7)),
+    );
   }
 
   /// Loads the complete History surface and calculates its read-only dose
@@ -1061,7 +1092,7 @@ class AppController extends ChangeNotifier {
         if (!finisherEligibility.eligible) {
           throw StateError(
             'The optional REHIT finisher is not currently eligible: '
-            '${finisherEligibility.closedReasons.map((reason) => reason.name).join(', ')}',
+            '${_rehitEligibilityMessage(finisherEligibility)}',
           );
         }
         final finisherPrescription = cardioEngine.prescriptionFor(
