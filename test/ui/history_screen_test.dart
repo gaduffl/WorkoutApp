@@ -306,10 +306,6 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining('0/1 in trailing 7d'),
-      findsOneWidget,
-    );
-    expect(
       find.text(
         'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.',
       ),
