@@ -28,18 +28,16 @@ class TrainingStatusEngine {
     final intensityWindow = targets.intensityRollingWindowDays;
     final fourByFour =
         ledger.protocol(CardioProtocolType.norwegian4x4);
-    final rehit = ledger.protocol(CardioProtocolType.rehit);
     final fourByFourCompleted = fourByFour.sessionsForWindow(intensityWindow);
-    final rehitCompleted = rehit.sessionsForWindow(intensityWindow);
-    final rehitDistinctDays = rehit.separateDaysForWindow(intensityWindow);
-    final fallbackDistinctDayTarget = targets.fallbackRehitRequiresSeparateDays
-        ? targets.fallbackRehitExposures
-        : 0;
+    final highIntensityDistinctDays = intensityWindow == 7
+        ? ledger.highIntensityDistinctDays7d
+        : intensityWindow == 28
+            ? ledger.highIntensityDistinctDays28d
+            : _distinctHighIntensityDays(ledger, intensityWindow);
 
     final baseWindow = targets.baseAerobicRollingWindowDays;
     final base = ledger.protocol(CardioProtocolType.zone2Base);
-    final baseDurations = base.sessionDurationsForWindow(baseWindow);
-    final longQualified = baseDurations
+    final longQualified = base.sessionDurationsForWindow(baseWindow)
         .where(
           (duration) => duration >= targets.baseLongExposureMinutes,
         )
@@ -47,14 +45,6 @@ class TrainingStatusEngine {
     final allocatedToLong = longQualified < targets.baseLongExposureCount
         ? longQualified
         : targets.baseLongExposureCount;
-    final shortThreshold = targets.baseShortExposureMinutes.reduce(
-      (current, next) => current < next ? current : next,
-    );
-    final shortCandidates =
-        baseDurations.where((duration) => duration >= shortThreshold).length -
-            allocatedToLong;
-    final shortQualifiedAfterLongAllocation =
-        shortCandidates > 0 ? shortCandidates : 0;
 
     return TrainingStatus(
       asOf: ledger.asOf,
@@ -62,7 +52,23 @@ class TrainingStatusEngine {
       muscle: muscle,
       aerobic: [
         AerobicTrainingStatus(
-          target: AerobicTargetKind.norwegian4x4Anchor,
+          target: AerobicTargetKind.highIntensityDistinctDays,
+          rollingWindowDays: intensityWindow,
+          completedExposures: highIntensityDistinctDays,
+          targetExposures: targets.highIntensityDistinctDaysTarget,
+          exposureDeficit: _deficit(
+            targets.highIntensityDistinctDaysTarget,
+            highIntensityDistinctDays,
+          ),
+          distinctDayDeficit: _deficit(
+            targets.highIntensityDistinctDaysTarget,
+            highIntensityDistinctDays,
+          ),
+          completedDistinctDays: highIntensityDistinctDays,
+          targetDistinctDays: targets.highIntensityDistinctDaysTarget,
+        ),
+        AerobicTrainingStatus(
+          target: AerobicTargetKind.norwegian4x4Preference,
           rollingWindowDays: intensityWindow,
           completedExposures: fourByFourCompleted,
           targetExposures: targets.preferredNorwegian4x4Exposures,
@@ -70,22 +76,8 @@ class TrainingStatusEngine {
             targets.preferredNorwegian4x4Exposures,
             fourByFourCompleted,
           ),
-        ),
-        AerobicTrainingStatus(
-          target: AerobicTargetKind.rehitSeparateDayFallback,
-          rollingWindowDays: intensityWindow,
-          completedExposures: rehitCompleted,
-          targetExposures: targets.fallbackRehitExposures,
-          exposureDeficit: _deficit(
-            targets.fallbackRehitExposures,
-            rehitCompleted,
-          ),
-          completedDistinctDays: rehitDistinctDays,
-          targetDistinctDays: fallbackDistinctDayTarget,
-          distinctDayDeficit: _deficit(
-            fallbackDistinctDayTarget,
-            rehitDistinctDays,
-          ),
+          completedDistinctDays: highIntensityDistinctDays,
+          targetDistinctDays: targets.highIntensityDistinctDaysTarget,
         ),
         AerobicTrainingStatus(
           target: AerobicTargetKind.longBaseExposure,
@@ -95,16 +87,6 @@ class TrainingStatusEngine {
           exposureDeficit: _deficit(
             targets.baseLongExposureCount,
             allocatedToLong,
-          ),
-        ),
-        AerobicTrainingStatus(
-          target: AerobicTargetKind.shortBaseExposure,
-          rollingWindowDays: baseWindow,
-          completedExposures: shortQualifiedAfterLongAllocation,
-          targetExposures: targets.baseShortExposureCount,
-          exposureDeficit: _deficit(
-            targets.baseShortExposureCount,
-            shortQualifiedAfterLongAllocation,
           ),
         ),
       ],
@@ -135,4 +117,12 @@ class TrainingStatusEngine {
 
   int _deficit(int target, int completed) =>
       target > completed ? target - completed : 0;
+
+  int _distinctHighIntensityDays(StimulusLedgerSnapshot ledger, int days) {
+    // Custom target windows are not currently user-editable; retain a stable
+    // protocol-safe fallback instead of manufacturing a partial count.
+    return days <= 7
+        ? ledger.highIntensityDistinctDays7d
+        : ledger.highIntensityDistinctDays28d;
+  }
 }
