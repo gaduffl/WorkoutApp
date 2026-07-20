@@ -115,44 +115,20 @@ class HistoryFeedbackViewModel {
       );
     }
 
-    final rawFourByFourRow = cardioRow(
-      AerobicTargetKind.norwegian4x4Anchor,
-      'Norwegian 4×4 anchor',
-    );
-    final rawRehitFallbackRow = cardioRow(
-      AerobicTargetKind.rehitSeparateDayFallback,
-      'REHIT fallback',
-    );
-
-    // The weekly high-intensity target is disjunctive: a 4×4 is preferred,
-    // while two qualifying REHIT days are its temporary fallback. Keep both
-    // protocol counts untouched, but do not present the preferred protocol as
-    // actively due after its fallback has already covered the weekly target.
-    // If both happen to be complete, the 4×4 remains the anchor and the
-    // fallback is correctly shown as unnecessary.
-    final fourByFourRow = cardioRow(
-      AerobicTargetKind.norwegian4x4Anchor,
-      'Norwegian 4×4 anchor',
-      applicable: rawFourByFourRow.met || !rawRehitFallbackRow.met,
-    );
-    final rehitFallbackRow = cardioRow(
-      AerobicTargetKind.rehitSeparateDayFallback,
-      'REHIT fallback',
-      applicable: !rawFourByFourRow.met,
-    );
-
     return HistoryFeedbackViewModel(
       muscles: muscles,
       cardio: [
-        fourByFourRow,
-        rehitFallbackRow,
         cardioRow(
-          AerobicTargetKind.longBaseExposure,
-          '${targets.baseLongExposureMinutes}m base exposure',
+          AerobicTargetKind.highIntensityDistinctDays,
+          'High-intensity days',
         ),
         cardioRow(
-          AerobicTargetKind.shortBaseExposure,
-          '${targets.baseShortExposureMinutes.join('/')}m base exposure',
+          AerobicTargetKind.norwegian4x4Preference,
+          'Norwegian 4×4 preference',
+        ),
+        cardioRow(
+          AerobicTargetKind.longBaseExposure,
+          '${targets.baseLongExposureMinutes}m base exposure (secondary to strength deficits)',
         ),
       ],
     );
