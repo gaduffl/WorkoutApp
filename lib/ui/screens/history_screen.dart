@@ -348,7 +348,7 @@ class _CardioTargetsCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Trailing windows · high intensity is covered by the 4×4 anchor or its REHIT fallback',
+                'Trailing windows · high-intensity days can be Norwegian 4×4 or REHIT',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -367,30 +367,25 @@ class _CardioTargetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detail = switch (row.target) {
-      AerobicTargetKind.norwegian4x4Anchor =>
+      AerobicTargetKind.highIntensityDistinctDays =>
+        '${row.completedDistinctDays}/${row.targetDistinctDays} DISTINCT DAYS in trailing ${row.rollingWindowDays}d',
+      AerobicTargetKind.norwegian4x4Preference =>
         '${row.completedExposures}/${row.targetExposures} in trailing ${row.rollingWindowDays}d',
-      AerobicTargetKind.rehitSeparateDayFallback =>
-        '${row.completedExposures}/${row.targetExposures} exposures · '
-            '${row.completedDistinctDays}/${row.targetDistinctDays} distinct days',
-      AerobicTargetKind.longBaseExposure ||
-      AerobicTargetKind.shortBaseExposure =>
+      AerobicTargetKind.longBaseExposure =>
         '${row.completedExposures}/${row.targetExposures} in trailing ${row.rollingWindowDays}d',
     };
     final note = switch (row.target) {
-      AerobicTargetKind.norwegian4x4Anchor => !row.applicable
-          ? 'Not currently needed — REHIT fallback met'
-          : row.met
-              ? 'Anchor met'
-              : '${row.exposureDeficit} anchor remaining',
-      AerobicTargetKind.rehitSeparateDayFallback => !row.applicable
-          ? 'Not needed — 4×4 anchor met'
-          : row.met
-              ? 'Fallback met — weekly high-intensity target covered for now · remains separate from 4×4 and base work'
-              : 'Temporary fallback only · does not equal 4×4 or base work',
-      AerobicTargetKind.longBaseExposure ||
-      AerobicTargetKind.shortBaseExposure => row.met
+      AerobicTargetKind.highIntensityDistinctDays => row.met
+          ? 'Met — Norwegian 4×4 and REHIT each count once per calendar day'
+          : '${row.distinctDayDeficit} distinct high-intensity day${row.distinctDayDeficit == 1 ? '' : 's'} remaining',
+      AerobicTargetKind.norwegian4x4Preference => row.met
+          ? 'Preference met'
+          : row.completedDistinctDays >= 3
+              ? 'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.'
+              : 'At least one 4×4 is preferred when a 35/60 min slot is available',
+      AerobicTargetKind.longBaseExposure => row.met
           ? 'Exposure met'
-          : '${row.exposureDeficit} exposure remaining',
+          : '${row.exposureDeficit} exposure remaining · secondary to strength deficits',
     };
     final icon = switch (row.state) {
       CardioTargetState.notNeeded => Icons.remove_circle_outline,
