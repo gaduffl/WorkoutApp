@@ -22,6 +22,7 @@ enum RehitClosedReason {
   intensityWithinTrailing48Hours,
   rehitAlreadyCompletedToday,
   rehitUnavailableDueToTravel,
+  highIntensityTargetMet,
 }
 
 /// Facts from the first workout persisted today.
@@ -76,6 +77,10 @@ class RehitEligibilityInput {
   /// unavailable.
   final bool rehitUnavailableDueToTravel;
 
+  /// Optional REHIT is a target-completion aid, never a fourth natural
+  /// high-intensity day in the rolling window.
+  final bool highIntensityTargetDue;
+
   /// Device-local wall-clock observation used by the rolling window and the
   /// once-only later-day nudge.
   final DateTime nowLocal;
@@ -95,6 +100,7 @@ class RehitEligibilityInput {
     required this.rehitAlreadyCompletedToday,
     required this.nowLocal,
     this.rehitUnavailableDueToTravel = false,
+    this.highIntensityTargetDue = true,
     this.nudgeCutoffHour = 20,
   }) : assert(nudgeCutoffHour >= 0 && nudgeCutoffHour <= 23);
 }
@@ -178,6 +184,9 @@ class RehitEligibilityEngine {
     }
     if (input.rehitUnavailableDueToTravel) {
       reasons.add(RehitClosedReason.rehitUnavailableDueToTravel);
+    }
+    if (!input.highIntensityTargetDue) {
+      reasons.add(RehitClosedReason.highIntensityTargetMet);
     }
 
     return RehitEligibilityResult(

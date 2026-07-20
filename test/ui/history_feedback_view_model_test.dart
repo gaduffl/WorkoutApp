@@ -75,19 +75,19 @@ void main() {
     );
     expect(
       model
-          .cardioTarget(AerobicTargetKind.norwegian4x4Anchor)
+          .cardioTarget(AerobicTargetKind.highIntensityDistinctDays)
+          .distinctDayDeficit,
+      3,
+    );
+    expect(
+      model
+          .cardioTarget(AerobicTargetKind.norwegian4x4Preference)
           .exposureDeficit,
       1,
     );
     expect(
       model
-          .cardioTarget(AerobicTargetKind.rehitSeparateDayFallback)
-          .distinctDayDeficit,
-      2,
-    );
-    expect(
-      model
-          .cardioTarget(AerobicTargetKind.rehitSeparateDayFallback)
+          .cardioTarget(AerobicTargetKind.norwegian4x4Preference)
           .applicable,
       isTrue,
     );
@@ -220,7 +220,7 @@ void main() {
     expect(maximum.bandState28d, MuscleTargetBandState.inBand);
   });
 
-  test('legacy Norwegian 4x4 log meets only the 4x4 anchor', () {
+  test('legacy Norwegian 4x4 log meets the preference while leaving frequency due', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(
@@ -235,21 +235,15 @@ void main() {
     );
 
     expect(
-      model.cardioTarget(AerobicTargetKind.norwegian4x4Anchor).met,
+      model.cardioTarget(AerobicTargetKind.norwegian4x4Preference).met,
       isTrue,
     );
     expect(
       model
-          .cardioTarget(AerobicTargetKind.rehitSeparateDayFallback)
-          .completedExposures,
-      0,
+          .cardioTarget(AerobicTargetKind.highIntensityDistinctDays)
+          .distinctDayDeficit,
+      2,
     );
-    final fallback = model.cardioTarget(
-      AerobicTargetKind.rehitSeparateDayFallback,
-    );
-    expect(fallback.applicable, isFalse);
-    expect(fallback.hasActiveDeficit, isFalse);
-    expect(fallback.state, CardioTargetState.notNeeded);
     expect(
       model
           .cardioTarget(AerobicTargetKind.longBaseExposure)
@@ -258,7 +252,7 @@ void main() {
     );
   });
 
-  test('two same-day legacy REHITs leave the distinct-day fallback deficit', () {
+  test('two same-day legacy REHITs count as one distinct high-intensity day', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(
@@ -278,28 +272,23 @@ void main() {
       ],
       asOf: asOf,
     );
-    final fallback = model.cardioTarget(
-      AerobicTargetKind.rehitSeparateDayFallback,
+    final intensity = model.cardioTarget(
+      AerobicTargetKind.highIntensityDistinctDays,
     );
     final fourByFour = model.cardioTarget(
-      AerobicTargetKind.norwegian4x4Anchor,
+      AerobicTargetKind.norwegian4x4Preference,
     );
 
     expect(fourByFour.exposureDeficit, 1);
     expect(fourByFour.applicable, isTrue);
     expect(fourByFour.hasActiveDeficit, isTrue);
     expect(fourByFour.state, CardioTargetState.deficit);
-    expect(fallback.completedExposures, 2);
-    expect(fallback.exposureDeficit, 0);
-    expect(fallback.completedDistinctDays, 1);
-    expect(fallback.distinctDayDeficit, 1);
-    expect(fallback.applicable, isTrue);
-    expect(fallback.hasActiveDeficit, isTrue);
-    expect(fallback.state, CardioTargetState.deficit);
-    expect(fallback.met, isFalse);
+    expect(intensity.completedDistinctDays, 1);
+    expect(intensity.distinctDayDeficit, 2);
+    expect(intensity.met, isFalse);
   });
 
-  test('two distinct-day REHITs cover the weekly target without rewriting 4x4 history', () {
+  test('two distinct-day REHITs leave one high-intensity day and the 4x4 preference due', () {
     final logs = [
       session(
         id: 'rehit-day-one',
@@ -321,34 +310,29 @@ void main() {
       asOf: asOf,
     );
     final fourByFour = covered.cardioTarget(
-      AerobicTargetKind.norwegian4x4Anchor,
+      AerobicTargetKind.norwegian4x4Preference,
     );
-    final fallback = covered.cardioTarget(
-      AerobicTargetKind.rehitSeparateDayFallback,
+    final intensity = covered.cardioTarget(
+      AerobicTargetKind.highIntensityDistinctDays,
     );
 
     expect(fourByFour.completedExposures, 0);
     expect(fourByFour.targetExposures, 1);
     expect(fourByFour.exposureDeficit, 1);
     expect(fourByFour.met, isFalse);
-    expect(fourByFour.applicable, isFalse);
-    expect(fourByFour.hasActiveDeficit, isFalse);
-    expect(fourByFour.state, CardioTargetState.notNeeded);
-    expect(fallback.completedExposures, 2);
-    expect(fallback.completedDistinctDays, 2);
-    expect(fallback.met, isTrue);
-    expect(fallback.applicable, isTrue);
-    expect(fallback.state, CardioTargetState.met);
+    expect(fourByFour.applicable, isTrue);
+    expect(intensity.completedDistinctDays, 2);
+    expect(intensity.distinctDayDeficit, 1);
 
     final agedOut = HistoryFeedbackViewModel.fromLogs(
       logs: logs,
       asOf: asOf.add(const Duration(days: 8)),
     );
     final dueAgain = agedOut.cardioTarget(
-      AerobicTargetKind.norwegian4x4Anchor,
+      AerobicTargetKind.highIntensityDistinctDays,
     );
     expect(dueAgain.completedExposures, 0);
-    expect(dueAgain.exposureDeficit, 1);
+    expect(dueAgain.distinctDayDeficit, 3);
     expect(dueAgain.applicable, isTrue);
     expect(dueAgain.hasActiveDeficit, isTrue);
     expect(dueAgain.state, CardioTargetState.deficit);
@@ -437,7 +421,7 @@ void main() {
     expect(historySessionDoseSummary(strength), '1/1 sets');
   });
 
-  test('one legacy 60m base exposure leaves the separate short deficit', () {
+  test('one legacy 60m base exposure fills the continuous base target', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(
@@ -455,13 +439,9 @@ void main() {
       model.cardioTarget(AerobicTargetKind.longBaseExposure).met,
       isTrue,
     );
-    expect(
-      model.cardioTarget(AerobicTargetKind.shortBaseExposure).exposureDeficit,
-      1,
-    );
   });
 
-  test('legacy 60m plus 35m base exposures meet both separate targets', () {
+  test('legacy 60m plus 35m base exposures retain the continuous base target', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(
@@ -484,10 +464,6 @@ void main() {
 
     expect(
       model.cardioTarget(AerobicTargetKind.longBaseExposure).met,
-      isTrue,
-    );
-    expect(
-      model.cardioTarget(AerobicTargetKind.shortBaseExposure).met,
       isTrue,
     );
   });

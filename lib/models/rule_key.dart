@@ -6,6 +6,7 @@ enum RuleKey {
   norwegian4x4Due,
   rehitFallbackDue,
   baseLongDeficit,
+  // Retained solely so persisted DecisionTrace history remains readable.
   baseShortDeficit,
   muscleStimulusDeficit,
   muscleRecoveryDemotion,

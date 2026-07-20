@@ -5,12 +5,22 @@ import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
+import 'package:morningcoach/models/rule_key.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/models/user_settings.dart';
 
 void main() {
+  test('old fired-rule names remain decodable', () {
+    final restored = firedRuleFromJson({
+      'key': 'rehitFallbackDue',
+      'pattern': null,
+      'params': <String, String>{},
+    });
+    expect(restored.key, RuleKey.rehitFallbackDue);
+  });
+
   test('travel context round-trips on plans and session logs', () {
     const plan = SessionPlan(
       sessionId: SessionTypeId.s1,

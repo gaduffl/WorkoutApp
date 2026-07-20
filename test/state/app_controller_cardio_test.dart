@@ -1368,6 +1368,54 @@ void main() {
       expect(controller.queueState.pointer, SessionTypeId.s2);
     });
 
+    test('controller closes optional REHIT at three cached distinct intensity days but leaves two days eligible', () async {
+      SessionLog qualifyingRehit(String id, DateTime completedAt) => SessionLog(
+            id: id,
+            templateId: SessionTypeId.s7,
+            tier: SessionTier.full,
+            date: DateTime(
+              completedAt.year,
+              completedAt.month,
+              completedAt.day,
+            ),
+            completedAt: completedAt,
+            setLogs: const [],
+            plannedWorkSets: 0,
+            completedWorkSets: 0,
+            durationMinutes: 10,
+            countsAs: const {FloorCategory.intensity},
+          );
+
+      final controller = await controllerAfterStrength(completedSets: 2);
+      final now = DateTime.now();
+      final strengthLog = await controller.repo.loadSessionLogsSince(
+        now.subtract(const Duration(days: 1)),
+      );
+      final threeDays = [
+        ...strengthLog,
+        qualifyingRehit('rehit-three', now.subtract(const Duration(days: 3))),
+        qualifyingRehit('rehit-five', now.subtract(const Duration(days: 5))),
+        qualifyingRehit('rehit-six', now.subtract(const Duration(days: 6))),
+      ];
+      controller.replaceRecentLogsForTesting(threeDays);
+      expect(
+        controller.rehitEligibilityAt(now).closedReasons,
+        contains(RehitClosedReason.highIntensityTargetMet),
+      );
+
+      controller.replaceRecentLogsForTesting([
+        ...strengthLog,
+        qualifyingRehit('rehit-three', now.subtract(const Duration(days: 3))),
+        qualifyingRehit('rehit-six', now.subtract(const Duration(days: 6))),
+      ]);
+      final due = controller.rehitEligibilityAt(now);
+      expect(
+        due.closedReasons,
+        isNot(contains(RehitClosedReason.highIntensityTargetMet)),
+      );
+      expect(due.eligible, isTrue);
+    });
+
     test('an explicit early end blocks later-day REHIT at exactly 50%', () async {
       final controller = await controllerAfterStrength(
         completedSets: 2,

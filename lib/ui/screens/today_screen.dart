@@ -52,16 +52,13 @@ String candidateReason(ScoredCandidate candidate) {
     return 'Unavailable - no pain-safe work remains';
   }
   if (terms.containsKey('norwegian4x4Due')) {
-    return 'Fills the rolling 7-day 4x4 anchor';
+    return 'Prioritizes the preferred 4×4 while a high-intensity day is due';
   }
   if (terms.containsKey('rehitFallbackDue')) {
-    return 'Advances the separate-day REHIT fallback';
+    return 'Fills a due rolling high-intensity day with REHIT';
   }
   if (terms.containsKey('baseLongDeficit')) {
     return 'Fills the long base-aerobic exposure';
-  }
-  if (terms.containsKey('baseShortDeficit')) {
-    return 'Fills the remaining 30+ min base exposure';
   }
   if (terms.containsKey('muscleWeeklyDeficit') ||
       terms.containsKey('muscle28dMinimumDeficit') ||

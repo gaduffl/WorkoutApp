@@ -63,24 +63,15 @@ void main() {
         countsAs: categories,
       );
 
-  /// Cardio target history used to keep anchor/base pressure out of tests
-  /// that exercise strength-plan assembly and safety mechanics.
+  /// Filled cardio-target history used to keep intensity/base pressure out of
+  /// tests that exercise strength-plan assembly and safety mechanics.
   List<SessionLog> floorSatisfiedLogs() => [
         buildLog(SessionTypeId.s1, today.subtract(const Duration(days: 2)), {FloorCategory.strength}),
         buildLog(SessionTypeId.s4, today.subtract(const Duration(days: 4)), {FloorCategory.strength}),
         buildLog(SessionTypeId.s3, today.subtract(const Duration(days: 3)), {FloorCategory.intensity}),
         buildLog(SessionTypeId.s6, today.subtract(const Duration(days: 2)), {FloorCategory.aerobic}),
-        SessionLog(
-          id: 's6-short',
-          templateId: SessionTypeId.s6,
-          tier: SessionTier.full,
-          date: today.subtract(const Duration(days: 5)),
-          setLogs: const [],
-          plannedWorkSets: 0,
-          completedWorkSets: 0,
-          durationMinutes: 35,
-          countsAs: const {FloorCategory.aerobic},
-        ),
+        buildLog(SessionTypeId.s7, today.subtract(const Duration(days: 5)), {FloorCategory.intensity}),
+        buildLog(SessionTypeId.s7, today.subtract(const Duration(days: 7)), {FloorCategory.intensity}),
       ];
 
   DecisionEngineInput buildInput({
@@ -1956,7 +1947,7 @@ void main() {
     expect(yellow, isNot(contains('%')));
   });
 
-  test('long base deficit selects S6 without weekend gating', () {
+  test('long base deficit yields to feasible strength deficits', () {
     final saturday = DateTime(2026, 1, 24);
     final weekendHistory = List.generate(
       20,
@@ -1988,12 +1979,12 @@ void main() {
       forceQueuePointer: false,
     ));
 
-    expect(output.trace.plan!.sessionId, SessionTypeId.s6);
-    expect(output.trace.firedRuleCodes, contains('BASE_LONG_DEFICIT'));
+    expect(output.trace.plan!.sessionId, isNot(SessionTypeId.s6));
+    expect(output.trace.firedRuleCodes, isNot(contains('BASE_LONG_DEFICIT')));
     final s6 = output.trace.candidates.firstWhere(
       (candidate) => candidate.sessionId == SessionTypeId.s6,
     );
-    expect(s6.scoreTerms['baseLongDeficit'], 15000);
+    expect(s6.scoreTerms, isNot(contains('baseLongDeficit')));
     expect(s6.scoreTerms, isNot(contains('weekendPriority')));
   });
 

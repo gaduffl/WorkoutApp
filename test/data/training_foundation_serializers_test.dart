@@ -301,8 +301,7 @@ void main() {
       10,
     );
     expect(restored.preferredNorwegian4x4Exposures, 1);
-    expect(restored.fallbackRehitExposures, 2);
-    expect(restored.baseShortExposureMinutes, [30, 35]);
+    expect(restored.highIntensityDistinctDaysTarget, 3);
   });
 
   test('partial persisted target bands are merged over personal defaults', () {
@@ -315,6 +314,19 @@ void main() {
     expect(restored.hypertrophyTargetBands.length, 9);
     expect(restored.hypertrophyTargetBands[MajorMuscleGroup.chest]!.center, 11);
     expect(restored.hypertrophyTargetBands[MajorMuscleGroup.back]!.center, 10);
+  });
+
+  test('legacy target JSON is accepted and emits the new intensity target', () {
+    final restored = trainingTargetsFromJson({
+      'fallbackRehitExposures': 2,
+      'fallbackRehitRequiresSeparateDays': true,
+      'baseShortExposureCount': 1,
+      'baseShortExposureMinutes': [30, 35],
+    });
+
+    expect(restored.highIntensityDistinctDaysTarget, 3);
+    expect(trainingTargetsToJson(restored), isNot(contains('fallbackRehitExposures')));
+    expect(trainingTargetsToJson(restored), containsPair('highIntensityDistinctDaysTarget', 3));
   });
 
   test('training deficit snapshot round-trips as data', () {
@@ -333,13 +345,13 @@ void main() {
       ],
       aerobic: const [
         AerobicTrainingStatus(
-          target: AerobicTargetKind.rehitSeparateDayFallback,
+          target: AerobicTargetKind.highIntensityDistinctDays,
           rollingWindowDays: 7,
           completedExposures: 2,
-          targetExposures: 2,
+          targetExposures: 3,
           exposureDeficit: 0,
           completedDistinctDays: 1,
-          targetDistinctDays: 2,
+          targetDistinctDays: 3,
           distinctDayDeficit: 1,
         ),
       ],
@@ -353,7 +365,7 @@ void main() {
     expect(restored.muscle.single.completedEffectiveSets, 29.5);
     expect(
       restored.aerobic.single.target,
-      AerobicTargetKind.rehitSeparateDayFallback,
+      AerobicTargetKind.highIntensityDistinctDays,
     );
     expect(restored.aerobic.single.distinctDayDeficit, 1);
   });

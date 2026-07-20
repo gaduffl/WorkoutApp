@@ -45,6 +45,7 @@ void main() {
     List<SessionLog> sessionLogsForRecovery = const [],
     bool rehitAlreadyCompletedToday = false,
     bool rehitUnavailableDueToTravel = false,
+    bool highIntensityTargetDue = true,
     DateTime? nowLocal,
     int nudgeCutoffHour = 20,
   }) {
@@ -59,6 +60,7 @@ void main() {
       sessionLogsForRecovery: sessionLogsForRecovery,
       rehitAlreadyCompletedToday: rehitAlreadyCompletedToday,
       rehitUnavailableDueToTravel: rehitUnavailableDueToTravel,
+      highIntensityTargetDue: highIntensityTargetDue,
       nowLocal: nowLocal ?? now,
       nudgeCutoffHour: nudgeCutoffHour,
     );
@@ -80,6 +82,13 @@ void main() {
     expect(result.eligible, isTrue);
     expect(result.closedReasons, isEmpty);
     expect(result.suggestedNudgeTime, DateTime(2026, 7, 15, 15));
+  });
+
+  test('target-complete rolling window closes optional REHIT hints and nudges', () {
+    expectClosed(
+      eligibleInput(highIntensityTargetDue: false),
+      RehitClosedReason.highIntensityTargetMet,
+    );
   });
 
   group('readiness and illness gates', () {
@@ -439,7 +448,11 @@ void main() {
     expect(
       result.closedReasons,
       RehitClosedReason.values
-          .where((reason) => reason != RehitClosedReason.noFirstSession)
+          .where(
+            (reason) =>
+                reason != RehitClosedReason.noFirstSession &&
+                reason != RehitClosedReason.highIntensityTargetMet,
+          )
           .toList(),
     );
   });

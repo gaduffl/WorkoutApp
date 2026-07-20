@@ -25,13 +25,13 @@ class AiExplainer {
       case RuleKey.restDoubleRed:
         return 'second RED recovery day in a row';
       case RuleKey.norwegian4x4Due:
-        return 'preferred 4x4 stimulus is missing from the rolling 7-day window';
+        return 'a high-intensity day is due and the preferred 4x4 is missing from the rolling 7-day window';
       case RuleKey.rehitFallbackDue:
-        return '20-minute slot advances the two-separate-day fallback with the bike-guided CAROL REHIT Intense preset while 4x4 remains due';
+        return 'the bike-guided CAROL REHIT Intense preset fills one still-due distinct high-intensity day';
       case RuleKey.baseLongDeficit:
         return 'the allocated 60-minute base exposure is missing';
       case RuleKey.baseShortDeficit:
-        return 'a separate 30+ minute base exposure is missing after long-session allocation';
+        return 'an archived rationale from an earlier target version';
       case RuleKey.muscleStimulusDeficit:
         return 'projected explicit muscle credit closes weekly and 28-day effective-set deficits';
       case RuleKey.muscleRecoveryDemotion:

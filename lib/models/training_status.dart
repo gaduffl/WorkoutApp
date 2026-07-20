@@ -27,16 +27,15 @@ class MuscleTrainingStatus {
 }
 
 enum AerobicTargetKind {
-  norwegian4x4Anchor,
-  rehitSeparateDayFallback,
+  highIntensityDistinctDays,
+  norwegian4x4Preference,
   longBaseExposure,
-  shortBaseExposure,
 }
 
 /// Snapshot of one aerobic target and its remaining exposure/day deficit.
 ///
-/// Distinct-day values make the REHIT fallback representable without treating
-/// two same-day sessions as equivalent to sessions on separate days.
+/// Distinct-day values keep same-day 4x4/REHIT duplicates from inflating the
+/// shared high-intensity frequency target.
 class AerobicTrainingStatus {
   final AerobicTargetKind target;
   final int rollingWindowDays;

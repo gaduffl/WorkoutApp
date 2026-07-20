@@ -219,14 +219,10 @@ void main() {
     expect(find.text('Core/grip'), findsOneWidget);
     expect(find.text('Below'), findsNWidgets(18));
     expect(find.text('Cardio targets'), findsOneWidget);
-    expect(find.text('Norwegian 4×4 anchor'), findsOneWidget);
-    expect(find.text('REHIT fallback'), findsOneWidget);
-    expect(find.text('60m base exposure'), findsOneWidget);
-    expect(find.text('30/35m base exposure'), findsOneWidget);
+    expect(find.text('High-intensity days'), findsOneWidget);
+    expect(find.text('Norwegian 4×4 preference'), findsOneWidget);
     expect(
-      find.textContaining(
-        'Temporary fallback only · does not equal 4×4 or base work',
-      ),
+      find.text('60m base exposure (secondary to strength deficits)'),
       findsOneWidget,
     );
 
@@ -240,7 +236,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('4x4 anchor makes the REHIT fallback explicitly not needed',
+  testWidgets('4x4 meets the preference while frequency remains visible',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -263,26 +259,16 @@ void main() {
     await tester.pumpWidget(app(loader: (_) async => data));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Anchor met'), findsOneWidget);
+    expect(find.textContaining('Preference met'), findsOneWidget);
     expect(
-      find.textContaining('Not needed — 4×4 anchor met'),
+      find.textContaining('1/3 DISTINCT DAYS'),
       findsOneWidget,
-    );
-    expect(
-      find.textContaining('0/2 exposures · 0/2 distinct days'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining(
-        'Temporary fallback only · does not equal 4×4 or base work',
-      ),
-      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'distinct-day REHIT fallback covers the weekly target while 4x4 count stays separate',
+      'three distinct-day REHIT sessions show replacement guidance instead of a fourth day',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -308,6 +294,7 @@ void main() {
       logs: [
         rehit('day-one', DateTime(2026, 7, 14, 9)),
         rehit('day-two', DateTime(2026, 7, 15, 9)),
+        rehit('day-three', DateTime(2026, 7, 13, 9)),
       ],
     );
 
@@ -315,22 +302,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining(
-        '0/1 in trailing 7d\nNot currently needed — REHIT fallback met',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('2/2 exposures · 2/2 distinct days'),
+      find.textContaining('3/3 DISTINCT DAYS'),
       findsOneWidget,
     );
     expect(
       find.textContaining(
-        'Fallback met — weekly high-intensity target covered for now',
+        'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.',
       ),
       findsOneWidget,
     );
-    expect(find.textContaining('1 anchor remaining'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

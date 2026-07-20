@@ -574,17 +574,13 @@ Map<String, dynamic> trainingTargetsToJson(TrainingTargets targets) => {
       'hypertrophyEvaluationWindowDays':
           targets.hypertrophyEvaluationWindowDays,
       'intensityRollingWindowDays': targets.intensityRollingWindowDays,
+      'highIntensityDistinctDaysTarget': targets.highIntensityDistinctDaysTarget,
       'preferredNorwegian4x4Exposures':
           targets.preferredNorwegian4x4Exposures,
-      'fallbackRehitExposures': targets.fallbackRehitExposures,
-      'fallbackRehitRequiresSeparateDays':
-          targets.fallbackRehitRequiresSeparateDays,
       'baseAerobicRollingWindowDays':
           targets.baseAerobicRollingWindowDays,
       'baseLongExposureCount': targets.baseLongExposureCount,
       'baseLongExposureMinutes': targets.baseLongExposureMinutes,
-      'baseShortExposureCount': targets.baseShortExposureCount,
-      'baseShortExposureMinutes': targets.baseShortExposureMinutes,
     };
 
 TrainingTargets trainingTargetsFromJson(Map<String, dynamic> j) {
@@ -614,14 +610,12 @@ TrainingTargets trainingTargetsFromJson(Map<String, dynamic> j) {
     intensityRollingWindowDays:
         j['intensityRollingWindowDays'] as int? ??
             defaults.intensityRollingWindowDays,
+    highIntensityDistinctDaysTarget:
+        j['highIntensityDistinctDaysTarget'] as int? ??
+            defaults.highIntensityDistinctDaysTarget,
     preferredNorwegian4x4Exposures:
         j['preferredNorwegian4x4Exposures'] as int? ??
             defaults.preferredNorwegian4x4Exposures,
-    fallbackRehitExposures: j['fallbackRehitExposures'] as int? ??
-        defaults.fallbackRehitExposures,
-    fallbackRehitRequiresSeparateDays:
-        j['fallbackRehitRequiresSeparateDays'] as bool? ??
-            defaults.fallbackRehitRequiresSeparateDays,
     baseAerobicRollingWindowDays:
         j['baseAerobicRollingWindowDays'] as int? ??
             defaults.baseAerobicRollingWindowDays,
@@ -629,11 +623,6 @@ TrainingTargets trainingTargetsFromJson(Map<String, dynamic> j) {
         defaults.baseLongExposureCount,
     baseLongExposureMinutes: j['baseLongExposureMinutes'] as int? ??
         defaults.baseLongExposureMinutes,
-    baseShortExposureCount: j['baseShortExposureCount'] as int? ??
-        defaults.baseShortExposureCount,
-    baseShortExposureMinutes:
-        (j['baseShortExposureMinutes'] as List?)?.cast<int>() ??
-            defaults.baseShortExposureMinutes,
   );
 }
 

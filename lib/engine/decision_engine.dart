@@ -250,32 +250,22 @@ class DecisionEngine {
       targets: targets,
       ledger: ledger,
     );
-    final fourByFour = _aerobicStatus(
+    final highIntensityDays = _aerobicStatus(
       trainingStatus,
-      AerobicTargetKind.norwegian4x4Anchor,
+      AerobicTargetKind.highIntensityDistinctDays,
     );
-    final rehitFallback = _aerobicStatus(
+    final fourByFourPreference = _aerobicStatus(
       trainingStatus,
-      AerobicTargetKind.rehitSeparateDayFallback,
+      AerobicTargetKind.norwegian4x4Preference,
     );
     final longBase = _aerobicStatus(
       trainingStatus,
       AerobicTargetKind.longBaseExposure,
     );
-    final shortBase = _aerobicStatus(
-      trainingStatus,
-      AerobicTargetKind.shortBaseExposure,
-    );
-    final fourByFourDue = fourByFour.exposureDeficit > 0;
-    final rehitFallbackDue = targets.fallbackRehitRequiresSeparateDays
-        ? rehitFallback.distinctDayDeficit > 0
-        : rehitFallback.exposureDeficit > 0;
-    // The weekly high-intensity target is disjunctive: one qualifying 4x4 is
-    // preferred, while the configured REHIT dose is its fallback. Once either
-    // path is complete, natural planning must not add the other as surplus
-    // intensity. Protocol-specific history remains separate in the ledger.
     final naturalHighIntensityTargetDue =
-        fourByFourDue && rehitFallbackDue;
+        highIntensityDays.distinctDayDeficit > 0;
+    final fourByFourPreferenceUnmet =
+        fourByFourPreference.exposureDeficit > 0;
     final highIntensitySafety =
         intensityRecoveryPolicy.evaluateHighIntensitySafety(
       logs: input.sessionLogs,
@@ -286,6 +276,7 @@ class DecisionEngine {
       travelMode: input.settings.travelMode,
     );
     final canAdvanceFourByFour = naturalHighIntensityTargetDue &&
+        fourByFourPreferenceUnmet &&
         checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
         !highIntensitySafety.blocked;
     final strengthStimulusMultiplier = automaticGlobalDeload
@@ -325,19 +316,18 @@ class DecisionEngine {
         terms['norwegian4x4Due'] = 20000;
       }
 
-      final canAdvanceRehitFallback = naturalHighIntensityTargetDue &&
+      final canAdvanceRehit = naturalHighIntensityTargetDue &&
           checkin.timeMinutes == 20 &&
           !highIntensitySafety.blocked;
-      if (id == SessionTypeId.s7 && canAdvanceRehitFallback) {
+      if (id == SessionTypeId.s7 && canAdvanceRehit) {
         terms['rehitFallbackDue'] = 20000;
       }
       final surplusOrRecoveryBlockedFourByFour =
           id == SessionTypeId.s3 && !canAdvanceFourByFour;
-      final surplusRehit =
-          id == SessionTypeId.s7 && !canAdvanceRehitFallback;
+      final surplusRehit = id == SessionTypeId.s7 && !canAdvanceRehit;
       final unadvanceableConceptualS3 = id == SessionTypeId.s3 &&
           checkin.timeMinutes == 20 &&
-          !canAdvanceRehitFallback;
+          !canAdvanceRehit;
       if (surplusOrRecoveryBlockedFourByFour ||
           surplusRehit ||
           unadvanceableConceptualS3) {
@@ -351,12 +341,6 @@ class DecisionEngine {
         if (checkin.timeMinutes >= targets.baseLongExposureMinutes &&
             longBase.exposureDeficit > 0) {
           terms['baseLongDeficit'] = 15000;
-        } else if (checkin.timeMinutes >=
-                targets.baseShortExposureMinutes.reduce(
-                  (current, next) => current < next ? current : next,
-                ) &&
-            shortBase.exposureDeficit > 0) {
-          terms['baseShortDeficit'] = 12000;
         }
       }
 
@@ -397,6 +381,27 @@ class DecisionEngine {
 
       final score = terms.values.fold(0, (a, b) => a + b);
       scored.add(_Scored(id, tier, score, terms, def));
+    }
+
+    // A 60-minute base exposure is useful, but it must never consume a slot
+    // while a pain-safe strength candidate can still close a positive target
+    // deficit. When strength is unavailable or its deficits are filled, the
+    // missing continuous base exposure regains its normal priority.
+    final hasFeasibleStrengthDeficit = scored.any(
+      (candidate) =>
+          candidate.def.countsAs.contains(FloorCategory.strength) &&
+          !candidate.terms.containsKey(painNoSafeWorkScoreTerm) &&
+          !candidate.terms.containsKey('muscleRecoveryDemotion') &&
+          !candidate.terms.containsKey('muscleOverMaxDemotion') &&
+          (candidate.terms.containsKey('muscleWeeklyDeficit') ||
+              candidate.terms.containsKey('muscle28dMinimumDeficit') ||
+              candidate.terms.containsKey('muscle28dCenterDeficit')),
+    );
+    if (hasFeasibleStrengthDeficit) {
+      for (final candidate in scored) {
+        final removed = candidate.terms.remove('baseLongDeficit');
+        if (removed != null) candidate.score -= removed;
+      }
     }
 
     // --- Step 5: selection ---
@@ -587,8 +592,8 @@ class DecisionEngine {
     // Readiness modulation evaluates the time-adjusted effective type. Both
     // intensity protocols are GREEN-only; YELLOW/RED use easy continuous
     // work that fits the same hard time window. A 20-minute version is
-    // explicitly recovery work and cannot qualify as the 30+ minute base
-    // exposure tracked by the ledger.
+    // explicitly recovery work and cannot qualify as a continuous base
+    // exposure in the ledger.
     if (recovery.bucket == ReadinessBucket.yellow) {
       if (effectiveSessionId == SessionTypeId.s1 ||
           effectiveSessionId == SessionTypeId.s2 ||
@@ -653,12 +658,7 @@ class DecisionEngine {
       fired.add(const FiredRule(RuleKey.baseLongDeficit));
     }
     if (effectiveSessionId == SessionTypeId.s6 &&
-        chosen.terms.containsKey('baseShortDeficit')) {
-      fired.add(const FiredRule(RuleKey.baseShortDeficit));
-    }
-    if (effectiveSessionId == SessionTypeId.s6 &&
         !chosen.terms.containsKey('baseLongDeficit') &&
-        !chosen.terms.containsKey('baseShortDeficit') &&
         !fired.any(
           (rule) =>
               rule.key == RuleKey.recoverySwapEasyCardio ||
@@ -1137,7 +1137,8 @@ class DecisionEngine {
         tier == SessionTier.extended &&
         recovery.bucket == ReadinessBucket.green &&
         !recovery.illnessGuardFired &&
-        !highIntensitySafety.blocked;
+        !highIntensitySafety.blocked &&
+        naturalHighIntensityTargetDue;
     if (template != null && !template.isCardioOnly) {
       final unbudgetedWork =
           exercises.where((exercise) => !exercise.isWarmup).toList();
@@ -1387,8 +1388,8 @@ class DecisionEngine {
 
   List<SessionTypeId> _feasibleCandidates(int time) {
     if (time == 20) {
-      // S3 remains conceptual so a due anchor can route to the separate-day
-      // REHIT fallback. All four strength families have a real compressed
+      // S3 remains conceptual so a due high-intensity day can route to the
+      // fixed CAROL REHIT preset. All four strength families have a real compressed
       // pair, preventing the old 20-minute S1/S5 pattern starvation.
       return [
         SessionTypeId.s1,

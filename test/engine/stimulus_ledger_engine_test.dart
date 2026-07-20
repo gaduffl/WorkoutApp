@@ -505,15 +505,14 @@ void main() {
           partialStatus.aerobic.firstWhere((entry) => entry.target == kind);
 
       expect(
-        target(AerobicTargetKind.norwegian4x4Anchor).exposureDeficit,
-        1,
+        target(AerobicTargetKind.highIntensityDistinctDays).distinctDayDeficit,
+        3,
       );
       expect(
-        target(AerobicTargetKind.rehitSeparateDayFallback).exposureDeficit,
-        2,
+        target(AerobicTargetKind.norwegian4x4Preference).exposureDeficit,
+        1,
       );
       expect(target(AerobicTargetKind.longBaseExposure).exposureDeficit, 1);
-      expect(target(AerobicTargetKind.shortBaseExposure).exposureDeficit, 1);
 
       final qualifyingLedger = engine.buildFromSessionLogs(
         logs: [
@@ -537,7 +536,7 @@ void main() {
         qualifyingStatus.aerobic
             .firstWhere(
               (entry) =>
-                  entry.target == AerobicTargetKind.norwegian4x4Anchor,
+                  entry.target == AerobicTargetKind.norwegian4x4Preference,
             )
             .exposureDeficit,
         0,

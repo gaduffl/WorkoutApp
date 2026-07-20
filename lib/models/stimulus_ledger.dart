@@ -151,17 +151,23 @@ class StimulusLedgerSnapshot {
   final DateTime asOf;
   final Map<MajorMuscleGroup, MuscleStimulusStatus> muscles;
   final Map<CardioProtocolType, AerobicProtocolStatus> aerobic;
+  final int highIntensityDistinctDays7d;
+  final int highIntensityDistinctDays28d;
 
   StimulusLedgerSnapshot({
     required this.asOf,
     required Map<MajorMuscleGroup, MuscleStimulusStatus> muscles,
     required Map<CardioProtocolType, AerobicProtocolStatus> aerobic,
+    this.highIntensityDistinctDays7d = 0,
+    this.highIntensityDistinctDays28d = 0,
   })  : muscles = Map<MajorMuscleGroup, MuscleStimulusStatus>.unmodifiable(
           muscles,
         ),
         aerobic = Map<CardioProtocolType, AerobicProtocolStatus>.unmodifiable(
           aerobic,
-        );
+        ),
+        assert(highIntensityDistinctDays7d >= 0),
+        assert(highIntensityDistinctDays28d >= 0);
 
   MuscleStimulusStatus muscle(MajorMuscleGroup value) => muscles[value]!;
 

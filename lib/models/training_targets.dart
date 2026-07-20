@@ -46,17 +46,14 @@ class TrainingTargets {
   final List<int> _hardTimeWindowsMinutes;
   final Map<MajorMuscleGroup, EffectiveSetTargetBand>
       _hypertrophyTargetBands;
-  final List<int> _baseShortExposureMinutes;
 
   final int hypertrophyEvaluationWindowDays;
   final int intensityRollingWindowDays;
+  final int highIntensityDistinctDaysTarget;
   final int preferredNorwegian4x4Exposures;
-  final int fallbackRehitExposures;
-  final bool fallbackRehitRequiresSeparateDays;
   final int baseAerobicRollingWindowDays;
   final int baseLongExposureCount;
   final int baseLongExposureMinutes;
-  final int baseShortExposureCount;
 
   TrainingTargets({
     List<int> hardTimeWindowsMinutes = const [0, 20, 35, 60],
@@ -64,14 +61,11 @@ class TrainingTargets {
         hypertrophyTargetBands,
     this.hypertrophyEvaluationWindowDays = 28,
     this.intensityRollingWindowDays = 7,
+    this.highIntensityDistinctDaysTarget = 3,
     this.preferredNorwegian4x4Exposures = 1,
-    this.fallbackRehitExposures = 2,
-    this.fallbackRehitRequiresSeparateDays = true,
     this.baseAerobicRollingWindowDays = 7,
     this.baseLongExposureCount = 1,
     this.baseLongExposureMinutes = 60,
-    this.baseShortExposureCount = 1,
-    List<int> baseShortExposureMinutes = const [30, 35],
   })  : _hardTimeWindowsMinutes =
             List<int>.unmodifiable(hardTimeWindowsMinutes),
         _hypertrophyTargetBands =
@@ -82,21 +76,16 @@ class TrainingTargets {
             ...?hypertrophyTargetBands,
           },
         ),
-        _baseShortExposureMinutes =
-            List<int>.unmodifiable(baseShortExposureMinutes),
         assert(hardTimeWindowsMinutes.isNotEmpty),
         assert(hardTimeWindowsMinutes.every((minutes) => minutes >= 0)),
         assert(hardTimeWindowsMinutes.contains(0)),
         assert(hypertrophyEvaluationWindowDays > 0),
         assert(intensityRollingWindowDays > 0),
+        assert(highIntensityDistinctDaysTarget > 0),
         assert(preferredNorwegian4x4Exposures > 0),
-        assert(fallbackRehitExposures > 0),
         assert(baseAerobicRollingWindowDays > 0),
         assert(baseLongExposureCount > 0),
-        assert(baseLongExposureMinutes > 0),
-        assert(baseShortExposureCount > 0),
-        assert(baseShortExposureMinutes.isNotEmpty),
-        assert(baseShortExposureMinutes.every((minutes) => minutes > 0));
+        assert(baseLongExposureMinutes > 0);
 
   List<int> get hardTimeWindowsMinutes =>
       UnmodifiableListView(_hardTimeWindowsMinutes);
@@ -104,7 +93,4 @@ class TrainingTargets {
   Map<MajorMuscleGroup, EffectiveSetTargetBand>
       get hypertrophyTargetBands =>
           UnmodifiableMapView(_hypertrophyTargetBands);
-
-  List<int> get baseShortExposureMinutes =>
-      UnmodifiableListView(_baseShortExposureMinutes);
 }
