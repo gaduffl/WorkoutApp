@@ -1566,8 +1566,13 @@ void main() {
       (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
     );
     expect(plank.metric, ExerciseMetric.seconds);
-    expect(plank.targetRange, (20, 45));
-    expect(plank.targetLabel, '20-45 seconds');
+    expect(plank.targetRange, (20, 60));
+    expect(plank.targetLabel, '20-60 seconds');
+    expect(plank.suggestedValue, 60);
+    expect(plank.progressionFraction, inInclusiveRange(0.0, 1.0));
+    expect(plank.progressionLabel, contains('Difficulty 1 of 5'));
+    expect(plank.progressionLabel, contains('60-second Plank'));
+    expect(plank.nextProgressionLabel, contains('controlled transition'));
 
     final states = baseStates()
       ..['coreGrip'] = ExerciseState(

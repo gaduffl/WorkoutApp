@@ -8,6 +8,7 @@ import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/pain.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -212,6 +213,54 @@ void main() {
     await tester.pump();
 
     expect(find.text(cue), findsOneWidget);
+  });
+
+  testWidgets('Today makes Plank progress and changed prescription explicit',
+      (tester) async {
+    const progressedPlan = SessionPlan(
+      sessionId: SessionTypeId.s5,
+      sessionName: 'Core progression',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'coreGrip',
+          pattern: MovementPattern.coreGrip,
+          name: 'Plank',
+          sets: 2,
+          metric: ExerciseMetric.seconds,
+          targetRange: (20, 60),
+          suggestedValue: 60,
+          progressionFraction: 0.75,
+          progressionLabel: '60-second Plank · Difficulty 1 of 5',
+          nextProgressionLabel: 'Next: controlled transition',
+          prescriptionChange: 'Target increased: 55 → 60 seconds',
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    final now = DateTime(2026, 7, 15, 10);
+    final unsafe = RehitEligibilityResult(
+      closedReasons: const [RehitClosedReason.readinessNotGreen],
+      observedAt: now,
+      suggestedNudgeTime: null,
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: _EligibilityController(unsafe, loggedToday: false),
+        child: MaterialApp(
+          home: TodayScreen(trace: trace(now, sessionPlan: progressedPlan)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Progressed since last time'), findsOneWidget);
+    expect(find.text('Target increased: 55 → 60 seconds'), findsOneWidget);
+    expect(find.text('60-second Plank · Difficulty 1 of 5'), findsOneWidget);
+    expect(find.text('Next: controlled transition'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
   testWidgets('Today and notification gate consume the same eligible result',

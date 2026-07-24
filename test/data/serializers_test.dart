@@ -159,6 +159,43 @@ void main() {
     expect(restored.allowsUnevenPair, isTrue);
   });
 
+  test('planned progression presentation round-trips and is legacy-safe', () {
+    const plank = PlannedExercise(
+      trackKey: 'coreGrip',
+      pattern: MovementPattern.coreGrip,
+      name: 'Plank',
+      sets: 2,
+      metric: ExerciseMetric.seconds,
+      targetRange: (20, 60),
+      suggestedValue: 60,
+      progressionFraction: 0.75,
+      progressionLabel: '60-second Plank · Difficulty 1 of 5',
+      nextProgressionLabel: 'Next: controlled transition',
+      prescriptionChange: 'Target increased: 55 → 60 seconds',
+      rirTarget: Rir.rir2,
+    );
+
+    final restored = plannedExerciseFromJson(plannedExerciseToJson(plank));
+    expect(restored.suggestedValue, 60);
+    expect(restored.progressionFraction, 0.75);
+    expect(restored.progressionLabel, plank.progressionLabel);
+    expect(restored.nextProgressionLabel, plank.nextProgressionLabel);
+    expect(restored.prescriptionChange, plank.prescriptionChange);
+
+    final legacyJson = plannedExerciseToJson(plank)
+      ..remove('suggestedValue')
+      ..remove('progressionFraction')
+      ..remove('progressionLabel')
+      ..remove('nextProgressionLabel')
+      ..remove('prescriptionChange');
+    final legacy = plannedExerciseFromJson(legacyJson);
+    expect(legacy.suggestedValue, isNull);
+    expect(legacy.progressionFraction, isNull);
+    expect(legacy.progressionLabel, isNull);
+    expect(legacy.nextProgressionLabel, isNull);
+    expect(legacy.prescriptionChange, isNull);
+  });
+
   test('duration-budget metadata round-trips and remains legacy-safe', () {
     const compound = PlannedExercise(
       trackKey: 'hinge',

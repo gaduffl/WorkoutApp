@@ -69,6 +69,29 @@ void main() {
         ],
       );
 
+  SessionPlan progressedPlankPlan() => const SessionPlan(
+        sessionId: SessionTypeId.s5,
+        sessionName: 'Core hold',
+        tier: SessionTier.full,
+        estimatedDurationMin: 20,
+        exercises: [
+          PlannedExercise(
+            trackKey: 'coreGrip',
+            pattern: MovementPattern.coreGrip,
+            name: 'Plank',
+            sets: 1,
+            metric: ExerciseMetric.seconds,
+            targetRange: (20, 60),
+            suggestedValue: 60,
+            progressionFraction: 0.75,
+            progressionLabel: '60-second Plank · Difficulty 1 of 5',
+            nextProgressionLabel: 'Next: controlled transition',
+            prescriptionChange: 'Target increased: 55 → 60 seconds',
+            rirTarget: Rir.rir2,
+          ),
+        ],
+      );
+
   _FinisherController captureController() => _FinisherController(
         RehitEligibilityResult(
           closedReasons: const [RehitClosedReason.readinessNotGreen],
@@ -88,6 +111,20 @@ void main() {
     await tester.tap(find.byIcon(Icons.remove).first); // weight -
     await tester.pump();
     expect(find.text('24 lb'), findsOneWidget); // back down one real step
+  });
+
+  testWidgets('logger starts Plank at 60 and shows progress/change context',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: LoggerScreen(plan: progressedPlankPlan())),
+    );
+
+    expect(find.text('60'), findsOneWidget);
+    expect(find.text('Progressed since last time'), findsOneWidget);
+    expect(find.text('Target increased: 55 → 60 seconds'), findsOneWidget);
+    expect(find.text('60-second Plank · Difficulty 1 of 5'), findsOneWidget);
+    expect(find.text('Next: controlled transition'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
   testWidgets('logger presents Goblet as one DB and deadlift as a matched pair',
