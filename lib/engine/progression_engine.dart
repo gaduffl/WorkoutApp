@@ -501,7 +501,14 @@ class ProgressionEngine {
     if (s.deloadSessionsRemaining <= 0) {
       s.ladderStepIndex = s.preDeloadLadderStepIndex ?? s.ladderStepIndex;
       s.currentLoad = s.preDeloadLoad ?? s.currentLoad;
-      s.currentTargetValue = s.preDeloadTargetValue ?? s.currentTargetValue;
+      if (s.preDeloadTargetValue != null) {
+        s.currentTargetValue = s.preDeloadTargetValue;
+      } else if (metricFor(s) == ExerciseMetric.seconds) {
+        // Legacy active-deload rows predate timed-target snapshots. Resolve
+        // against the restored ladder step rather than carrying a temporary
+        // target initialized from whichever step happened to be scheduled.
+        s.currentTargetValue = targetRangeFor(s).$1;
+      }
       _stepPrescriptionBack(s, cfg);
       s.status = ExerciseStatus.progress;
       s.deloadSessionsRemaining = 0;
