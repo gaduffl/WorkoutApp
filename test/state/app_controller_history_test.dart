@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
+import 'package:morningcoach/engine/cardio_engine.dart';
+import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/recovery_snapshot.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/training_status.dart';
 import 'package:morningcoach/state/app_controller.dart';
 
 class _HistoryRepository extends Repository {
@@ -14,13 +17,19 @@ class _HistoryRepository extends Repository {
   DateTime? recoverySince;
 
   _HistoryRepository({
-    this.sessions = const [],
-  }) : super(AppDatabase());
+    List<SessionLog> sessions = const [],
+  })  : sessions = List.of(sessions),
+        super(AppDatabase());
 
   @override
   Future<List<SessionLog>> loadSessionLogsSince(DateTime since) async {
     sessionSince = since;
-    return sessions;
+    return sessions.where((log) => !log.date.isBefore(since)).toList();
+  }
+
+  @override
+  Future<void> saveSessionLog(SessionLog log) async {
+    sessions.add(log);
   }
 
   @override
@@ -70,5 +79,42 @@ void main() {
       () => data.targets.hardTimeWindowsMinutes.add(90),
       throwsUnsupportedError,
     );
+  });
+
+  test(
+      'qualifying unplanned REHIT is returned by history and counts as one high-intensity day',
+      () async {
+    final repo = _HistoryRepository();
+    final controller = AppController(repo);
+    const cardio = CardioEngine();
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: 9,
+      heartRateMaxBpm: controller.settings.hrMax,
+    );
+    final completion = cardio.completionFromElapsedSeconds(
+      prescription: prescription,
+      completedWorkIntervals: 2,
+      completedDurationSeconds: 520,
+    );
+
+    await controller.logUnplannedRehit(completion: completion);
+    final data = await controller.loadHistoryData();
+
+    expect(data.logs, hasLength(1));
+    expect(data.logs.single.isUnplanned, isTrue);
+    expect(
+      data.ledger.protocol(CardioProtocolType.rehit).sessions7d,
+      1,
+    );
+    final highIntensity = data.trainingStatus.aerobic.singleWhere(
+      (status) => status.target == AerobicTargetKind.highIntensityDistinctDays,
+    );
+    expect(highIntensity.completedDistinctDays, 1);
+    expect(highIntensity.distinctDayDeficit, 2);
+    final fourByFour = data.trainingStatus.aerobic.singleWhere(
+      (status) => status.target == AerobicTargetKind.norwegian4x4Preference,
+    );
+    expect(fourByFour.completedExposures, 0);
   });
 }

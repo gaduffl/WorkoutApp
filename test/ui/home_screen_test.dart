@@ -6,7 +6,14 @@ import 'package:provider/provider.dart';
 
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
+import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
+import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/history_data.dart';
+import 'package:morningcoach/models/session_log.dart';
+import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/training_targets.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/home_screen.dart';
 
@@ -239,6 +246,37 @@ void main() {
     expect(find.text('Morning check-in'), findsOneWidget);
   });
 
+  testWidgets(
+      'history opened while an unplanned REHIT is saving refreshes after persistence',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 5000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final saveGate = Completer<void>();
+    final controller = await pumpHome(tester, saveGate: saveGate);
+
+    await openCompletionForm(tester);
+    await tester.tap(find.text('Save attempt'));
+    await tester.pump();
+    expect(controller.logCalls, 1);
+
+    await tester.tap(find.byIcon(Icons.history));
+    await tester.pumpAndSettle();
+    expect(find.text('No sessions logged yet.'), findsOneWidget);
+
+    saveGate.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('S7 - full · unplanned'), findsOneWidget);
+    expect(
+      find.textContaining('2 sprints · 0:40 work · 8:40 total'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1/3 DISTINCT DAYS'), findsOneWidget);
+    expect(find.text('No sessions logged yet.'), findsNothing);
+  });
+
   testWidgets('below-dose unplanned REHIT is saved without credit wording',
       (tester) async {
     final controller = await pumpHome(tester);
@@ -271,6 +309,7 @@ class _RecordingHomeController extends AppController {
   int logCalls = 0;
   CardioCompletion? completion;
   Completer<void>? saveGate;
+  final List<SessionLog> historyLogs = [];
 
   @override
   Future<void> logUnplannedRehit({
@@ -280,5 +319,53 @@ class _RecordingHomeController extends AppController {
     this.completion = completion;
     final gate = saveGate;
     if (gate != null) await gate.future;
+    final completedAt = DateTime.now();
+    historyLogs.add(
+      SessionLog(
+        id: 'unplanned-$logCalls',
+        templateId: SessionTypeId.s7,
+        tier: SessionTier.full,
+        date: DateTime(
+          completedAt.year,
+          completedAt.month,
+          completedAt.day,
+        ),
+        completedAt: completedAt,
+        setLogs: const [],
+        plannedWorkSets: 0,
+        completedWorkSets: 0,
+        durationMinutes: (completion.completedDurationSeconds + 59) ~/ 60,
+        countsAs: completion.meetsCreditableDose
+            ? const {FloorCategory.intensity}
+            : const {},
+        cardioCompletion: completion,
+        cardioCompletedAsPrescribed: completion.meetsCreditableDose,
+        isSupplemental: true,
+        isUnplanned: true,
+      ),
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<HistoryData> loadHistoryData({DateTime? asOf}) async {
+    final effectiveAsOf = asOf ?? DateTime.now();
+    final targets = TrainingTargets();
+    final ledger = const StimulusLedgerEngine().buildFromSessionLogs(
+      logs: historyLogs,
+      asOf: effectiveAsOf,
+    );
+    final status = const TrainingStatusEngine().build(
+      targets: targets,
+      ledger: ledger,
+    );
+    return HistoryData(
+      asOf: effectiveAsOf,
+      logs: historyLogs,
+      recoverySnapshots: const [],
+      targets: targets,
+      ledger: ledger,
+      trainingStatus: status,
+    );
   }
 }
