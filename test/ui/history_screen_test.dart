@@ -7,10 +7,13 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/history_data.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/models/training_targets.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/history_screen.dart';
@@ -270,6 +273,69 @@ void main() {
     expect(find.text('Progression (top set, 12 weeks)'), findsOneWidget);
     expect(find.text('HRV, last 28 days'), findsOneWidget);
     expect(find.text('No sessions logged yet.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('timed core progression and difficulty changes are visible',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    SessionLog timedLog({
+      required String id,
+      required DateTime date,
+      required String exercise,
+      required int seconds,
+    }) =>
+        SessionLog(
+          id: id,
+          templateId: SessionTypeId.s5,
+          tier: SessionTier.full,
+          date: date,
+          completedAt: date.add(const Duration(minutes: 20)),
+          setLogs: [
+            SetLog(
+              trackKey: MovementPattern.coreGrip.name,
+              pattern: MovementPattern.coreGrip,
+              exerciseName: exercise,
+              weight: 0,
+              metric: ExerciseMetric.seconds,
+              value: seconds,
+              rir: Rir.rir2,
+              timestamp: date,
+            ),
+          ],
+          plannedWorkSets: 1,
+          completedWorkSets: 1,
+          durationMinutes: 20,
+          countsAs: const {FloorCategory.strength},
+        );
+
+    final logs = [
+      timedLog(
+        id: 'plank',
+        date: DateTime(2026, 7, 10),
+        exercise: 'Plank',
+        seconds: 60,
+      ),
+      timedLog(
+        id: 'l-sit',
+        date: DateTime(2026, 7, 14),
+        exercise: 'L-sit progression',
+        seconds: 15,
+      ),
+    ];
+    await tester.pumpWidget(app(loader: (_) async => dataWith(logs: logs)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('L-sit progression'), findsOneWidget);
+    expect(find.text('15 s'), findsOneWidget);
+    expect(
+      find.text('Difficulty history: Plank → L-sit progression'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

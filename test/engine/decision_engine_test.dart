@@ -1604,6 +1604,42 @@ void main() {
     expect(wristCurl.targetLabel, '8-15 reps');
   });
 
+  test('timed deload lowers the hold itself and hides earnable progress', () {
+    final states = baseStates()
+      ..['coreGrip'] = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadTargetValue: 60,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s5),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    ));
+
+    final plank = output.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
+    );
+    expect(plank.metric, ExerciseMetric.seconds);
+    expect(plank.targetRange, (35, 35));
+    expect(plank.suggestedValue, 35);
+    expect(plank.progressionFraction, isNull);
+    expect(plank.prescriptionChange, isNull);
+  });
+
   test('active rep micro-stages emit deterministic execution cues', () {
     const expectations = <(int, String)>[
       (1, 'slow 3-second eccentric'),

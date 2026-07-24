@@ -148,6 +148,7 @@ class PainEngine {
       next.lastPainScheduledDate = null;
       next.prePainLoad = next.currentLoad;
       next.prePainLadderStepIndex = next.ladderStepIndex;
+      next.prePainTargetValue = next.currentTargetValue;
       next.painReentryTestOffered = false;
       next.painReentryTestPassed = false;
     } else {

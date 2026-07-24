@@ -977,6 +977,15 @@ class DecisionEngine {
                 ? const (10, 10)
                 : const (8, 8)
             : null;
+        final timedDeloadTarget = !painReentryPrescription &&
+                prescriptionState.status == ExerciseStatus.deload &&
+                prescriptionStep.metric == ExerciseMetric.seconds
+            ? progressionEngine.deloadTargetValueFor(prescriptionState)
+            : null;
+        final targetOverride = reentryTarget ??
+            (timedDeloadTarget == null
+                ? null
+                : (timedDeloadTarget, timedDeloadTarget));
         final painActionInstruction = switch (action.kind) {
           PainActionKind.reduceLoadOne ||
           PainActionKind.regressLadderAndReduce =>
@@ -999,7 +1008,7 @@ class DecisionEngine {
           persistLoadOnCompletion: persistLoad,
           isPainReentryTest:
               painReentryPrescription && !input.settings.travelMode,
-          targetRangeOverride: reentryTarget,
+          targetRangeOverride: targetOverride,
           instruction: painReentryPrescription
               ? prescriptionStep.metric == ExerciseMetric.seconds
                   ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
@@ -2057,6 +2066,15 @@ class DecisionEngine {
     final targetRange = targetRangeOverride ??
         step.targetRange ??
         (state.trackKey.startsWith('sub:') ? (8, 15) : state.pattern.repRange);
+    final progression =
+        progressionEngine.progressionPresentationFor(state, equipmentConfig);
+    final suggestedValue = metric == ExerciseMetric.seconds
+        ? targetRangeOverride?.$1 ?? progressionEngine.suggestedValueFor(state)
+        : null;
+    final showProgression = progressionEligible &&
+        !isPainReentryTest &&
+        !state.painFrozen &&
+        state.status != ExerciseStatus.deload;
 
     double? loadTotal;
     String? loadDisplay;
@@ -2102,6 +2120,12 @@ class DecisionEngine {
             enabled:
                 progressionEligible && microProgressionCueEligible,
           ),
+      suggestedValue: suggestedValue,
+      progressionFraction: showProgression ? progression.fraction : null,
+      progressionLabel: showProgression ? progression.label : null,
+      nextProgressionLabel: showProgression ? progression.nextLabel : null,
+      prescriptionChange:
+          showProgression ? state.lastPrescriptionChange : null,
       persistLoadOnCompletion: persistLoadOnCompletion,
       progressionEligible: progressionEligible,
       isCompoundWork: isCompoundWork,

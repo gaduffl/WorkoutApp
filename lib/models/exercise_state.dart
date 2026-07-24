@@ -12,6 +12,15 @@ class ExerciseState {
   final MovementPattern pattern;
   int ladderStepIndex;
   double currentLoad;
+
+  /// Current within-step target for timed work. Null is a legacy/uninitialized
+  /// value and is resolved by ProgressionEngine from the active ladder step.
+  int? currentTargetValue;
+
+  /// Human-readable description of the most recent change to the next
+  /// prescription. Cleared by the next completed exposure when nothing
+  /// changes, so the UI never presents stale progress as new.
+  String? lastPrescriptionChange;
   ExerciseStatus status;
   DateTime? lastTrainedDate;
   int consecutiveHoldCount;
@@ -37,6 +46,7 @@ class ExerciseState {
   DateTime? lastPainScheduledDate;
   double? prePainLoad;
   int? prePainLadderStepIndex;
+  int? prePainTargetValue;
   bool painReentryTestOffered;
   bool painReentryTestPassed;
 
@@ -44,6 +54,7 @@ class ExerciseState {
   int deloadSessionsRemaining;
   double? preDeloadLoad;
   int? preDeloadLadderStepIndex;
+  int? preDeloadTargetValue;
 
   /// §6.4 undershoot correction: after a ladder-cap jump, if the first
   /// session at the new step comes in at RIR>=3 across the board, apply
@@ -61,6 +72,8 @@ class ExerciseState {
     required this.pattern,
     this.ladderStepIndex = 0,
     this.currentLoad = 0,
+    this.currentTargetValue,
+    this.lastPrescriptionChange,
     this.status = ExerciseStatus.progress,
     this.lastTrainedDate,
     this.consecutiveHoldCount = 0,
@@ -74,11 +87,13 @@ class ExerciseState {
     this.lastPainScheduledDate,
     this.prePainLoad,
     this.prePainLadderStepIndex,
+    this.prePainTargetValue,
     this.painReentryTestOffered = false,
     this.painReentryTestPassed = false,
     this.deloadSessionsRemaining = 0,
     this.preDeloadLoad,
     this.preDeloadLadderStepIndex,
+    this.preDeloadTargetValue,
     this.awaitingUndershootCheck = false,
     this.microStepStage = 0,
   })  : regressionDates = regressionDates ?? [],
@@ -99,6 +114,8 @@ class ExerciseState {
         pattern: pattern,
         ladderStepIndex: ladderStepIndex,
         currentLoad: currentLoad,
+        currentTargetValue: currentTargetValue,
+        lastPrescriptionChange: lastPrescriptionChange,
         status: status,
         lastTrainedDate: lastTrainedDate,
         consecutiveHoldCount: consecutiveHoldCount,
@@ -112,11 +129,13 @@ class ExerciseState {
         lastPainScheduledDate: lastPainScheduledDate,
         prePainLoad: prePainLoad,
         prePainLadderStepIndex: prePainLadderStepIndex,
+        prePainTargetValue: prePainTargetValue,
         painReentryTestOffered: painReentryTestOffered,
         painReentryTestPassed: painReentryTestPassed,
         deloadSessionsRemaining: deloadSessionsRemaining,
         preDeloadLoad: preDeloadLoad,
         preDeloadLadderStepIndex: preDeloadLadderStepIndex,
+        preDeloadTargetValue: preDeloadTargetValue,
         awaitingUndershootCheck: awaitingUndershootCheck,
         microStepStage: microStepStage,
       );

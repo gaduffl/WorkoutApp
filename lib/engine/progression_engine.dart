@@ -24,6 +24,37 @@ class PrescriptionResolution {
   });
 }
 
+/// Display-ready projection of one persisted progression state. Keeping this
+/// pure and engine-owned prevents Today, Logger, and restored plans from
+/// disagreeing about the current milestone or the next difficulty.
+class ProgressionPresentation {
+  final double fraction;
+  final String label;
+  final String nextLabel;
+
+  const ProgressionPresentation({
+    required this.fraction,
+    required this.label,
+    required this.nextLabel,
+  });
+}
+
+class _PrescriptionSnapshot {
+  final String exerciseName;
+  final ExerciseMetric metric;
+  final int targetValue;
+  final double load;
+  final int microStepStage;
+
+  const _PrescriptionSnapshot({
+    required this.exerciseName,
+    required this.metric,
+    required this.targetValue,
+    required this.load,
+    required this.microStepStage,
+  });
+}
+
 /// §6: per-pattern progression state machine + §6.4 rep-cap ladder rule +
 /// §6.6 detraining adjustment (with §7.2 pain-reentry precedence).
 ///
@@ -46,6 +77,98 @@ class ProgressionEngine {
   }
 
   (int, int) repRangeFor(ExerciseState state) => targetRangeFor(state);
+
+  /// The exact metric value Logger should open with. Plank intentionally
+  /// migrates to Sebastian's established 60-second baseline; other timed
+  /// steps begin at their own lower bound until progression persists a value.
+  int suggestedValueFor(ExerciseState state) {
+    final range = targetRangeFor(state);
+    final persisted = state.currentTargetValue;
+    if (persisted != null) return persisted.clamp(range.$1, range.$2).toInt();
+    final step = ladderStepFor(state);
+    if (state.trackKey == MovementPattern.coreGrip.name &&
+        state.ladderStepIndex == 0 &&
+        step.name == 'Plank') {
+      return 60.clamp(range.$1, range.$2).toInt();
+    }
+    return range.$1;
+  }
+
+  /// Timed deloads reduce the actual hold target, not the irrelevant zero-load
+  /// dimension used by bodyweight work.
+  int deloadTargetValueFor(ExerciseState state) {
+    final range = targetRangeFor(state);
+    return _roundTimedTarget(suggestedValueFor(state) * 0.6, range);
+  }
+
+  ProgressionPresentation progressionPresentationFor(
+    ExerciseState state,
+    EquipmentConfig cfg,
+  ) {
+    final step = ladderStepFor(state);
+    final ladder = substituteRegistry.containsKey(state.trackKey)
+        ? null
+        : ladders[state.pattern];
+    final difficulty = ladder == null
+        ? step.name
+        : 'Difficulty ${state.ladderStepIndex.clamp(0, ladder.steps.length - 1) + 1} of ${ladder.steps.length}';
+    final target = suggestedValueFor(state);
+    final range = targetRangeFor(state);
+    final stage = state.microStepStage.clamp(0, 3);
+
+    if (step.metric == ExerciseMetric.seconds) {
+      final targetSteps = math.max(0, ((range.$2 - range.$1) / 5).ceil());
+      final completedTargetSteps =
+          ((target - range.$1) / 5).ceil().clamp(0, targetSteps);
+      final totalMilestones = math.max(1, targetSteps + 4);
+      final fraction = ((completedTargetSteps + stage) / totalMilestones)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final next = target < range.$2
+          ? 'Next: ${math.min(range.$2, target + 5)} seconds'
+          : stage < 3
+              ? 'Next: ${_microStageName(stage + 1, step.metric)}'
+              : ladder != null &&
+                      state.ladderStepIndex < ladder.steps.length - 1
+                  ? 'Next difficulty: ${ladder.steps[state.ladderStepIndex + 1].name}'
+                  : 'Current progression maximum reached';
+      return ProgressionPresentation(
+        fraction: fraction,
+        label: '$target-second ${step.name} · $difficulty',
+        nextLabel: next,
+      );
+    }
+
+    final achievable = step.backpackLoaded
+        ? equipment.allPerDumbbellSteps(cfg)
+        : _achievableSet(step, cfg);
+    final loadIndex = achievable == null || achievable.isEmpty
+        ? 0
+        : achievable.indexWhere((value) => value >= state.currentLoad);
+    final normalizedLoadIndex =
+        loadIndex < 0 ? achievable?.length ?? 0 : loadIndex;
+    final loadMilestones =
+        achievable == null ? 0 : math.max(0, achievable.length - 1);
+    final totalMilestones = math.max(1, loadMilestones + 4);
+    final fraction = ((normalizedLoadIndex + stage) / totalMilestones)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final loadLabel = state.currentLoad > 0
+        ? '${_formatLoad(state.currentLoad)} lb ${step.name}'
+        : step.name;
+    final next = stage > 0 && stage < 3
+        ? 'Next: ${_microStageName(stage + 1, step.metric)}'
+        : ladder != null &&
+                state.ladderStepIndex < ladder.steps.length - 1 &&
+                stage == 3
+            ? 'Next difficulty: ${ladder.steps[state.ladderStepIndex + 1].name}'
+            : 'Next: complete every set at the top of the range with RIR 2+';
+    return ProgressionPresentation(
+      fraction: fraction,
+      label: '$loadLabel · $difficulty',
+      nextLabel: next,
+    );
+  }
 
   LadderStep ladderStepFor(ExerciseState state) {
     // Named exercises (§7.1 substitutes, S5 accessories) carry their own
@@ -86,11 +209,16 @@ class ProgressionEngine {
         .toList();
     if (eligibleSets.isEmpty) return state;
     final next = state.clone();
+    final before = _snapshotFor(next);
+    next.lastPrescriptionChange = null;
+    if (metricFor(next) == ExerciseMetric.seconds) {
+      next.currentTargetValue = suggestedValueFor(next);
+    }
     next.lastTrainedDate = sessionDate;
 
     // §6.2.4: pain freeze - sessions while flagged never count as
     // holds/progressions, regardless of severity.
-    if (next.painFrozen) return next;
+    if (next.painFrozen) return _finishChange(next, before);
 
     // §6.2 note: a REGRESS label lasts exactly one session, then reverts
     // to PROGRESS before this session's own trigger is evaluated.
@@ -99,11 +227,14 @@ class ProgressionEngine {
     }
 
     if (next.pattern.patternClass == PatternClass.kneeHealth) {
-      return next; // rep/ROM progression only, no state machine (§6.1)
+      return _finishChange(next, before); // rep/ROM only, no state machine.
     }
 
     if (next.status == ExerciseStatus.deload) {
-      return _handleDeloadSession(next, equipmentConfig);
+      return _finishChange(
+        _handleDeloadSession(next, equipmentConfig),
+        before,
+      );
     }
 
     final expectedMetric = metricFor(next);
@@ -112,7 +243,7 @@ class ProgressionEngine {
         .toList();
     // A mismatched legacy/new metric must not accidentally advance a state.
     // Stamp recency above, but otherwise leave the prescription unchanged.
-    if (metricSets.isEmpty) return next;
+    if (metricSets.isEmpty) return _finishChange(next, before);
 
     // The logger is authoritative for a regular session's working load. A
     // user may adjust the prescription before or between sets, so progression
@@ -125,26 +256,37 @@ class ProgressionEngine {
     }
 
     final (low, high) = targetRangeFor(next);
-    final anyBelowRange = metricSets.any((s) => s.value < low);
-    final anyRir0 = metricSets.any((s) => s.rir == Rir.rir0);
-    final allAtTopHighRir = metricSets.every((s) =>
-        s.value >= high &&
-        (s.rir == Rir.rir2 || s.rir == Rir.rir3plus || s.rir == Rir.rir4plus));
+    final anyBelowRange = metricSets.any((setLog) => setLog.value < low);
+    final anyRir0 = metricSets.any((setLog) => setLog.rir == Rir.rir0);
+    final progressionTarget = expectedMetric == ExerciseMetric.seconds
+        ? suggestedValueFor(next)
+        : high;
+    final allAtTargetHighRir = metricSets.every((setLog) =>
+        setLog.value >= progressionTarget &&
+        (setLog.rir == Rir.rir2 ||
+            setLog.rir == Rir.rir3plus ||
+            setLog.rir == Rir.rir4plus));
 
     if (next.awaitingUndershootCheck) {
       next.awaitingUndershootCheck = false;
-      if (metricSets.every((s) =>
-          s.value >= low &&
-          (s.rir == Rir.rir3plus || s.rir == Rir.rir4plus))) {
+      if (metricSets.every((setLog) =>
+          setLog.value >= low &&
+          (setLog.rir == Rir.rir3plus ||
+              setLog.rir == Rir.rir4plus))) {
         _applyOneIncrement(next, equipmentConfig);
         next.status = ExerciseStatus.progress;
         next.consecutiveHoldCount = 0;
-        return next;
+        return _finishChange(next, before);
       }
     }
 
-    if (allAtTopHighRir) {
-      _applyProgressTrigger(next, equipmentConfig);
+    if (allAtTargetHighRir) {
+      if (expectedMetric == ExerciseMetric.seconds &&
+          progressionTarget < high) {
+        next.currentTargetValue = math.min(high, progressionTarget + 5);
+      } else {
+        _applyProgressTrigger(next, equipmentConfig);
+      }
       next.status = ExerciseStatus.progress;
       next.consecutiveHoldCount = 0;
     } else if (anyBelowRange || anyRir0) {
@@ -170,26 +312,56 @@ class ProgressionEngine {
       _enterDeload(next);
     }
 
-    return next;
+    return _finishChange(next, before);
   }
 
   void _applyOneIncrement(ExerciseState s, EquipmentConfig cfg) {
     final step = ladderStepFor(s);
+    if (step.metric == ExerciseMetric.seconds) {
+      final range = targetRangeFor(s);
+      final target = suggestedValueFor(s);
+      if (target < range.$2) {
+        s.currentTargetValue = math.min(range.$2, target + 5);
+        return;
+      }
+    }
     if (step.backpackLoaded) {
-      s.currentLoad += 5;
+      final cap = _backpackLoadCap(cfg);
+      if (cap != null && s.currentLoad >= cap) {
+        _advanceMicroOrLadder(s, cfg);
+      } else {
+        s.currentLoad = cap == null
+            ? s.currentLoad + 5
+            : math.min(cap, s.currentLoad + 5);
+      }
       return;
     }
     final achievable = _achievableSet(step, cfg);
-    if (achievable == null) return; // bodyweight: nothing to increment
-    s.currentLoad = equipment.nextAchievableAbove(s.currentLoad, achievable);
+    if (achievable == null) {
+      _advanceMicroOrLadder(s, cfg);
+      return;
+    }
+    final nextLoad = equipment.nextAchievableAbove(s.currentLoad, achievable);
+    if (nextLoad == s.currentLoad) {
+      _advanceMicroOrLadder(s, cfg);
+    } else {
+      s.currentLoad = nextLoad;
+    }
   }
 
   void _applyProgressTrigger(ExerciseState s, EquipmentConfig cfg) {
     final step = ladderStepFor(s);
 
     if (step.backpackLoaded) {
-      s.currentLoad += 5;
-      s.microStepStage = 0;
+      final cap = _backpackLoadCap(cfg);
+      if (cap != null && s.currentLoad >= cap) {
+        _advanceMicroOrLadder(s, cfg);
+      } else {
+        s.currentLoad = cap == null
+            ? s.currentLoad + 5
+            : math.min(cap, s.currentLoad + 5);
+        s.microStepStage = 0;
+      }
       return;
     }
     final achievable = _achievableSet(step, cfg);
@@ -233,7 +405,18 @@ class ProgressionEngine {
       final reduction = s.pattern.ladderJumpReductionFraction;
       final target = s.currentLoad * (1 - reduction);
       final achievable = _achievableSet(newStep, cfg);
-      s.currentLoad = achievable == null ? 0 : equipment.roundDownToAchievable(target, achievable);
+      if (newStep.backpackLoaded) {
+        final cap = _backpackLoadCap(cfg);
+        final capped = cap == null ? target : math.min(target, cap);
+        s.currentLoad = math.max(0, (capped / 5).floor() * 5).toDouble();
+      } else {
+        s.currentLoad = achievable == null
+            ? 0
+            : equipment.roundDownToAchievable(target, achievable);
+      }
+      s.currentTargetValue = newStep.metric == ExerciseMetric.seconds
+          ? (newStep.targetRange ?? s.pattern.repRange).$1
+          : null;
       s.awaitingUndershootCheck = true; // §6.4 undershoot correction
     }
   }
@@ -249,16 +432,29 @@ class ProgressionEngine {
   void _stepPrescriptionBack(ExerciseState s, EquipmentConfig cfg) {
     s.awaitingUndershootCheck = false;
     final step = ladderStepFor(s);
+
+    // Reverse the actual progression order. A tempo/pause/ROM stage is the
+    // newest dimension and must be removed before load or duration changes.
+    if (s.microStepStage > 0) {
+      s.microStepStage -= 1;
+      return;
+    }
+
+    if (step.metric == ExerciseMetric.seconds) {
+      final range = targetRangeFor(s);
+      final target = suggestedValueFor(s);
+      if (target > range.$1) {
+        s.currentTargetValue = math.max(range.$1, target - 5);
+        return;
+      }
+    }
+
     if (step.backpackLoaded) {
       s.currentLoad = math.max(0, s.currentLoad - 5);
       return;
     }
     final achievable = _achievableSet(step, cfg);
     if (achievable == null) {
-      if (s.microStepStage > 0) {
-        s.microStepStage -= 1;
-        return;
-      }
       // Named substitutes/accessories have no independent movement ladder.
       // Keep a capped named exercise capped rather than mutating the index of
       // an unrelated pattern ladder.
@@ -269,21 +465,23 @@ class ProgressionEngine {
         // Therefore the immediately preceding prescription is the prior
         // ladder step at its final micro stage, not its unmodified form.
         s.microStepStage = 3;
+        final previousStep = ladderStepFor(s);
+        s.currentTargetValue = previousStep.metric == ExerciseMetric.seconds
+            ? (previousStep.targetRange ?? s.pattern.repRange).$2
+            : null;
       }
       return;
     }
     final lowerLoad = equipment.nextAchievableBelow(s.currentLoad, achievable);
     if (lowerLoad < s.currentLoad) {
       s.currentLoad = lowerLoad;
-    } else if (s.microStepStage > 0) {
-      // At the equipment floor, remove one active tempo/pause/ROM modifier.
-      s.microStepStage -= 1;
     }
   }
 
   void _enterDeload(ExerciseState s) {
     s.preDeloadLoad = s.currentLoad;
     s.preDeloadLadderStepIndex = s.ladderStepIndex;
+    s.preDeloadTargetValue = suggestedValueFor(s);
     s.status = ExerciseStatus.deload;
     s.deloadSessionsRemaining = 2;
     // Consume the regression window that triggered this deload. Leaving the
@@ -303,11 +501,13 @@ class ProgressionEngine {
     if (s.deloadSessionsRemaining <= 0) {
       s.ladderStepIndex = s.preDeloadLadderStepIndex ?? s.ladderStepIndex;
       s.currentLoad = s.preDeloadLoad ?? s.currentLoad;
+      s.currentTargetValue = s.preDeloadTargetValue ?? s.currentTargetValue;
       _stepPrescriptionBack(s, cfg);
       s.status = ExerciseStatus.progress;
       s.deloadSessionsRemaining = 0;
       s.preDeloadLoad = null;
       s.preDeloadLadderStepIndex = null;
+      s.preDeloadTargetValue = null;
     }
     return s;
   }
@@ -369,16 +569,21 @@ class ProgressionEngine {
     DateTime today,
     EquipmentConfig cfg,
   ) {
-    if (state.status == ExerciseStatus.deload) {
-      return PrescriptionResolution(state, deloadActive: true);
-    }
+    // A formal safety re-entry must outrank deload. Otherwise a state that
+    // became pain-frozen on the same check-in as a global deload can be stuck:
+    // the deload cannot be consumed while frozen and the test is never shown.
     if (state.painReentryTestOffered && !state.painReentryTestPassed) {
       final step = ladderStepFor(state);
       final achievable = _achievableSet(step, cfg);
       final base = state.prePainLoad ?? state.currentLoad;
-      final testLoad = achievable == null ? base * 0.5 : equipment.roundDownToAchievable(base * 0.5, achievable);
+      final testLoad = achievable == null
+          ? base * 0.5
+          : equipment.roundDownToAchievable(base * 0.5, achievable);
       final next = state.clone()..currentLoad = testLoad;
       return PrescriptionResolution(next, painReentryTestFired: true);
+    }
+    if (state.status == ExerciseStatus.deload) {
+      return PrescriptionResolution(state, deloadActive: true);
     }
 
     // A missing training date means this is an onboarding prescription, not
@@ -399,7 +604,15 @@ class ProgressionEngine {
     final step = ladderStepFor(next);
     final achievable = _achievableSet(step, cfg);
     final pct = _detrainPercent(days);
-    next.currentLoad = achievable == null ? next.currentLoad * pct : equipment.roundDownToAchievable(next.currentLoad * pct, achievable);
+    next.currentLoad = achievable == null
+        ? next.currentLoad * pct
+        : equipment.roundDownToAchievable(next.currentLoad * pct, achievable);
+    if (step.metric == ExerciseMetric.seconds) {
+      next.currentTargetValue = _roundTimedTarget(
+        suggestedValueFor(next) * pct,
+        targetRangeFor(next),
+      );
+    }
     next.status = ExerciseStatus.progress;
     return PrescriptionResolution(next, detrainFired: true);
   }
@@ -408,16 +621,36 @@ class ProgressionEngine {
   /// resume at the *lower* of (detraining-adjusted load, pre-pain load - 1
   /// increment); detraining percentages never stack on top of an active
   /// pain protocol (§6.6 precedence note).
-  ExerciseState resolvePostReentryResume(ExerciseState state, DateTime today, EquipmentConfig cfg) {
+  ExerciseState resolvePostReentryResume(
+    ExerciseState state,
+    DateTime today,
+    EquipmentConfig cfg,
+  ) {
     final next = state.clone();
-    final base = state.prePainLoad ?? state.currentLoad;
+    final resumesIntoDeload = state.status == ExerciseStatus.deload &&
+        state.deloadSessionsRemaining > 0;
     final step = ladderStepFor(next);
     final achievable = _achievableSet(step, cfg);
-    final detrainAdjusted =
-        achievable == null ? base * _detrainPercent(state.daysUntrained(today)) : equipment.roundDownToAchievable(base * _detrainPercent(state.daysUntrained(today)), achievable);
-    final preMinusOne = achievable == null ? base : equipment.nextAchievableBelow(base, achievable);
+    final pct = _detrainPercent(state.daysUntrained(today));
+    final base = state.prePainLoad ?? state.currentLoad;
+    final detrainAdjusted = achievable == null
+        ? base * pct
+        : equipment.roundDownToAchievable(base * pct, achievable);
+    final preMinusOne = achievable == null
+        ? base
+        : equipment.nextAchievableBelow(base, achievable);
     next.currentLoad = math.min(detrainAdjusted, preMinusOne);
-    next.status = ExerciseStatus.progress;
+    if (step.metric == ExerciseMetric.seconds) {
+      final baseTarget =
+          state.prePainTargetValue ?? suggestedValueFor(state);
+      final detrainTarget =
+          _roundTimedTarget(baseTarget * pct, targetRangeFor(next));
+      final oneStepBack = math.max(targetRangeFor(next).$1, baseTarget - 5);
+      next.currentTargetValue = math.min(detrainTarget, oneStepBack);
+    }
+    next.status = resumesIntoDeload
+        ? ExerciseStatus.deload
+        : ExerciseStatus.progress;
     next.painFrozen = false;
     next.painSeverity = null;
     next.painRegion = null;
@@ -429,6 +662,78 @@ class ProgressionEngine {
     next.painReentryTestPassed = false;
     next.prePainLoad = null;
     next.prePainLadderStepIndex = null;
+    next.prePainTargetValue = null;
+    // If a global deload overlapped the pain episode, it remains reachable on
+    // the next prescription now that the safety freeze has cleared.
     return next;
   }
+
+  double? _backpackLoadCap(EquipmentConfig cfg) {
+    final achievable = equipment.allPerDumbbellSteps(cfg);
+    return achievable.isEmpty ? null : achievable.last;
+  }
+
+  int _roundTimedTarget(double value, (int, int) range) {
+    final rounded = (value.floor() ~/ 5) * 5;
+    return rounded.clamp(range.$1, range.$2).toInt();
+  }
+
+  _PrescriptionSnapshot _snapshotFor(ExerciseState state) {
+    return _PrescriptionSnapshot(
+      exerciseName: ladderStepFor(state).name,
+      metric: metricFor(state),
+      targetValue: suggestedValueFor(state),
+      load: state.currentLoad,
+      microStepStage: state.microStepStage,
+    );
+  }
+
+  ExerciseState _finishChange(
+    ExerciseState state,
+    _PrescriptionSnapshot before,
+  ) {
+    final after = _snapshotFor(state);
+    if (before.exerciseName != after.exerciseName) {
+      state.lastPrescriptionChange =
+          'New difficulty: ${before.exerciseName} → ${after.exerciseName}';
+    } else if (before.metric == ExerciseMetric.seconds &&
+        before.targetValue != after.targetValue) {
+      final verb = after.targetValue > before.targetValue
+          ? 'Target increased'
+          : 'Target adjusted';
+      state.lastPrescriptionChange =
+          '$verb: ${before.targetValue} → ${after.targetValue} seconds';
+    } else if ((before.load - after.load).abs() > 0.001) {
+      final verb = after.load > before.load ? 'Load increased' : 'Load adjusted';
+      state.lastPrescriptionChange =
+          '$verb: ${_formatLoad(before.load)} → ${_formatLoad(after.load)} lb';
+    } else if (before.microStepStage != after.microStepStage) {
+      final verb = after.microStepStage > before.microStepStage
+          ? 'New technique'
+          : 'Technique adjusted';
+      state.lastPrescriptionChange =
+          '$verb: ${_microStageName(after.microStepStage, after.metric)}';
+    }
+    return state;
+  }
+
+  String _microStageName(int stage, ExerciseMetric metric) {
+    if (metric == ExerciseMetric.seconds) {
+      return switch (stage) {
+        1 => 'controlled transition',
+        2 => 'stricter hold',
+        3 => 'harder leverage',
+        _ => 'standard hold',
+      };
+    }
+    return switch (stage) {
+      1 => '3-second eccentric',
+      2 => '1-second pause',
+      3 => 'extended range',
+      _ => 'standard tempo',
+    };
+  }
+
+  String _formatLoad(double load) =>
+      load == load.roundToDouble() ? load.toInt().toString() : load.toString();
 }

@@ -111,7 +111,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
       LadderStep(
         name: 'Plank',
         metric: ExerciseMetric.seconds,
-        targetRange: (20, 45),
+        targetRange: (20, 60),
       ),
       LadderStep(
         name: 'L-sit progression',
