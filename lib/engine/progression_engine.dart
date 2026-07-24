@@ -158,14 +158,15 @@ class ProgressionEngine {
         : step.name;
     final next = stage > 0 && stage < 3
         ? 'Next: ${_microStageName(stage + 1, step.metric)}'
-        : ladder != null &&
-                state.ladderStepIndex < ladder.steps.length - 1 &&
-                stage == 3
-            ? 'Next difficulty: ${ladder.steps[state.ladderStepIndex + 1].name}'
+        : stage == 3
+            ? ladder != null &&
+                    state.ladderStepIndex < ladder.steps.length - 1
+                ? 'Next difficulty: ${ladder.steps[state.ladderStepIndex + 1].name}'
+                : 'Current progression maximum reached'
             : 'Next: complete every set at the top of the range with RIR 2+';
     return ProgressionPresentation(
       fraction: fraction,
-      label: '$loadLabel · $difficulty',
+      label: ladder == null ? loadLabel : '$loadLabel · $difficulty',
       nextLabel: next,
     );
   }
