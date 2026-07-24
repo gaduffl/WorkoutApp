@@ -619,7 +619,7 @@ class _CalendarHeatCard extends StatelessWidget {
                 _HeatLegend(
                   key: const ValueKey('history-heat-legend-strength'),
                   label: 'Strength',
-                  color: scheme.primary,
+                  color: scheme.error,
                 ),
                 _HeatLegend(
                   key: const ValueKey('history-heat-legend-zone2'),
@@ -650,7 +650,7 @@ class _CalendarHeatCard extends StatelessWidget {
     int maxSets,
   ) => switch (day.category) {
         HistoryHeatCategory.none => scheme.surfaceContainerHighest,
-        HistoryHeatCategory.strength => scheme.primary.withValues(
+        HistoryHeatCategory.strength => scheme.error.withValues(
             alpha: 0.35 + 0.65 * (day.strengthSets / maxSets),
           ),
         HistoryHeatCategory.zone2 => scheme.secondary.withValues(alpha: 0.78),
