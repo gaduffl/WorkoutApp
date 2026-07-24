@@ -28,10 +28,17 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   Future<HistoryData>? _future;
+  AppController? _controller;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final controller = context.read<AppController>();
+    if (!identical(_controller, controller)) {
+      _controller?.removeListener(_handleControllerChanged);
+      _controller = controller;
+      controller.addListener(_handleControllerChanged);
+    }
     _future ??= _load();
   }
 
@@ -41,13 +48,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (oldWidget.loadData != widget.loadData) _future = _load();
   }
 
+  @override
+  void dispose() {
+    _controller?.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
   Future<HistoryData> _load() {
-    final controller = context.read<AppController>();
+    final controller = _controller ?? context.read<AppController>();
     return widget.loadData?.call(controller) ?? controller.loadHistoryData();
   }
 
+  void _handleControllerChanged() {
+    if (!mounted) return;
+    setState(() {
+      _future = _load();
+    });
+  }
+
   void _retry() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   @override
