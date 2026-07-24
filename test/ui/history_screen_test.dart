@@ -326,15 +326,30 @@ void main() {
         exercise: 'L-sit progression',
         seconds: 15,
       ),
+      timedLog(
+        id: 'l-sit-2',
+        date: DateTime(2026, 7, 15),
+        exercise: 'L-sit progression',
+        seconds: 20,
+      ),
     ];
     await tester.pumpWidget(app(loader: (_) async => dataWith(logs: logs)));
     await tester.pumpAndSettle();
 
     expect(find.text('L-sit progression'), findsOneWidget);
-    expect(find.text('15 s'), findsOneWidget);
+    expect(find.text('20 s'), findsOneWidget);
     expect(
       find.text('Difficulty history: Plank → L-sit progression'),
       findsOneWidget,
+    );
+    final timedSparkline = find.byKey(
+      const ValueKey('progression-sparkline-coreGrip'),
+    );
+    expect(timedSparkline, findsOneWidget);
+    expect(
+      tester.getSize(timedSparkline).width,
+      greaterThan(200),
+      reason: 'The timed sparkline must fill the chart column, not collapse to a dot.',
     );
     expect(tester.takeException(), isNull);
   });

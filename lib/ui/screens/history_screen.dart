@@ -781,6 +781,10 @@ class _ProgressionCard extends StatelessWidget {
                         Text(latestName),
                         if (points.length >= 2)
                           SizedBox(
+                            key: ValueKey(
+                              'progression-sparkline-${p.name}',
+                            ),
+                            width: double.infinity,
                             height: 28,
                             child: CustomPaint(
                               painter: _SparklinePainter(
