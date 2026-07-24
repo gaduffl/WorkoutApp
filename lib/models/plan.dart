@@ -21,6 +21,20 @@ class PlannedExercise {
   final bool isWarmup;
   final String? instruction;
 
+  /// Exact metric value Logger should prefill. Unlike [targetRange], this
+  /// moves as timed progression advances and survives app restarts.
+  final int? suggestedValue;
+
+  /// Normalized progress through the current ladder step toward the next
+  /// difficulty, plus display copy snapshotted into the persisted plan.
+  final double? progressionFraction;
+  final String? progressionLabel;
+  final String? nextProgressionLabel;
+
+  /// What changed after the most recent completed exposure, when the next
+  /// prescription is no longer exactly the same.
+  final String? prescriptionChange;
+
   /// §6.6: after real positive work, a detraining-adjusted prescription
   /// becomes the safe baseline (otherwise stamping recency after a partial
   /// comeback would snap the next plan back to the harder pre-break state).
@@ -85,6 +99,11 @@ class PlannedExercise {
     this.substitutedFrom,
     this.isWarmup = false,
     this.instruction,
+    this.suggestedValue,
+    this.progressionFraction,
+    this.progressionLabel,
+    this.nextProgressionLabel,
+    this.prescriptionChange,
     this.persistLoadOnCompletion = false,
     this.progressionEligible = true,
     this.isTravel = false,
@@ -120,6 +139,11 @@ class PlannedExercise {
         substitutedFrom: substitutedFrom,
         isWarmup: isWarmup,
         instruction: instruction,
+        suggestedValue: suggestedValue,
+        progressionFraction: progressionFraction,
+        progressionLabel: progressionLabel,
+        nextProgressionLabel: nextProgressionLabel,
+        prescriptionChange: prescriptionChange,
         persistLoadOnCompletion: persistLoadOnCompletion,
         progressionEligible: progressionEligible,
         isTravel: isTravel,

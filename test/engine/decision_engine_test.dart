@@ -1566,8 +1566,13 @@ void main() {
       (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
     );
     expect(plank.metric, ExerciseMetric.seconds);
-    expect(plank.targetRange, (20, 45));
-    expect(plank.targetLabel, '20-45 seconds');
+    expect(plank.targetRange, (20, 60));
+    expect(plank.targetLabel, '20-60 seconds');
+    expect(plank.suggestedValue, 60);
+    expect(plank.progressionFraction, inInclusiveRange(0.0, 1.0));
+    expect(plank.progressionLabel, contains('Difficulty 1 of 5'));
+    expect(plank.progressionLabel, contains('60-second Plank'));
+    expect(plank.nextProgressionLabel, contains('controlled transition'));
 
     final states = baseStates()
       ..['coreGrip'] = ExerciseState(
@@ -1597,6 +1602,42 @@ void main() {
     expect(wristCurl.metric, ExerciseMetric.reps);
     expect(wristCurl.targetRange, (8, 15));
     expect(wristCurl.targetLabel, '8-15 reps');
+  });
+
+  test('timed deload lowers the hold itself and hides earnable progress', () {
+    final states = baseStates()
+      ..['coreGrip'] = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 1,
+        preDeloadTargetValue: 60,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s5),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: states,
+    ));
+
+    final plank = output.trace.plan!.exercises.firstWhere(
+      (exercise) => exercise.name == 'Plank' && !exercise.isWarmup,
+    );
+    expect(plank.metric, ExerciseMetric.seconds);
+    expect(plank.targetRange, (35, 35));
+    expect(plank.suggestedValue, 35);
+    expect(plank.progressionFraction, isNull);
+    expect(plank.prescriptionChange, isNull);
   });
 
   test('active rep micro-stages emit deterministic execution cues', () {

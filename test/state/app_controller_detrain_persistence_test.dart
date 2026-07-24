@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/progression_engine.dart';
+import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
@@ -52,6 +53,41 @@ void main() {
     final persisted = await controller.repo.loadExerciseStates();
     return persisted[trackKey]!;
   }
+
+  test('completed 60-second Plank progression survives repository reload',
+      () async {
+    final controller = AppController(Repository(_MemoryDatabase()));
+    final original = ExerciseState(
+      trackKey: MovementPattern.coreGrip.name,
+      pattern: MovementPattern.coreGrip,
+      currentTargetValue: 60,
+    );
+    controller.exerciseStates = {original.trackKey: original};
+    const exercise = PlannedExercise(
+      trackKey: 'coreGrip',
+      pattern: MovementPattern.coreGrip,
+      name: 'Plank',
+      sets: 2,
+      metric: ExerciseMetric.seconds,
+      targetRange: (20, 60),
+      suggestedValue: 60,
+      progressionFraction: 2 / 3,
+      progressionLabel: '60-second Plank · Difficulty 1 of 5',
+      nextProgressionLabel: 'Next: controlled transition',
+      rirTarget: Rir.rir2,
+    );
+
+    await controller.completeSession(
+      planFor(exercise),
+      completedSets(exercise, count: 2, value: 60),
+      durationMinutes: 10,
+    );
+
+    final stored = await persistedState(controller, original.trackKey);
+    expect(stored.currentTargetValue, 60);
+    expect(stored.microStepStage, 1);
+    expect(stored.lastPrescriptionChange, contains('controlled transition'));
+  });
 
   test('a fully completed loaded return persists its easier resolved step',
       () async {

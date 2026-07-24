@@ -10,6 +10,7 @@ import '../../models/rule_key.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
+import '../widgets/progression_panel.dart';
 import 'checkin_screen.dart';
 import 'logger_screen.dart';
 
@@ -432,6 +433,11 @@ class _TodayScreenState extends State<TodayScreen> {
                           ),
                           if (e.instruction != null)
                             Text(e.instruction!, style: Theme.of(context).textTheme.bodySmall),
+                          if (!e.isWarmup &&
+                              e.progressionFraction != null) ...[
+                            const SizedBox(height: 10),
+                            ProgressionPanel(exercise: e),
+                          ],
                         ],
                       ),
                       trailing: e.isWarmup ? null : Text('RIR ${_rirLabel(e.rirTarget.name)}'),

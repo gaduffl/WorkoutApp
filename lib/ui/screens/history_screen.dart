@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/cardio_protocol.dart';
+import '../../models/exercise_metric.dart';
 import '../../models/history_data.dart';
 import '../../models/movement_pattern.dart';
 import '../../models/recovery_snapshot.dart';
@@ -719,6 +720,7 @@ class _ProgressionCard extends StatelessWidget {
     MovementPattern.pushVertical,
     MovementPattern.pullVertical,
     MovementPattern.pullHorizontal,
+    MovementPattern.coreGrip,
   ];
 
   @override
@@ -726,6 +728,90 @@ class _ProgressionCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final rows = <Widget>[];
     for (final p in _patterns) {
+      if (p == MovementPattern.coreGrip) {
+        final timedEntries = <({String name, int seconds})>[];
+        for (final log in logs) {
+          final sets = log.setLogs
+              .where((setLog) =>
+                  !setLog.isWarmup &&
+                  setLog.pattern == p &&
+                  setLog.trackKey == p.name &&
+                  setLog.metric == ExerciseMetric.seconds &&
+                  setLog.value > 0)
+              .toList();
+          if (sets.isEmpty) continue;
+          final name = sets.last.exerciseName;
+          final top = sets
+              .where((setLog) => setLog.exerciseName == name)
+              .map((setLog) => setLog.value)
+              .reduce((a, b) => a > b ? a : b);
+          timedEntries.add((name: name, seconds: top));
+        }
+        if (timedEntries.isEmpty) continue;
+
+        final latestName = timedEntries.last.name;
+        final points = timedEntries
+            .where((entry) => entry.name == latestName)
+            .map((entry) => entry.seconds.toDouble())
+            .toList();
+        final difficulties = <String>[];
+        for (final entry in timedEntries) {
+          if (difficulties.isEmpty || difficulties.last != entry.name) {
+            difficulties.add(entry.name);
+          }
+        }
+        rows.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      p.displayName,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(latestName),
+                        if (points.length >= 2)
+                          SizedBox(
+                            height: 28,
+                            child: CustomPaint(
+                              painter: _SparklinePainter(
+                                points,
+                                scheme.primary,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${timedEntries.last.seconds} s',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+              if (difficulties.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(left: 110, top: 2),
+                  child: Text(
+                    'Difficulty history: ${difficulties.join(' → ')}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+        ));
+        continue;
+      }
       // top completed work-set weight per session, oldest -> newest
       final points = <double>[];
       for (final l in logs) {

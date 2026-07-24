@@ -39,7 +39,7 @@ void main() {
             exerciseName: 'Plank',
             weight: 0,
             metric: ExerciseMetric.seconds,
-            value: 45,
+            value: 60,
             rir: Rir.rir2,
             timestamp: today,
           ),
@@ -49,7 +49,8 @@ void main() {
       );
 
       expect(engine.metricFor(state), ExerciseMetric.seconds);
-      expect(engine.targetRangeFor(state), (20, 45));
+      expect(engine.targetRangeFor(state), (20, 60));
+      expect(engine.suggestedValueFor(state), 60);
       expect(result.microStepStage, 1);
     });
 
@@ -585,7 +586,7 @@ void main() {
       expect(completed.lastTrainedDate, today);
     });
 
-    test('deload exit restores the saved loaded step then drops one load', () {
+    test('deload exit restores the saved step then removes its newest stage', () {
       final state = ExerciseState(
         trackKey: 'hinge',
         pattern: MovementPattern.hinge,
@@ -608,8 +609,8 @@ void main() {
       expect(result.status, ExerciseStatus.progress);
       expect(result.ladderStepIndex, 2);
       expect(engine.ladderStepFor(result).name, 'DB RDL');
-      expect(result.currentLoad, 50);
-      expect(result.microStepStage, 2);
+      expect(result.currentLoad, 60);
+      expect(result.microStepStage, 1);
       expect(result.regressionDates, isEmpty);
       expect(result.preDeloadLoad, isNull);
       expect(result.preDeloadLadderStepIndex, isNull);
@@ -641,7 +642,7 @@ void main() {
       expect(result.regressionDates, isEmpty);
     });
 
-    test('deload exit removes exactly 5 lb from a backpack step', () {
+    test('deload exit removes the newest backpack micro stage first', () {
       final state = ExerciseState(
         trackKey: 'coreGrip',
         pattern: MovementPattern.coreGrip,
@@ -673,8 +674,8 @@ void main() {
       );
 
       expect(result.ladderStepIndex, 3);
-      expect(result.currentLoad, 20);
-      expect(result.microStepStage, 2);
+      expect(result.currentLoad, 25);
+      expect(result.microStepStage, 1);
       expect(result.regressionDates, isEmpty);
     });
 
@@ -972,6 +973,367 @@ void main() {
       // detrain-adjusted: floor(90*0.8=72) to nearest achievable -> 70;
       // pre-pain-minus-one-increment below 90 -> 80. Lower of the two is 70.
       expect(resumed.currentLoad, 70);
+    });
+  });
+
+  group('timed targets and audited progression boundaries', () {
+    SetLog timedSet({
+      required int seconds,
+      Rir rir = Rir.rir2,
+      double weight = 0,
+      String exerciseName = 'Plank',
+    }) =>
+        SetLog(
+          trackKey: 'coreGrip',
+          pattern: MovementPattern.coreGrip,
+          exerciseName: exerciseName,
+          weight: weight,
+          metric: ExerciseMetric.seconds,
+          value: seconds,
+          rir: rir,
+          timestamp: today,
+        );
+
+    test('legacy Plank starts at the established 60-second target', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+      );
+
+      expect(engine.targetRangeFor(state), (20, 60));
+      expect(engine.suggestedValueFor(state), 60);
+    });
+
+    test('45 seconds no longer counts as Plank mastery', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [timedSet(seconds: 45), timedSet(seconds: 45)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentTargetValue, 60);
+      expect(result.microStepStage, 0);
+      expect(result.ladderStepIndex, 0);
+      expect(result.lastPrescriptionChange, isNull);
+    });
+
+    test('a successful 60-second Plank advances and explains the new stage',
+        () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [timedSet(seconds: 60), timedSet(seconds: 60)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentTargetValue, 60);
+      expect(result.microStepStage, 1);
+      expect(result.lastPrescriptionChange, contains('controlled transition'));
+    });
+
+    test('four mastered Plank exposures reach L-sit at its safe target', () {
+      var state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+      );
+
+      for (var exposure = 0; exposure < 4; exposure++) {
+        state = engine.evaluateSession(
+          state,
+          [timedSet(seconds: 60), timedSet(seconds: 60)],
+          equipmentConfig: cfg,
+          sessionDate: today.add(Duration(days: exposure)),
+        );
+      }
+
+      expect(state.ladderStepIndex, 1);
+      expect(engine.ladderStepFor(state).name, 'L-sit progression');
+      expect(state.currentTargetValue, 10);
+      expect(state.microStepStage, 0);
+      expect(state.awaitingUndershootCheck, isTrue);
+      expect(state.lastPrescriptionChange, contains('New difficulty'));
+    });
+
+    test('timed targets rise by five seconds before technique progression',
+        () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 1,
+        currentTargetValue: 10,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [
+          timedSet(seconds: 10, exerciseName: 'L-sit progression'),
+          timedSet(seconds: 10, exerciseName: 'L-sit progression'),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentTargetValue, 15);
+      expect(result.microStepStage, 0);
+      expect(result.lastPrescriptionChange, contains('10 → 15 seconds'));
+    });
+
+    test('timed regression removes a stage before reducing duration', () {
+      final staged = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        microStepStage: 2,
+        status: ExerciseStatus.hold,
+        consecutiveHoldCount: 1,
+      );
+      final stagedResult = engine.evaluateSession(
+        staged,
+        [timedSet(seconds: 10, rir: Rir.rir0)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      expect(stagedResult.currentTargetValue, 60);
+      expect(stagedResult.microStepStage, 1);
+
+      final targeted = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 1,
+        currentTargetValue: 20,
+        status: ExerciseStatus.hold,
+        consecutiveHoldCount: 1,
+      );
+      final targetedResult = engine.evaluateSession(
+        targeted,
+        [
+          timedSet(
+            seconds: 5,
+            rir: Rir.rir0,
+            exerciseName: 'L-sit progression',
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+      expect(targetedResult.currentTargetValue, 15);
+      expect(targetedResult.microStepStage, 0);
+    });
+
+    test('an unchanged exposure clears stale prescription-change copy', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        lastPrescriptionChange: 'Old change',
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [timedSet(seconds: 50, rir: Rir.rir1)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentTargetValue, 60);
+      expect(result.microStepStage, 0);
+      expect(result.lastPrescriptionChange, isNull);
+    });
+
+    test('loaded regression removes the active stage before reducing load',
+        () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 60,
+        ladderStepIndex: 2,
+        microStepStage: 2,
+        status: ExerciseStatus.hold,
+        consecutiveHoldCount: 1,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [set(reps: 4, rir: Rir.rir0)],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.status, ExerciseStatus.regress);
+      expect(result.currentLoad, 60);
+      expect(result.microStepStage, 1);
+    });
+
+    test('pending pain re-entry takes precedence over an active deload', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 40,
+        prePainLoad: 90,
+        painFrozen: true,
+        painReentryTestOffered: true,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 2,
+        preDeloadLoad: 90,
+      );
+
+      final resolution = engine.resolveTodaysPrescription(state, today, cfg);
+
+      expect(resolution.painReentryTestFired, isTrue);
+      expect(resolution.deloadActive, isFalse);
+      expect(resolution.state.currentLoad, 42);
+    });
+
+    test('passed pain re-entry leaves an overlapping deload reachable', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 42,
+        prePainLoad: 90,
+        painFrozen: true,
+        painReentryTestPassed: true,
+        status: ExerciseStatus.deload,
+        deloadSessionsRemaining: 2,
+        preDeloadLoad: 90,
+        lastTrainedDate: today.subtract(const Duration(days: 2)),
+      );
+
+      final resumed = engine.resolvePostReentryResume(state, today, cfg);
+      expect(resumed.painFrozen, isFalse);
+      expect(resumed.status, ExerciseStatus.deload);
+      expect(resumed.deloadSessionsRemaining, 2);
+      expect(
+        engine.resolveTodaysPrescription(resumed, today, cfg).deloadActive,
+        isTrue,
+      );
+    });
+
+    test('backpack loading uses the configured DB maximum as its auto cap',
+        () {
+      final state = ExerciseState(
+        trackKey: 'pullVertical',
+        pattern: MovementPattern.pullVertical,
+        ladderStepIndex: 2,
+        currentLoad: 50,
+      );
+      final top = SetLog(
+        trackKey: 'pullVertical',
+        pattern: MovementPattern.pullVertical,
+        exerciseName: 'Weighted pull-up (backpack/DB)',
+        weight: 50,
+        value: 10,
+        rir: Rir.rir2,
+        timestamp: today,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [top, top],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.currentLoad, 50);
+      expect(result.microStepStage, 1);
+    });
+
+    test('capped backpack progression can advance the movement ladder', () {
+      final state = ExerciseState(
+        trackKey: 'pullVertical',
+        pattern: MovementPattern.pullVertical,
+        ladderStepIndex: 2,
+        currentLoad: 50,
+        microStepStage: 3,
+      );
+      final top = SetLog(
+        trackKey: 'pullVertical',
+        pattern: MovementPattern.pullVertical,
+        exerciseName: 'Weighted pull-up (backpack/DB)',
+        weight: 50,
+        value: 10,
+        rir: Rir.rir2,
+        timestamp: today,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [top, top],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.ladderStepIndex, 3);
+      expect(
+        engine.ladderStepFor(result).name,
+        'Weighted pull-up +pause at top',
+      );
+      expect(result.currentLoad, 40);
+      expect(result.currentLoad, lessThanOrEqualTo(50));
+    });
+
+    test('detraining reduces a timed target in five-second steps', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        lastTrainedDate: today.subtract(const Duration(days: 12)),
+      );
+
+      final resolution = engine.resolveTodaysPrescription(state, today, cfg);
+
+      expect(resolution.detrainFired, isTrue);
+      expect(resolution.state.currentTargetValue, 50);
+    });
+
+    test('timed deload target reduces the actual hold duration', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        currentTargetValue: 60,
+        status: ExerciseStatus.deload,
+      );
+
+      expect(engine.deloadTargetValueFor(state), 35);
+    });
+
+    test('easy first timed exposure applies a real undershoot increment', () {
+      final state = ExerciseState(
+        trackKey: 'coreGrip',
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 1,
+        currentTargetValue: 10,
+        awaitingUndershootCheck: true,
+      );
+
+      final result = engine.evaluateSession(
+        state,
+        [
+          timedSet(
+            seconds: 10,
+            rir: Rir.rir4plus,
+            exerciseName: 'L-sit progression',
+          ),
+        ],
+        equipmentConfig: cfg,
+        sessionDate: today,
+      );
+
+      expect(result.awaitingUndershootCheck, isFalse);
+      expect(result.currentTargetValue, 15);
     });
   });
 }

@@ -1235,6 +1235,9 @@ class AppController extends ChangeNotifier {
           next.ladderStepIndex = resolvedLadderStep;
         }
         if (e.loadTotal != null) next.currentLoad = e.loadTotal!;
+        if (e.metric == ExerciseMetric.seconds && e.suggestedValue != null) {
+          next.currentTargetValue = e.suggestedValue;
+        }
         exerciseStates[e.trackKey] = next;
       }
 
@@ -1284,7 +1287,9 @@ class AppController extends ChangeNotifier {
           // load/micro-stage until this track's final prescribed set count is
           // complete. Other fully completed tracks remain independently
           // eligible even when later exercises are wrapped.
-          exerciseStates[entry.key] = state.clone()..lastTrainedDate = now;
+          exerciseStates[entry.key] = state.clone()
+            ..lastTrainedDate = now
+            ..lastPrescriptionChange = null;
           continue;
         }
         exerciseStates[entry.key] = progression.evaluateSession(

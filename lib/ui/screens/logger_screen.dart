@@ -15,6 +15,7 @@ import '../../models/session_type.dart';
 import '../../models/set_log.dart';
 import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
+import '../widgets/progression_panel.dart';
 
 /// §11.3: one exercise at a time, big steppers, RIR buttons, pain button,
 /// rest timer, "wrap up" button. Weight steps follow the exercise's real
@@ -155,7 +156,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   void _syncSetInputs() {
     _holdTimer?.cancel();
     _holdRunning = false;
-    _value = _exercise.targetRange.$1;
+    _value = _exercise.suggestedValue ?? _exercise.targetRange.$1;
     _holdSecondsLeft = _value;
     _holdTargetSeconds = _value;
     _holdTimerUsed = false;
@@ -446,6 +447,11 @@ class _LoggerScreenState extends State<LoggerScreen> {
                           style: Theme.of(context).textTheme.bodySmall,
                           textAlign: TextAlign.center,
                         ),
+                      ],
+                      if (!e.isWarmup &&
+                          e.progressionFraction != null) ...[
+                        const SizedBox(height: 12),
+                        ProgressionPanel(exercise: e),
                       ],
                       const SizedBox(height: 20),
                       if (e.loadTotal != null || e.loadSteps != null)
