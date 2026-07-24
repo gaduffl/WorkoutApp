@@ -61,11 +61,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _handleControllerChanged() {
     if (!mounted) return;
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   void _retry() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   @override
