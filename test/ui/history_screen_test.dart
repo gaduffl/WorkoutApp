@@ -181,6 +181,43 @@ void main() {
     expect(colors, hasLength(3));
   });
 
+  testWidgets('strength heat blocks and legend use the red error palette',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final strengthLog = heatLog(
+      id: 'strength-color',
+      date: DateTime(2026, 7, 15),
+      strengthSets: 4,
+    );
+    await tester.pumpWidget(
+      app(loader: (_) async => dataWith(logs: [strengthLog])),
+    );
+    await tester.pumpAndSettle();
+
+    final errorColor = Theme.of(
+      tester.element(find.byType(HistoryScreen)),
+    ).colorScheme.error;
+    final strengthBlock = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byTooltip('2026-07-15: 4 strength sets'),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final strengthLegend = tester.widget<Container>(
+      find.descendant(
+        of: find.byKey(const ValueKey('history-heat-legend-strength')),
+        matching: find.byType(Container),
+      ),
+    );
+
+    expect((strengthBlock.decoration as BoxDecoration).color, errorColor);
+    expect((strengthLegend.decoration! as BoxDecoration).color, errorColor);
+  });
+
   testWidgets('shows a stable loading state', (tester) async {
     final pending = Completer<HistoryData>();
     await tester.pumpWidget(app(loader: (_) => pending.future));
