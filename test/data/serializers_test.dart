@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:morningcoach/data/serializers.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
+import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -74,6 +75,31 @@ void main() {
     final restored = setLogFromJson(setLogToJson(logged));
     expect(restored.metric, ExerciseMetric.seconds);
     expect(restored.value, 35);
+  });
+
+  test('timed progression target and change metadata round-trip safely', () {
+    final state = ExerciseState(
+      trackKey: 'coreGrip',
+      pattern: MovementPattern.coreGrip,
+      currentTargetValue: 60,
+      lastPrescriptionChange:
+          'New technique: controlled transition at 60 seconds',
+    );
+
+    final json = exerciseStateToJson(state);
+    final restored = exerciseStateFromJson(json);
+    expect(restored.currentTargetValue, 60);
+    expect(
+      restored.lastPrescriptionChange,
+      'New technique: controlled transition at 60 seconds',
+    );
+
+    json
+      ..remove('currentTargetValue')
+      ..remove('lastPrescriptionChange');
+    final legacy = exerciseStateFromJson(json);
+    expect(legacy.currentTargetValue, isNull);
+    expect(legacy.lastPrescriptionChange, isNull);
   });
 
   test('legacy rep-only sets and plans remain readable', () {
