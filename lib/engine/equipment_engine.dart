@@ -158,7 +158,10 @@ class EquipmentEngine {
   /// §2.6 rule 1: display names the physical setup, including how many
   /// dumbbells are loaded, rather than presenting a two-DB total as though
   /// it were one dumbbell.
-  String describeLoad(ResolvedLoad load, EquipmentConfig cfg) {
+  ///
+  /// When [setNumber] is provided for an uneven pair, the L/R assignment
+  /// alternates: odd sets show L=lo/R=hi, even sets show L=hi/R=lo.
+  String describeLoad(ResolvedLoad load, EquipmentConfig cfg, {int? setNumber}) {
     if (load.isSingleDb) {
       final block = _blockLabelFor(load.perDumbbellA, cfg);
       return '1 × ${_fmt(load.perDumbbellA)} lb ($block dumbbell)';
@@ -166,7 +169,9 @@ class EquipmentEngine {
     if (load.uneven) {
       final lo = math.min(load.perDumbbellA, load.perDumbbellB!);
       final hi = math.max(load.perDumbbellA, load.perDumbbellB!);
-      return 'L: ${_fmt(lo)} / R: ${_fmt(hi)} '
+      final showLo = (setNumber == null || setNumber.isOdd) ? lo : hi;
+      final showHi = (setNumber == null || setNumber.isOdd) ? hi : lo;
+      return 'L: ${_fmt(showLo)} / R: ${_fmt(showHi)} '
           '(${_fmt(load.total)} lb total), swap after each set';
     }
     final block = _blockLabelFor(load.perDumbbellA, cfg);
