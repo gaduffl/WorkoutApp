@@ -401,7 +401,7 @@ class _TodayScreenState extends State<TodayScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
+            if (!done) Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
