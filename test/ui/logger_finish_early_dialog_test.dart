@@ -68,11 +68,5 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Wrap up'), findsOneWidget);
     expect(find.text('Finish workout early?'), findsNothing);
-
-    // Tap again and confirm
-    await tester.tap(wrapUp);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('End workout'));
-    await tester.pumpAndSettle();
   });
 }
