@@ -412,6 +412,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
       e,
       currentLoad,
       controller?.settings.equipment,
+      setNumber: step.setNumber,
     );
     final partner = _supersetPartnerName(step);
     final isLast = _current == _steps.length - 1;
@@ -583,14 +584,16 @@ class _LoggerScreenState extends State<LoggerScreen> {
   String? _loadDisplay(
     PlannedExercise exercise,
     double total,
-    EquipmentConfig? equipment,
-  ) {
+    EquipmentConfig? equipment, {
+    int? setNumber,
+  }) {
     if (exercise.loadTotal == null && exercise.loadSteps == null) return null;
     final count = exercise.dumbbellCount;
     if (count == 1 && equipment != null) {
       return const EquipmentEngine().describeLoad(
         const EquipmentEngine().resolveSingleDb(total, equipment),
         equipment,
+        setNumber: setNumber,
       );
     }
     if (count == 2 && equipment != null) {
@@ -608,6 +611,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
           allowUneven: exercise.allowsUnevenPair ?? false,
         ),
         displayEquipment,
+        setNumber: setNumber,
       );
     }
     // Metadata absent means this was saved by an older build. Do not infer
