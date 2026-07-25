@@ -731,6 +731,9 @@ void main() {
     );
     await tester.tap(find.text('Finish early'));
     await tester.pumpAndSettle();
+    // Confirmation dialog appears first — confirm to proceed
+    await tester.tap(find.text('End workout'));
+    await tester.pumpAndSettle();
     expect(find.text('Log optional REHIT finisher'), findsNothing);
     expect(nominallySafe.lastEndedEarly, isTrue);
   });
