@@ -6,6 +6,7 @@ import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
+import '../widgets/progression_help_dialog.dart';
 
 String _editableHrMax(double? value) {
   if (value == null) return '';
@@ -437,6 +438,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: const Text('Disconnect OneDrive'),
               ),
             ],
+            const Divider(height: 32),
+            Text('Help & Rules', style: Theme.of(context).textTheme.titleMedium),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.help_outline),
+              title: const Text('Progression rules'),
+              subtitle: const Text('How Reps/Seconds and RIR determine weight and stage progression'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showProgressionRulesDialog(context),
+            ),
             const Divider(height: 32),
             Text('AI layer (optional)', style: Theme.of(context).textTheme.titleMedium),
             SwitchListTile(

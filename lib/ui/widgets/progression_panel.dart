@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/plan.dart';
+import 'progression_help_dialog.dart';
 
 /// Shared, persisted progression projection used by Today and Logger.
 ///
@@ -70,11 +71,28 @@ class ProgressionPanel extends StatelessWidget {
             borderRadius: BorderRadius.circular(99),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: colors.onSurfaceVariant,
+                ),
+                tooltip: 'Progression rules',
+                onPressed: () => showProgressionRulesDialog(context),
+              ),
+            ],
           ),
           if (exercise.nextProgressionLabel case final next?) ...[
             const SizedBox(height: 2),
