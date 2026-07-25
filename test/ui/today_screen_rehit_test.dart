@@ -662,17 +662,112 @@ void main() {
     await tester.scrollUntilVisible(find.text('Log cardio attempt'), 200);
     expect(find.text('Log cardio attempt'), findsOneWidget);
   });
+
+  testWidgets(
+      'header plan card is hidden after session is logged so the stale '
+      'REHIT/4x4 safety warning cannot shadow the completion state',
+      (tester) async {
+    final now = DateTime(2026, 7, 15, 10);
+    final s7Plan = SessionPlan(
+      sessionId: SessionTypeId.s7,
+      sessionName: 'REHIT',
+      tier: SessionTier.full,
+      exercises: const [],
+      estimatedDurationMin: 16,
+    );
+    final unsafe = RehitEligibilityResult(
+      closedReasons: const [RehitClosedReason.recoveryWindowActive],
+      observedAt: now,
+      suggestedNudgeTime: null,
+    );
+    // simulates a logged REHIT session whose 48h recovery gate now blocks the
+    // original S7 plan -> staleHighIntensityPlan would otherwise be true.
+    final controller = _EligibilityController(
+      unsafe,
+      loggedToday: true,
+      doneToday: true,
+      planUsable: false,
+      highIntensityUsable: false,
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(
+          home: TodayScreen(trace: trace(now, sessionPlan: s7Plan)),
+        ),
+      ),
+    );
+    await tester.pump();
+    // The "stale plan" copy must NOT appear once the session is done.
+    expect(find.text('Plan unavailable in current safety mode'), findsNothing);
+    expect(
+      find.textContaining(
+        'This recommendation cannot be started under the current',
+      ),
+      findsNothing,
+    );
+    // The completion card must still be on screen.
+    expect(find.text('Session complete'), findsOneWidget);
+  });
+
+  testWidgets(
+      'header plan card stays visible while in-progress so the safety '
+      'warning still explains why the plan cannot be started',
+      (tester) async {
+    final now = DateTime(2026, 7, 15, 10);
+    final s7Plan = SessionPlan(
+      sessionId: SessionTypeId.s7,
+      sessionName: 'REHIT',
+      tier: SessionTier.full,
+      exercises: const [],
+      estimatedDurationMin: 16,
+    );
+    final unsafe = RehitEligibilityResult(
+      closedReasons: const [RehitClosedReason.recoveryWindowActive],
+      observedAt: now,
+      suggestedNudgeTime: null,
+    );
+    // The session is NOT done -> the stale plan warning must still surface
+    // so the user knows the recommendation cannot be started right now.
+    final controller = _EligibilityController(
+      unsafe,
+      loggedToday: false,
+      doneToday: false,
+      planUsable: false,
+      highIntensityUsable: false,
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(
+          home: TodayScreen(trace: trace(now, sessionPlan: s7Plan)),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Plan unavailable in current safety mode'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'This recommendation cannot be started under the current',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 class _EligibilityController extends AppController {
   final RehitEligibilityResult eligibility;
   final bool loggedToday;
   final bool doneToday;
+  final bool planUsable;
+  final bool highIntensityUsable;
 
   _EligibilityController(
     this.eligibility, {
     this.loggedToday = true,
     bool? doneToday,
+    this.planUsable = true,
+    this.highIntensityUsable = true,
   })  : doneToday = doneToday ?? loggedToday,
         super(Repository(AppDatabase()));
 
@@ -691,6 +786,13 @@ class _EligibilityController extends AppController {
 
   @override
   bool get sessionLoggedToday => loggedToday;
+
+  @override
+  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) => planUsable;
+
+  @override
+  bool isHighIntensityUsableNow({DateTime? nowLocal}) =>
+      highIntensityUsable;
 
   void publishTrace(DecisionTrace trace) {
     todayTrace = trace;
