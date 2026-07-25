@@ -29,6 +29,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final plan = SessionPlan(
+      sessionName: 'Upper Body',
       sessionId: SessionTypeId.s1,
       tier: SessionTier.full,
       exercises: [
