@@ -324,6 +324,30 @@ class _LoggerScreenState extends State<LoggerScreen> {
     if (wasLast) await _finish();
   }
 
+  Future<bool> _confirmFinishEarly() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Finish workout early?'),
+        content: const Text(
+          'End the session now and save completed sets.\n'
+          'Unperformed exercises will not advance progression.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('End workout'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _finish({bool wrapUp = false}) async {
     if (_finishing) return;
     setState(() => _finishing = true);
@@ -394,10 +418,19 @@ class _LoggerScreenState extends State<LoggerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${e.name}${e.isWarmup ? '' : ' - set ${step.setNumber}/${e.sets}'}'),
+        title: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Text('${e.name}${e.isWarmup ? '' : ' - set ${step.setNumber}/${e.sets}'}'),
+        ),
         actions: [
           TextButton(
-            onPressed: _finishing ? null : () => _finish(wrapUp: true),
+            onPressed: _finishing
+                ? null
+                : () async {
+                    if (await _confirmFinishEarly()) {
+                      await _finish(wrapUp: true);
+                    }
+                  },
             child: const Text('Wrap up', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -513,8 +546,13 @@ class _LoggerScreenState extends State<LoggerScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed:
-                        _finishing ? null : () => _finish(wrapUp: true),
+                    onPressed: _finishing
+                        ? null
+                        : () async {
+                            if (await _confirmFinishEarly()) {
+                              await _finish(wrapUp: true);
+                            }
+                          },
                     child: const Text('Finish early'),
                   ),
                 ),

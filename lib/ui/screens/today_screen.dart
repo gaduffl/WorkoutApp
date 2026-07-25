@@ -421,7 +421,37 @@ class _TodayScreenState extends State<TodayScreen> {
                                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                             )
                           : (e.isWarmup ? const Icon(Icons.local_fire_department_outlined) : null),
-                      title: Text(e.name),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              e.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (e.isWarmup) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade700,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Warmup',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
