@@ -14,6 +14,55 @@ import '../widgets/progression_panel.dart';
 import 'checkin_screen.dart';
 import 'logger_screen.dart';
 
+/// Reorders a plan's exercises to match Logger execution order.
+///
+/// Warm-ups are collected before their superset group or standalone work
+/// exercise, so the Today preview matches the actual step sequence.
+List<PlannedExercise> _playOrder(List<PlannedExercise> exercises) {
+  // Group warm-ups with the work exercise they precede.
+  final units = <({int workIdx, List<int> warmups, int? group})>[];
+  final pending = <int>[];
+  for (var i = 0; i < exercises.length; i++) {
+    if (exercises[i].isWarmup) {
+      pending.add(i);
+    } else {
+      units.add((workIdx: i, warmups: List.of(pending), group: exercises[i].supersetGroup));
+      pending.clear();
+    }
+  }
+
+  final ordered = <PlannedExercise>[];
+  var u = 0;
+  while (u < units.length) {
+    final unit = units[u];
+    if (unit.group != null) {
+      // Superset: collect all warm-ups for the group first.
+      final group = [unit];
+      var v = u + 1;
+      while (v < units.length && units[v].group == unit.group) {
+        group.add(units[v]);
+        v++;
+      }
+      for (final m in group) {
+        for (final w in m.warmups) {
+          ordered.add(exercises[w]);
+        }
+      }
+      for (final m in group) {
+        ordered.add(exercises[m.workIdx]);
+      }
+      u = v;
+    } else {
+      for (final w in unit.warmups) {
+        ordered.add(exercises[w]);
+      }
+      ordered.add(exercises[unit.workIdx]);
+      u++;
+    }
+  }
+  return ordered;
+}
+
 const optionalRehitFinisherMessage =
     'Optional finisher: CAROL REHIT Intense after the strength work. Complete the bike-guided preset; both sprints earn intensity credit.';
 
@@ -412,7 +461,7 @@ class _TodayScreenState extends State<TodayScreen> {
               const SizedBox(height: 8),
             ],
             if (plan != null)
-              ...plan.exercises.map((e) => Card(
+              ..._playOrder(plan.exercises).map((e) => Card(
                     child: ListTile(
                       leading: e.supersetGroup != null
                           ? CircleAvatar(
