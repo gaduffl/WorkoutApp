@@ -5,7 +5,7 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
-import 'package:morningcoach/models/rir.dart';
+import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/settings_screen.dart';
 import 'package:morningcoach/ui/widgets/progression_panel.dart';
@@ -31,7 +31,6 @@ void main() {
     sets: 3,
     metric: ExerciseMetric.reps,
     targetRange: (8, 12),
-    targetLabel: '8-12 reps',
     rirTarget: Rir.rir2,
     loadTotal: 40,
     progressionFraction: 0.5,
