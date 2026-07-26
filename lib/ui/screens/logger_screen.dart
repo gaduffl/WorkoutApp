@@ -456,7 +456,24 @@ class _LoggerScreenState extends State<LoggerScreen> {
                           onChanged: _toggleSuperset,
                         ),
                       if (e.isWarmup)
-                        const Chip(label: Text('Warm-up set'))
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade700,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Warmup',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
                       else if (e.isTravel)
                         const Chip(
                           avatar: Icon(Icons.luggage_outlined, size: 18),
