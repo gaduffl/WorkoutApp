@@ -127,6 +127,45 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
+  testWidgets(
+      'single-arm accessories label the stepper "Dumbbell load (single-arm, alternate arms)"',
+      (tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+    final plan = SessionPlan(
+      sessionId: SessionTypeId.s5,
+      sessionName: 'Flex/Pump',
+      tier: SessionTier.full,
+      estimatedDurationMin: 25,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'sub:coreGrip:db_curl',
+          pattern: MovementPattern.coreGrip,
+          name: 'Alternating DB curl',
+          sets: 2,
+          targetRange: (8, 15),
+          loadTotal: 20,
+          dumbbellCount: 1,
+          allowsUnevenPair: false,
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: plan)),
+      ),
+    );
+
+    expect(
+      find.text('Dumbbell load (single-arm, alternate arms)'),
+      findsOneWidget,
+      reason: 'The singular "Dumbbell load" wording made single-arm exercises look like '
+          'a one-DB total; the parenthetical makes the alternating-arm protocol explicit.',
+    );
+    expect(find.text('Alternating DB curl'), findsOneWidget);
+  });
+
   testWidgets('logger presents Goblet as one DB and deadlift as a matched pair',
       (tester) async {
     final controller = AppController(Repository(AppDatabase()));

@@ -1264,14 +1264,14 @@ void main() {
           MovementPattern.coreGrip,
           today.subtract(const Duration(days: 2)),
           trackKey: 'sub:coreGrip:db_curl',
-          name: 'DB curl',
+          name: 'Alternating DB curl',
         ),
       for (var i = 0; i < 48; i++)
         workSet(
           MovementPattern.pushVertical,
           today.subtract(const Duration(days: 2)),
           trackKey: 'sub:pushVertical:lateral_raise',
-          name: 'Lateral raise',
+          name: 'Alternating lateral raise',
         ),
     ];
     final output = engine.decide(input(

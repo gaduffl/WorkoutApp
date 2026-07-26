@@ -222,17 +222,17 @@ void main() {
           set(
             trackKey: 'sub:coreGrip:db_curl',
             pattern: MovementPattern.coreGrip,
-            name: 'DB curl',
+            name: 'Alternating DB curl',
           ),
           set(
             trackKey: 'sub:pushVertical:lateral_raise',
             pattern: MovementPattern.pushVertical,
-            name: 'Lateral raise',
+            name: 'Alternating lateral raise',
           ),
           set(
             trackKey: 'sub:pushVertical:overhead_triceps',
             pattern: MovementPattern.pushVertical,
-            name: 'Overhead triceps extension',
+            name: 'Alternating overhead triceps extension',
           ),
           set(
             trackKey: 'coreGrip',

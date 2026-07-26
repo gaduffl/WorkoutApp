@@ -981,7 +981,7 @@ void main() {
       sessionLogs: floorSatisfiedLogs(),
       settings: const UserSettings(travelMode: true),
     ));
-    expect(s5.trace.plan!.exercises.any((e) => e.name == 'DB curl'), isFalse);
+    expect(s5.trace.plan!.exercises.any((e) => e.name == 'Alternating DB curl'), isFalse);
     final s5Work = s5.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
     expect(
       s5Work.map((e) => e.name),
@@ -2528,7 +2528,7 @@ void main() {
               SetLog(
                 trackKey: 'sub:coreGrip:db_curl',
                 pattern: MovementPattern.coreGrip,
-                exerciseName: 'DB curl',
+                exerciseName: 'Alternating DB curl',
                 weight: 8,
                 value: 10,
                 rir: Rir.rir2,

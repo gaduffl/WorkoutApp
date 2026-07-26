@@ -242,7 +242,7 @@ void main() {
     final legacyNamed = plannedExerciseToJson(const PlannedExercise(
       trackKey: 'sub:pushVertical:lateral_raise',
       pattern: MovementPattern.pushVertical,
-      name: 'Lateral raise',
+      name: 'Alternating lateral raise',
       sets: 2,
       targetRange: (8, 15),
       rirTarget: Rir.rir2,

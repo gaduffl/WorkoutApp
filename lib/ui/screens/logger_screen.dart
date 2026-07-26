@@ -643,7 +643,7 @@ class _LoggerScreenState extends State<LoggerScreen> {
   Widget _weightStepper(String? currentLoadDisplay) {
     final w = _weightByExercise[_steps[_current].exIdx] ?? 0;
     final label = switch (_exercise.dumbbellCount) {
-      1 => 'Dumbbell load',
+      1 => 'Dumbbell load (single-arm, alternate arms)',
       2 => 'Dumbbells',
       _ => 'Weight',
     };

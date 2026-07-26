@@ -54,10 +54,10 @@ void main() {
     final template = sessionTemplates[SessionTypeId.s5]!;
     final full = template.slotsForTier(SessionTier.full);
     final names = full.map((s) => s.$3?.name).whereType<String>().toList();
-    expect(names, containsAll(['DB curl', 'Lateral raise', 'Overhead triceps extension']));
+    expect(names, containsAll(['Alternating DB curl', 'Alternating lateral raise', 'Alternating overhead triceps extension']));
     // compressed keeps the first two named accessories as the hard pair
     final compressed = template.slotsForTier(SessionTier.compressed);
     expect(compressed.length, 2);
-    expect(compressed.first.$3?.name, 'DB curl');
+    expect(compressed.first.$3?.name, 'Alternating DB curl');
   });
 }

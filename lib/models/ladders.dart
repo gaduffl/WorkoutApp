@@ -196,21 +196,21 @@ const Map<MovementPattern, LadderStep> travelSteps = {
 // pushVertical ties raises/triceps to the shoulder rules.
 const dbCurl = SubstituteExercise(
   slug: 'db_curl',
-  name: 'DB curl',
+  name: 'Alternating DB curl',
   pattern: MovementPattern.coreGrip,
   dumbbells: 1,
 );
 
 const lateralRaise = SubstituteExercise(
   slug: 'lateral_raise',
-  name: 'Lateral raise',
+  name: 'Alternating lateral raise',
   pattern: MovementPattern.pushVertical,
   dumbbells: 1,
 );
 
 const overheadTriceps = SubstituteExercise(
   slug: 'overhead_triceps',
-  name: 'Overhead triceps extension',
+  name: 'Alternating overhead triceps extension',
   pattern: MovementPattern.pushVertical,
   dumbbells: 1,
 );
