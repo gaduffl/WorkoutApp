@@ -676,7 +676,7 @@ void main() {
       estimatedDurationMin: 16,
     );
     final unsafe = RehitEligibilityResult(
-      closedReasons: const [RehitClosedReason.recoveryWindowActive],
+      closedReasons: const [RehitClosedReason.intensityWithinTrailing48Hours],
       observedAt: now,
       suggestedNudgeTime: null,
     );
@@ -723,7 +723,7 @@ void main() {
       estimatedDurationMin: 16,
     );
     final unsafe = RehitEligibilityResult(
-      closedReasons: const [RehitClosedReason.recoveryWindowActive],
+      closedReasons: const [RehitClosedReason.intensityWithinTrailing48Hours],
       observedAt: now,
       suggestedNudgeTime: null,
     );

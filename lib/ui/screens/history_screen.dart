@@ -799,7 +799,7 @@ class _ProgressionCard extends StatelessWidget {
             ),
           ));
         }
-        if (difficulties.length > 1)
+        if (difficulties.length > 1) {
           rows.add(Padding(
             padding: const EdgeInsets.only(left: 110, top: 2),
             child: Text(
@@ -807,6 +807,7 @@ class _ProgressionCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ));
+        }
         continue;
       }
       // top completed work-set weight per session, oldest -> newest
