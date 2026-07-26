@@ -336,12 +336,20 @@ void main() {
     await tester.pumpWidget(app(loader: (_) async => dataWith(logs: logs)));
     await tester.pumpAndSettle();
 
-    expect(find.text('L-sit progression'), findsOneWidget);
     expect(find.text('20 s'), findsOneWidget);
+    expect(
+      find.text('Latest: L-sit progression'),
+      findsOneWidget,
+      reason: 'The latest difficulty must appear as a small secondary line under the row label, never inside the chart column.',
+    );
     expect(
       find.text('Difficulty history: Plank → L-sit progression'),
       findsOneWidget,
     );
+    // "Plank" must not appear anywhere on the card now: the row label is
+    // "Core / grip", the secondary line is "Latest: L-sit progression", and
+    // Plank only shows up in the difficulty-history summary.
+    expect(find.text('Plank'), findsOneWidget);
     final timedSparkline = find.byKey(
       const ValueKey('progression-sparkline-coreGrip'),
     );

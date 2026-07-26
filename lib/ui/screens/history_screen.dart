@@ -762,58 +762,51 @@ class _ProgressionCard extends StatelessWidget {
         }
         rows.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 110,
-                    child: Text(
-                      p.displayName,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(latestName),
-                        if (points.length >= 2)
-                          SizedBox(
-                            key: ValueKey(
-                              'progression-sparkline-${p.name}',
-                            ),
-                            width: double.infinity,
-                            height: 28,
-                            child: CustomPaint(
-                              painter: _SparklinePainter(
-                                points,
-                                scheme.primary,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${timedEntries.last.seconds} s',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
+              SizedBox(
+                width: 110,
+                child: Text(
+                  p.displayName,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
-              if (difficulties.length > 1)
-                Padding(
-                  padding: const EdgeInsets.only(left: 110, top: 2),
-                  child: Text(
-                    'Difficulty history: ${difficulties.join(' → ')}',
-                    style: Theme.of(context).textTheme.bodySmall,
+              Expanded(
+                child: SizedBox(
+                  key: ValueKey(
+                    'progression-sparkline-${p.name}',
+                  ),
+                  height: 28,
+                  child: CustomPaint(
+                    painter: _SparklinePainter(points, scheme.primary),
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${timedEntries.last.seconds} s',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ],
           ),
         ));
+        if (latestName != p.displayName) {
+          rows.add(Padding(
+            padding: const EdgeInsets.only(left: 110, top: 2, bottom: 2),
+            child: Text(
+              'Latest: $latestName',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ));
+        }
+        if (difficulties.length > 1)
+          rows.add(Padding(
+            padding: const EdgeInsets.only(left: 110, top: 2),
+            child: Text(
+              'Difficulty history: ${difficulties.join(' → ')}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ));
         continue;
       }
       // top completed work-set weight per session, oldest -> newest
