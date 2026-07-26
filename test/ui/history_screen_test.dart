@@ -348,8 +348,8 @@ void main() {
     );
     // "Plank" must not appear anywhere on the card now: the row label is
     // "Core / grip", the secondary line is "Latest: L-sit progression", and
-    // Plank only shows up in the difficulty-history summary.
-    expect(find.text('Plank'), findsOneWidget);
+    // Plank only shows up inside the difficulty-history summary string.
+    expect(find.textContaining('Plank'), findsOneWidget);
     final timedSparkline = find.byKey(
       const ValueKey('progression-sparkline-coreGrip'),
     );

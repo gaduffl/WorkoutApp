@@ -163,7 +163,12 @@ void main() {
       reason: 'The singular "Dumbbell load" wording made single-arm exercises look like '
           'a one-DB total; the parenthetical makes the alternating-arm protocol explicit.',
     );
-    expect(find.text('Alternating DB curl'), findsOneWidget);
+    expect(
+      find.textContaining('Alternating DB curl'),
+      findsOneWidget,
+      reason: 'The plan card / AppBar must surface the new canonical accessory name; '
+          'the AppBar appends " - set n/N" so a contains match is the right shape.',
+    );
   });
 
   testWidgets('Wrist curls renders as a matched pair, not single-arm',

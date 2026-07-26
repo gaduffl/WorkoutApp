@@ -383,8 +383,12 @@ void main() {
       observedAt: now,
       suggestedNudgeTime: null,
     );
-    final controller = _EligibilityController(unsafe, loggedToday: false)
-      ..settings = const UserSettings(travelMode: true);
+    final controller = _EligibilityController(
+      unsafe,
+      loggedToday: false,
+      planUsable: false,
+      highIntensityUsable: false,
+    )..settings = const UserSettings(travelMode: true);
     final stale = SessionPlan(
       sessionId: SessionTypeId.s3,
       sessionName: 'Norwegian 4x4 (CAROL)',
@@ -641,7 +645,12 @@ void main() {
     );
     final staleTrace = trace(now, sessionPlan: stalePlan);
     final refreshedTrace = trace(now, sessionPlan: refreshedPlan);
-    final controller = _EligibilityController(unsafe, loggedToday: false)
+    final controller = _EligibilityController(
+      unsafe,
+      loggedToday: false,
+      planUsable: false,
+      highIntensityUsable: false,
+    )
       ..settings = const UserSettings(travelMode: true)
       ..todayTrace = staleTrace;
 
