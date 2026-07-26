@@ -797,7 +797,18 @@ class _EligibilityController extends AppController {
   bool get sessionLoggedToday => loggedToday;
 
   @override
-  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) => planUsable;
+  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) {
+    // Mirror the real short-circuit: non-S3/S7 plans are always usable in the
+    // fixture regardless of the high-intensity gate, so tests that publish a
+    // refreshed non-high-intensity trace (e.g. Travel-safe Zone 2 / S6) can
+    // watch the safety warning disappear without re-stubbing the controller.
+    if (plan == null ||
+        (plan.sessionId != SessionTypeId.s3 &&
+            plan.sessionId != SessionTypeId.s7)) {
+      return true;
+    }
+    return planUsable;
+  }
 
   @override
   bool isHighIntensityUsableNow({DateTime? nowLocal}) =>
