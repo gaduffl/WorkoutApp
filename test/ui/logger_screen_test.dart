@@ -166,6 +166,49 @@ void main() {
     expect(find.text('Alternating DB curl'), findsOneWidget);
   });
 
+  testWidgets('Wrist curls renders as a matched pair, not single-arm',
+      (tester) async {
+    final controller = AppController(Repository(AppDatabase()));
+    final plan = SessionPlan(
+      sessionId: SessionTypeId.s5,
+      sessionName: 'Flex/Pump',
+      tier: SessionTier.full,
+      estimatedDurationMin: 25,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'coreGrip',
+          pattern: MovementPattern.coreGrip,
+          name: 'Wrist curls',
+          sets: 2,
+          targetRange: (8, 15),
+          loadTotal: 48,
+          dumbbellCount: 2,
+          allowsUnevenPair: true,
+          loadSteps: [24, 36, 40, 42, 48, 50],
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: plan)),
+      ),
+    );
+
+    expect(
+      find.text('Dumbbells'),
+      findsOneWidget,
+      reason: 'Wrist curls is bilateral (one DB per wrist); the matched-pair '
+          'header is "Dumbbells", not the single-arm "Dumbbell load".',
+    );
+    expect(
+      find.text('Dumbbell load (single-arm, alternate arms)'),
+      findsNothing,
+    );
+    expect(find.text('2 × 24 lb (48 lb total; small pair)'), findsOneWidget);
+  });
+
   testWidgets('logger presents Goblet as one DB and deadlift as a matched pair',
       (tester) async {
     final controller = AppController(Repository(AppDatabase()));

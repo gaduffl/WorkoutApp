@@ -129,7 +129,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
         metric: ExerciseMetric.seconds,
         targetRange: (15, 45),
       ),
-      LadderStep(name: 'Wrist curls', dumbbells: 1),
+      LadderStep(name: 'Wrist curls', dumbbells: 2),
     ],
   ),
 };

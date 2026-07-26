@@ -1857,6 +1857,14 @@ void main() {
     }
     final wristCurl = coreSteps.firstWhere((step) => step.name == 'Wrist curls');
     expect(wristCurl.metric, ExerciseMetric.reps);
+    expect(
+      wristCurl.dumbbells,
+      2,
+      reason: 'Wrist curls is a bilateral rep move (one DB per wrist); using '
+          'dumbbells: 1 made the Logger render "1 × 24 lb" and the stepper '
+          'say "Dumbbell load (single-arm, alternate arms)", which is the '
+          'wrong protocol for a matched-pair move.',
+    );
   });
 
   test('a strength template with no pain-free work returns a no-plan outcome', () {
