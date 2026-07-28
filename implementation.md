@@ -298,3 +298,17 @@ treat filename as canonical version).
     achievable total; backpack steps take the raw load) — and stamps
     `lastPrescriptionChange` "Set manually to …". Index is clamped to the
     ladder bounds.
+36. **Manual-load memory is reference-only.** The override dialog now shows the
+    load the user last typed *for that pattern+level* ("You last entered N lb
+    for this level"), persisted in `meta:manual_load_entries` keyed by
+    `<pattern>:<ladderIndex>` and recorded only when a non-blank load is
+    entered. Deliberately **not** pre-filled into the field: a blank field
+    still means "auto", so the remembered value is never silently re-applied —
+    it is purely informational so the user can recall what they set before.
+37. **CI publish: harden APK release upload against a GitHub race.** The
+    single-call `gh release create <tag> <asset>` intermittently 404'd on
+    `uploads.github.com` (the freshly-created release hadn't propagated),
+    failing the job and leaving an empty release. Split into create-then-upload
+    with a bounded retry loop. Also added a manual `release-cleanup.yml`
+    (`workflow_dispatch`, tag input) to prune stray debug prereleases —
+    used to remove the empty `debug-aa91c96` release the race left behind.

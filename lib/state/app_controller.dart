@@ -54,6 +54,11 @@ class AppController extends ChangeNotifier {
   DecisionTrace? todayTrace;
   bool loading = true;
 
+  /// Last load the user typed into the manual progression-override dialog,
+  /// keyed by `<pattern>:<ladderIndex>`. Shown back as a reference only —
+  /// never auto-applied (see [setPatternProgression]).
+  Map<String, double> manualLoadEntries = {};
+
   /// Serializes session persistence so a rapid double action cannot append
   /// the same workout twice or advance the queue twice.
   bool _completionInFlight = false;
@@ -576,6 +581,7 @@ class AppController extends ChangeNotifier {
     _recentLogs = await repo.loadSessionLogsSince(
       today().subtract(const Duration(days: 7)),
     );
+    manualLoadEntries = await repo.loadManualLoadEntries();
   }
 
   /// Loads the complete History surface and calculates its read-only dose
@@ -1009,8 +1015,24 @@ class AppController extends ChangeNotifier {
 
     exerciseStates = {...exerciseStates, key: st};
     await repo.saveExerciseState(st);
+
+    // Remember the load the user actually typed, per pattern+level, so the
+    // dialog can show it back next time as a reference. This is informational
+    // only — it is never auto-applied; a blank field still means "auto".
+    if (startLoad != null) {
+      manualLoadEntries = {...manualLoadEntries, _manualLoadKey(pattern, idx): startLoad};
+      await repo.saveManualLoadEntries(manualLoadEntries);
+    }
     notifyListeners();
   }
+
+  String _manualLoadKey(MovementPattern pattern, int ladderIndex) =>
+      '${pattern.name}:$ladderIndex';
+
+  /// The load the user last typed for [pattern] at [ladderIndex] in the manual
+  /// override dialog, or null if they never entered one. Reference only.
+  double? lastManualLoad(MovementPattern pattern, int ladderIndex) =>
+      manualLoadEntries[_manualLoadKey(pattern, ladderIndex)];
 
   /// The current ladder-step index for a compound pattern (Settings picker).
   int currentLadderIndex(MovementPattern pattern) =>

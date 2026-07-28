@@ -156,5 +156,23 @@ class Repository {
     await db.delete('meta', 'key', 'day_start_snapshot');
   }
 
+  /// The load the user last typed into the manual progression-override dialog,
+  /// keyed by `<pattern>:<ladderIndex>`. Purely informational — it is shown
+  /// back next time as a reference and never auto-applied.
+  Future<Map<String, double>> loadManualLoadEntries() async {
+    final j = await db.getJson('meta', 'key', 'manual_load_entries');
+    if (j == null) return {};
+    final out = <String, double>{};
+    j.forEach((k, v) {
+      final d = (v as num?)?.toDouble();
+      if (d != null) out[k] = d;
+    });
+    return out;
+  }
+
+  Future<void> saveManualLoadEntries(Map<String, double> entries) async {
+    await db.putJson('meta', 'key', 'manual_load_entries', Map<String, dynamic>.from(entries));
+  }
+
   String ymd(DateTime d) => _ymd(d);
 }
