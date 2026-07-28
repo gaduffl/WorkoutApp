@@ -526,6 +526,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     MovementPattern.pullHorizontal,
   ];
 
+  static String _formatLoad(double v) =>
+      v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
   String _patternLabel(MovementPattern p) => switch (p) {
         MovementPattern.squat => 'Squat',
         MovementPattern.hinge => 'Hinge',
@@ -548,6 +551,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (ctx, setLocal) {
           final step = steps[selected];
           final loaded = step.dumbbells > 0 || step.backpackLoaded;
+          final lastLoad = controller.lastManualLoad(pattern, selected);
           return AlertDialog(
             title: Text('${_patternLabel(pattern)} level'),
             content: Column(
@@ -570,6 +574,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: step.backpackLoaded ? 'Added weight (lb, blank = bodyweight)' : 'Starting total load (lb, blank = auto)',
+                      helperText: lastLoad != null
+                          ? 'You last entered ${_formatLoad(lastLoad)} lb for this level'
+                          : null,
                     ),
                   )
                 else

@@ -181,6 +181,57 @@ void main() {
       expect(controller.currentLadderIndex(pattern), 0);
     });
   });
+
+  group('manual load memory', () {
+    // Pick a loaded step (dumbbells/backpack) so a start load is meaningful.
+    int loadedStep(MovementPattern pattern) {
+      final steps = ladders[pattern]!.steps;
+      final i = steps.indexWhere((s) => s.dumbbells > 0 || s.backpackLoaded);
+      expect(i, isNot(-1), reason: 'need a loaded step to test load memory');
+      return i;
+    }
+
+    test('remembers the load the user typed, per pattern + level, and it '
+        'survives a reload', () async {
+      final db = _ScopedMemoryDatabase();
+      final controller = _SilentController(Repository(db));
+      const pattern = MovementPattern.squat;
+      final idx = loadedStep(pattern);
+
+      expect(controller.lastManualLoad(pattern, idx), isNull);
+
+      await controller.setPatternProgression(pattern, idx, startLoad: 47);
+      expect(controller.lastManualLoad(pattern, idx), 47);
+
+      // A different level keeps its own (absent) memory.
+      expect(controller.lastManualLoad(pattern, idx + 1), isNull);
+
+      // Persisted to disk under the pattern+level key, so a fresh launch
+      // (which reloads this map) restores it.
+      final persisted = await controller.repo.loadManualLoadEntries();
+      expect(persisted['${pattern.name}:$idx'], 47);
+    });
+
+    test('a blank (null) start load neither records nor auto-applies the last '
+        'entered value', () async {
+      final controller = _SilentController(Repository(_ScopedMemoryDatabase()));
+      const pattern = MovementPattern.squat;
+      final idx = loadedStep(pattern);
+
+      await controller.setPatternProgression(pattern, idx, startLoad: 60);
+      final remembered = controller.lastManualLoad(pattern, idx);
+      expect(remembered, 60);
+
+      // Re-run the same level with a blank load: the memory is unchanged and
+      // the applied load is NOT silently taken from the remembered value.
+      await controller.setPatternProgression(pattern, idx);
+      expect(controller.lastManualLoad(pattern, idx), 60,
+          reason: 'blank entry must not overwrite the remembered value');
+      final applied = controller.exerciseStates[pattern.name]!.currentLoad;
+      expect(applied, isNot(60),
+          reason: 'blank must fall back to auto, not reuse the last load');
+    });
+  });
 }
 
 class _SilentController extends AppController {
