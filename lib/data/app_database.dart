@@ -65,6 +65,14 @@ class AppDatabase {
     await db.delete(table, where: '$keyColumn = ?', whereArgs: [key]);
   }
 
+  /// Deletes rows whose [dateColumn] value starts with [datePrefix] (an ISO
+  /// `YYYY-MM-DD`). Used by "Reset day" to remove exactly one calendar day's
+  /// rows regardless of any time component in the stored timestamp.
+  Future<int> deleteByDatePrefix(String table, String dateColumn, String datePrefix) async {
+    final db = await open();
+    return db.delete(table, where: '$dateColumn LIKE ?', whereArgs: ['$datePrefix%']);
+  }
+
   Future<List<Map<String, dynamic>>> getJsonSince(String table, String dateColumn, DateTime since) async {
     final db = await open();
     final rows = await db.query(

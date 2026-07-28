@@ -1287,7 +1287,7 @@ void main() {
         .toList();
 
     expect(work.map((value) => value.trackKey), [
-      'sub:pushVertical:overhead_triceps',
+      'sub:pushVertical:dip',
       MovementPattern.coreGrip.name,
     ]);
   });

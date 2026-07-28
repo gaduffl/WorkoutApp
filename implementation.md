@@ -261,3 +261,40 @@ treat filename as canonical version).
     `msal29d50c5e-…://auth` (registerable via that platform's one-click
     checkbox); AndroidManifest intent-filter and the link handler updated to
     the new scheme/host.
+
+## Session 2026-07-28 (reset-day, dips, manual progression override)
+
+33. **"Reset today" = dated-row delete + progression/queue rollback, airtight to
+    one day.** `Repository.deleteDayData` deletes only rows whose date column
+    `LIKE 'YYYY-MM-DD%'` (new `AppDatabase.deleteByDatePrefix`) across
+    `check_ins`/`recovery_snapshots`/`decision_traces`/`session_logs`; the full
+    `YYYY-MM-DD` prefix means a same-day-of-month row in another month never
+    matches. Because a completed session already mutated progression + queue,
+    deleting rows alone wouldn't undo the day — so a **day-start snapshot**
+    (`meta:day_start_snapshot`, keyed by its own date) is persisted the first
+    time each day is touched (`_ensureDayStartSnapshot` at the top of
+    `submitCheckIn`). `resetDay` restores that snapshot's exercise-states +
+    queue, deletes any track that only came into existence today (absent from
+    the snapshot), then wipes today's rows and the snapshot itself. A stale
+    snapshot from a previous day is treated as absent. Confirm dialog required
+    before it runs (destructive, irreversible). Tests in
+    `app_controller_reset_day_test.dart` prove other days survive.
+34. **Dips replace the S5 overhead-triceps isolation, modeled single-DB.** Yes,
+    dips make sense — they're a compound triceps/lower-chest push and a strict
+    upgrade over the overhead-extension isolation for the S5 arm slot.
+    Bodyweight dips are *not* used directly because load is uncontrollable
+    (§2.6 the whole app is built on quantized load steps). Instead the dip is a
+    **weighted dip with a DB held between the feet** (`dumbbells: 1`), which is
+    behaviorally identical to the isolation it replaces — same single-DB
+    achievable-load ladder, same PowerBlock step granularity — so the
+    progression/pain engines needed zero behavioral change, only the
+    slug/name/muscle-map rename (`sub:pushVertical:dip`, primary = triceps).
+    Travel/bodyweight variant is a bench/chair dip.
+35. **Manual progression override (`setPatternProgression`).** Settings can jump
+    any compound pattern straight to a chosen ladder step (e.g. push-ups far
+    past the entry step). It clones the state to a clean `PROGRESS` at the new
+    step — clears deload/hold/micro bookkeeping, resets load to the step's
+    achievable floor (or a user-entered start load, rounded down to an
+    achievable total; backpack steps take the raw load) — and stamps
+    `lastPrescriptionChange` "Set manually to …". Index is clamped to the
+    ladder bounds.

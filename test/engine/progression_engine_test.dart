@@ -352,7 +352,7 @@ void main() {
         'coreGrip',
         dbCurl.trackKey,
         lateralRaise.trackKey,
-        overheadTriceps.trackKey,
+        dip.trackKey,
       };
 
       expect(states.keys.toSet(), expectedKeys);

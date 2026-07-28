@@ -38,6 +38,12 @@ class ExerciseMuscleMap {
     'sub:pushVertical:overhead_triceps': _MuscleProfile(
       primary: {MajorMuscleGroup.triceps},
     ),
+    // Dips occupy the triceps-pump slot in S5; credited as triceps to keep
+    // the per-slot stimulus accounting clean (they also hit chest/delts, but
+    // those are covered by the horizontal-push and lateral-raise slots).
+    'sub:pushVertical:dip': _MuscleProfile(
+      primary: {MajorMuscleGroup.triceps},
+    ),
   };
 
   /// Exact-name fallbacks preserve legacy/imported named-exercise history

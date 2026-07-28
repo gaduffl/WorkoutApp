@@ -176,7 +176,7 @@ class ProgressionEngine {
     // dumbbell count — never fall back to the pattern ladder's step, which
     // would compute increments on the wrong achievable-load set.
     final named = substituteRegistry[state.trackKey];
-    if (named != null) return LadderStep(name: named.name, dumbbells: named.dumbbells);
+    if (named != null) return named.ladderStep;
     final ladder = ladders[state.pattern]!;
     final idx = state.ladderStepIndex.clamp(0, ladder.steps.length - 1);
     return ladder.steps[idx];

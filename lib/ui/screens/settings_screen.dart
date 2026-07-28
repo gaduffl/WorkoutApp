@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/ladders.dart';
 import '../../models/movement_pattern.dart';
 import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
@@ -439,6 +440,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
             const Divider(height: 32),
+            Text('Progression level', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Jump a movement straight to the difficulty you actually train at — '
+              'e.g. skip past push-ups if you are already well beyond them. '
+              'The next session starts there and ramps quickly if it feels easy.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            ..._progressionPatterns.map((p) {
+              final idx = context.watch<AppController>().currentLadderIndex(p);
+              final steps = ladders[p]!.steps;
+              final stepName = steps[idx.clamp(0, steps.length - 1)].name;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(_patternLabel(p)),
+                subtitle: Text('Step ${idx + 1}/${steps.length}: $stepName'),
+                trailing: const Icon(Icons.tune),
+                onTap: () => _editProgression(p),
+              );
+            }),
+            const Divider(height: 32),
+            Text('Reset', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
+              style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+              onPressed: () => _confirmResetDay(context),
+              label: const Text('Reset today'),
+            ),
+            const Divider(height: 32),
             Text('Help & Rules', style: Theme.of(context).textTheme.titleMedium),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -484,6 +515,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  static const _progressionPatterns = [
+    MovementPattern.squat,
+    MovementPattern.hinge,
+    MovementPattern.pushHorizontal,
+    MovementPattern.pushVertical,
+    MovementPattern.pullVertical,
+    MovementPattern.pullHorizontal,
+  ];
+
+  String _patternLabel(MovementPattern p) => switch (p) {
+        MovementPattern.squat => 'Squat',
+        MovementPattern.hinge => 'Hinge',
+        MovementPattern.pushHorizontal => 'Horizontal push',
+        MovementPattern.pushVertical => 'Vertical push',
+        MovementPattern.pullVertical => 'Vertical pull',
+        MovementPattern.pullHorizontal => 'Horizontal pull',
+        _ => p.name,
+      };
+
+  Future<void> _editProgression(MovementPattern pattern) async {
+    final controller = context.read<AppController>();
+    final steps = ladders[pattern]!.steps;
+    var selected = controller.currentLadderIndex(pattern).clamp(0, steps.length - 1);
+    final loadController = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final step = steps[selected];
+          final loaded = step.dumbbells > 0 || step.backpackLoaded;
+          return AlertDialog(
+            title: Text('${_patternLabel(pattern)} level'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButton<int>(
+                  isExpanded: true,
+                  value: selected,
+                  items: [
+                    for (var i = 0; i < steps.length; i++)
+                      DropdownMenuItem(value: i, child: Text('${i + 1}. ${steps[i].name}')),
+                  ],
+                  onChanged: (v) => setLocal(() => selected = v ?? selected),
+                ),
+                const SizedBox(height: 8),
+                if (loaded)
+                  TextField(
+                    controller: loadController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: step.backpackLoaded ? 'Added weight (lb, blank = bodyweight)' : 'Starting total load (lb, blank = auto)',
+                    ),
+                  )
+                else
+                  const Text('Bodyweight movement — no load to set.'),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Set level')),
+            ],
+          );
+        },
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final load = double.tryParse(loadController.text.trim());
+    await controller.setPatternProgression(pattern, selected, startLoad: load);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${_patternLabel(pattern)} set to step ${selected + 1}')));
+    }
+  }
+
+  Future<void> _confirmResetDay(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reset today?'),
+        content: const Text(
+          "This permanently deletes ONLY today's data: your check-in, recovery entry, the "
+          'recommended plan, and any sessions you logged today. Progression and the session '
+          'queue are rolled back to how they were at the start of today.\n\n'
+          'No other day is touched — your full history stays intact. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(dialogContext).colorScheme.error),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete today'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await context.read<AppController>().resetDay();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Today reset ✓')));
+    }
   }
 
   Future<void> _confirmManualDeload(BuildContext context) async {

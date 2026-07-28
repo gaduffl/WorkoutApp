@@ -2060,7 +2060,7 @@ class DecisionEngine {
   }) {
     final substitute = substituteRegistry[state.trackKey];
     final step = substitute != null
-        ? LadderStep(name: substitute.name, dumbbells: substitute.dumbbells)
+        ? substitute.ladderStep
         : ladders[state.pattern]!.steps[state.ladderStepIndex.clamp(0, ladders[state.pattern]!.steps.length - 1)];
     final metric = step.metric;
     final targetRange = targetRangeOverride ??

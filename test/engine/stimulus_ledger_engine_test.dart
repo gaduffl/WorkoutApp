@@ -230,9 +230,9 @@ void main() {
             name: 'Alternating lateral raise',
           ),
           set(
-            trackKey: 'sub:pushVertical:overhead_triceps',
+            trackKey: 'sub:pushVertical:dip',
             pattern: MovementPattern.pushVertical,
-            name: 'Alternating overhead triceps extension',
+            name: 'Weighted dip (DB between feet)',
           ),
           set(
             trackKey: 'coreGrip',
