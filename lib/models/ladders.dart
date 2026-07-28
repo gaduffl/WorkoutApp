@@ -142,14 +142,22 @@ class SubstituteExercise {
   final MovementPattern pattern;
   final int dumbbells;
 
+  /// Bodyweight movement loaded by a backpack/belt (§2.6 rule 5) — e.g. dips.
+  /// Progresses on reps at bodyweight, then in free-entered added weight.
+  final bool backpackLoaded;
+
   const SubstituteExercise({
     required this.slug,
     required this.name,
     required this.pattern,
     this.dumbbells = 0,
+    this.backpackLoaded = false,
   });
 
   String get trackKey => 'sub:${pattern.name}:$slug';
+
+  /// The ladder step this named exercise resolves to.
+  LadderStep get ladderStep => LadderStep(name: name, dumbbells: dumbbells, backpackLoaded: backpackLoaded);
 }
 
 const bridgeHamstringCurl = SubstituteExercise(
@@ -215,13 +223,26 @@ const overheadTriceps = SubstituteExercise(
   dumbbells: 1,
 );
 
+/// Dips (triceps + chest + front delt) on parallel grips. Loaded with a
+/// single dumbbell held between the feet (or in a backpack), so the load
+/// steps in real PowerBlock increments instead of the coarse jumps of pure
+/// bodyweight — that solves the "can't control dip load" problem. Mapped to
+/// pushVertical so a sharp shoulder flag removes it (§7.1), like the overhead
+/// work it replaces.
+const dip = SubstituteExercise(
+  slug: 'dip',
+  name: 'Weighted dip (DB between feet)',
+  pattern: MovementPattern.pushVertical,
+  dumbbells: 1,
+);
+
 /// Named progression tracks that are part of a normal (non-pain) plan.
 /// Pain-only substitutes remain in [substituteRegistry], but are created only
 /// when their corresponding pain action is actually prescribed.
 const s5NamedAccessories = <SubstituteExercise>[
   dbCurl,
   lateralRaise,
-  overheadTriceps,
+  dip,
 ];
 
 /// No-equipment equivalents for S5's named dumbbell accessories. Keeping
@@ -234,6 +255,7 @@ const Map<String, LadderStep> travelNamedSteps = {
   'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
   'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
   'sub:pushVertical:overhead_triceps': LadderStep(name: 'Diamond push-up'),
+  'sub:pushVertical:dip': LadderStep(name: 'Bench / chair dip (bodyweight)'),
 };
 
 /// Keyed by [SubstituteExercise.trackKey] so plan assembly can resolve a

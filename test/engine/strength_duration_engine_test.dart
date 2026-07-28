@@ -309,9 +309,9 @@ void main() {
             currentLoad: 20,
             lastTrainedDate: today.subtract(const Duration(days: 2)),
           ),
-          overheadTriceps.trackKey: ExerciseState(
-            trackKey: overheadTriceps.trackKey,
-            pattern: overheadTriceps.pattern,
+          dip.trackKey: ExerciseState(
+            trackKey: dip.trackKey,
+            pattern: dip.pattern,
             currentLoad: 20,
             lastTrainedDate: today.subtract(const Duration(days: 2)),
           ),

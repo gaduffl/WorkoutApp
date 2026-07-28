@@ -109,4 +109,52 @@ class Repository {
     if (j == null) return null;
     return decisionTraceFromJson(j);
   }
+
+  String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Deletes every dated row belonging to [day] — and nothing from any other
+  /// day. Used by "Reset day". Progression/queue rollback is handled by the
+  /// day-start snapshot, not here.
+  Future<void> deleteDayData(DateTime day) async {
+    final prefix = _ymd(day);
+    await db.deleteByDatePrefix('check_ins', 'date', prefix);
+    await db.deleteByDatePrefix('recovery_snapshots', 'date', prefix);
+    await db.deleteByDatePrefix('decision_traces', 'date', prefix);
+    await db.deleteByDatePrefix('session_logs', 'date', prefix);
+  }
+
+  /// A snapshot of exercise-state + queue taken at the start of a calendar
+  /// day, so "Reset day" can roll progression/queue back to that point. Only
+  /// one is kept at a time (keyed by its own date).
+  Future<void> saveDayStartSnapshot(DateTime day, Map<String, ExerciseState> states, QueueState queue) async {
+    await db.putJson('meta', 'key', 'day_start_snapshot', {
+      'date': _ymd(day),
+      'states': states.map((k, v) => MapEntry(k, exerciseStateToJson(v))),
+      'queue': queueStateToJson(queue),
+    });
+  }
+
+  Future<Map<String, dynamic>?> loadDayStartSnapshot() async {
+    return db.getJson('meta', 'key', 'day_start_snapshot');
+  }
+
+  /// Parsed day-start snapshot, but only if it belongs to [day] (a stale
+  /// snapshot from a previous day is treated as absent).
+  Future<({Map<String, ExerciseState> states, QueueState queue})?> loadDayStartSnapshotFor(DateTime day) async {
+    final j = await loadDayStartSnapshot();
+    if (j == null || j['date'] != _ymd(day)) return null;
+    final states = <String, ExerciseState>{};
+    (j['states'] as Map).forEach((k, v) {
+      states[k as String] = exerciseStateFromJson((v as Map).cast<String, dynamic>());
+    });
+    final queue = queueStateFromJson((j['queue'] as Map).cast<String, dynamic>());
+    return (states: states, queue: queue);
+  }
+
+  Future<void> deleteDayStartSnapshot() async {
+    await db.delete('meta', 'key', 'day_start_snapshot');
+  }
+
+  String ymd(DateTime d) => _ymd(d);
 }

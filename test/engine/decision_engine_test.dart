@@ -985,7 +985,7 @@ void main() {
     final s5Work = s5.trace.plan!.exercises.where((e) => !e.isWarmup).toList();
     expect(
       s5Work.map((e) => e.name),
-      containsAll(const ['Self-resisted curl', 'Prone Y-raise', 'Diamond push-up', 'Plank / hollow hold']),
+      containsAll(const ['Self-resisted curl', 'Prone Y-raise', 'Bench / chair dip (bodyweight)', 'Plank / hollow hold']),
     );
     expect(s5Work.every((e) => e.isTravel && e.loadTotal == null), isTrue);
   });
@@ -1283,11 +1283,11 @@ void main() {
 
     expect(triggered.trace.plan, isNull);
     expect(
-      triggered.patchedExerciseStates[overheadTriceps.trackKey]!.status,
+      triggered.patchedExerciseStates[dip.trackKey]!.status,
       ExerciseStatus.deload,
     );
     expect(
-      triggered.patchedExerciseStates[overheadTriceps.trackKey]!
+      triggered.patchedExerciseStates[dip.trackKey]!
           .deloadSessionsRemaining,
       2,
     );
@@ -1301,7 +1301,7 @@ void main() {
       forcedSessionId: SessionTypeId.s5,
     ));
     final triceps = afterTriggerAgedOut.trace.plan!.exercises.firstWhere(
-      (exercise) => exercise.trackKey == overheadTriceps.trackKey,
+      (exercise) => exercise.trackKey == dip.trackKey,
     );
 
     expect(triceps.rirTarget, Rir.rir4plus);
@@ -1536,7 +1536,7 @@ void main() {
     };
 
     expect(workByKey[dbCurl.trackKey]!.loadTotal, 24);
-    for (final named in [lateralRaise, overheadTriceps]) {
+    for (final named in [lateralRaise, dip]) {
       final exercise = workByKey[named.trackKey]!;
       expect(exercise.name, named.name);
       expect(exercise.loadTotal, 21, reason: named.name);

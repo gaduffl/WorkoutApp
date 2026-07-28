@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/repository.dart';
 import '../engine/cardio_engine.dart';
 import '../engine/decision_engine.dart';
+import '../engine/equipment_engine.dart';
 import '../engine/intensity_recovery_policy.dart';
 import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
@@ -808,6 +809,7 @@ class AppController extends ChangeNotifier {
   }) async {
     await _assertPrimaryPlanUnlocked();
     final now = today();
+    await _ensureDayStartSnapshot(now);
     _preCheckInSnapshot ??= Map.of(exerciseStates);
     final checkin = CheckIn(
       date: now,
@@ -922,6 +924,97 @@ class AppController extends ChangeNotifier {
     unawaited(syncNotifications());
     notifyListeners();
   }
+
+  /// Persists a start-of-day snapshot of progression + queue the first time
+  /// the day is touched, so [resetDay] can roll them back. Keyed by date, so
+  /// a snapshot from a previous day is replaced rather than reused.
+  Future<void> _ensureDayStartSnapshot(DateTime now) async {
+    final existing = await repo.loadDayStartSnapshot();
+    if (existing != null && existing['date'] == repo.ymd(now)) return;
+    await repo.saveDayStartSnapshot(now, exerciseStates, queueState);
+  }
+
+  /// Full "Reset day": deletes ONLY today's check-in, recovery entry, plan,
+  /// and logged sessions, and rolls progression + queue back to the start of
+  /// today (from the day-start snapshot). No other day is touched. Works even
+  /// after a session is logged — that's the point.
+  Future<void> resetDay() async {
+    final now = today();
+
+    // Roll progression + queue back to the start of today, if we have the
+    // snapshot. Delete any exercise-state tracks that only came into existence
+    // today (absent from the snapshot) so nothing from today survives.
+    final snap = await repo.loadDayStartSnapshotFor(now);
+    if (snap != null) {
+      for (final key in exerciseStates.keys.where((k) => !snap.states.containsKey(k))) {
+        await repo.deleteExerciseState(key);
+      }
+      exerciseStates = snap.states;
+      queueState = snap.queue;
+      await repo.saveExerciseStates(exerciseStates);
+      await repo.saveQueueState(queueState);
+    }
+
+    // Remove today's dated rows (check-in, recovery, trace, session logs).
+    await repo.deleteDayData(now);
+    await repo.deleteDayStartSnapshot();
+    _preCheckInSnapshot = null;
+
+    await _reloadAll();
+    todayTrace = null;
+    unawaited(syncNotifications());
+    notifyListeners();
+  }
+
+  /// Manual progression override: jump a compound pattern to a chosen ladder
+  /// step (and starting load), for when the user is already well past the
+  /// entry step (e.g. push-ups). Resets deload/hold/micro state to a clean
+  /// PROGRESS at the new step; the first session ramps quickly if it's easy.
+  Future<void> setPatternProgression(
+    MovementPattern pattern,
+    int ladderIndex, {
+    double? startLoad,
+  }) async {
+    final ladder = ladders[pattern];
+    if (ladder == null) return;
+    final idx = ladderIndex.clamp(0, ladder.steps.length - 1);
+    final step = ladder.steps[idx];
+    final key = pattern.name;
+    final st = (exerciseStates[key] ?? ExerciseState(trackKey: key, pattern: pattern)).clone()
+      ..ladderStepIndex = idx
+      ..status = ExerciseStatus.progress
+      ..microStepStage = 0
+      ..consecutiveHoldCount = 0
+      ..deloadSessionsRemaining = 0
+      ..preDeloadLoad = null
+      ..preDeloadLadderStepIndex = null
+      ..awaitingUndershootCheck = true
+      ..currentTargetValue = step.metric == ExerciseMetric.seconds
+          ? (step.targetRange ?? pattern.repRange).$1
+          : null
+      ..lastPrescriptionChange = 'Set manually to "${step.name}"';
+
+    const eq = EquipmentEngine();
+    if (step.backpackLoaded) {
+      st.currentLoad = startLoad != null ? max(0.0, startLoad) : 0;
+    } else if (step.dumbbells == 0) {
+      st.currentLoad = 0; // bodyweight
+    } else {
+      final achievable = step.dumbbells == 1
+          ? eq.singleDbAchievableTotals(settings.equipment)
+          : eq.twoDbAchievableTotals(settings.equipment, allowUneven: !step.unilateral);
+      final target = startLoad ?? (st.currentLoad > 0 ? st.currentLoad : achievable.first);
+      st.currentLoad = eq.roundDownToAchievable(target, achievable);
+    }
+
+    exerciseStates = {...exerciseStates, key: st};
+    await repo.saveExerciseState(st);
+    notifyListeners();
+  }
+
+  /// The current ladder-step index for a compound pattern (Settings picker).
+  int currentLadderIndex(MovementPattern pattern) =>
+      exerciseStates[pattern.name]?.ladderStepIndex ?? 0;
 
   bool _completedFormalPainReentry({
     required SessionPlan plan,
