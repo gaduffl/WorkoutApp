@@ -70,12 +70,25 @@ jobs:
         run: |
           short_sha="${GITHUB_SHA::7}"
           tag="debug-${short_sha}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" MorningCoach-debug.apk --clobber
-          else
-            gh release create "${tag}" MorningCoach-debug.apk \
+          # Create the release without the asset first. Creating it with the
+          # APK in one call races the uploads.github.com endpoint, which can
+          # 404 for a few seconds until the new release propagates. Idempotent
+          # across re-runs.
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create "${tag}" \
               --target "${GITHUB_SHA}" \
               --title "MorningCoach debug ${short_sha}" \
               --notes "Automated debug APK from commit ${GITHUB_SHA}." \
               --prerelease
           fi
+          # Upload the asset separately, retrying through the propagation lag.
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "${tag}" MorningCoach-debug.apk --clobber; then
+              echo "Uploaded APK on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Upload attempt ${attempt} failed; retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
+          done
+          echo "APK upload failed after ${attempt} attempts." >&2
+          exit 1
