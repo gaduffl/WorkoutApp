@@ -50,14 +50,16 @@ class ProgressionPanel extends StatelessWidget {
                   color: colors.primary,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  progressed
-                      ? 'Progressed since last time'
-                      : 'Prescription changed since last time',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: colors.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                Expanded(
+                  child: Text(
+                    progressed
+                        ? 'Progressed since last time'
+                        : 'Prescription changed since last time',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
                 ),
               ],
             ),
