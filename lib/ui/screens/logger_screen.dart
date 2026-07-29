@@ -58,6 +58,12 @@ class _LoggerScreenState extends State<LoggerScreen> {
   int _holdTargetSeconds = 0;
   bool _holdRunning = false;
   bool _holdTimerUsed = false;
+  // Countdown for minute-based warm-up blocks (general prep / ATG). Purely a
+  // guide to pace the block; it never changes what gets logged.
+  Timer? _warmupTimer;
+  int _warmupSecondsLeft = 0;
+  int _warmupTotalSeconds = 0;
+  bool _warmupRunning = false;
   final _stopwatch = Stopwatch()..start();
 
   List<PlannedExercise> get _ex => widget.plan.exercises;
@@ -78,8 +84,12 @@ class _LoggerScreenState extends State<LoggerScreen> {
   void dispose() {
     _restTimer?.cancel();
     _holdTimer?.cancel();
+    _warmupTimer?.cancel();
     super.dispose();
   }
+
+  bool get _isMinuteWarmup =>
+      _exercise.isWarmup && _exercise.metric == ExerciseMetric.minutes;
 
   // ---- play-order construction ----
 
@@ -156,10 +166,16 @@ class _LoggerScreenState extends State<LoggerScreen> {
   void _syncSetInputs() {
     _holdTimer?.cancel();
     _holdRunning = false;
-    _value = _exercise.suggestedValue ?? _exercise.targetRange.$1;
+    // Default to the TOP of the target range so the user rarely has to step it
+    // up. Timed holds keep their progression-driven suggestedValue.
+    _value = _exercise.suggestedValue ?? _exercise.targetRange.$2;
     _holdSecondsLeft = _value;
     _holdTargetSeconds = _value;
     _holdTimerUsed = false;
+    _warmupTimer?.cancel();
+    _warmupRunning = false;
+    _warmupTotalSeconds = _isMinuteWarmup ? _exercise.targetRange.$1 * 60 : 0;
+    _warmupSecondsLeft = _warmupTotalSeconds;
     _rir = _exercise.rirTarget;
     _painFlag = false;
   }
@@ -252,6 +268,53 @@ class _LoggerScreenState extends State<LoggerScreen> {
     });
   }
 
+  void _toggleWarmupTimer() {
+    if (_warmupRunning) {
+      _warmupTimer?.cancel();
+      setState(() => _warmupRunning = false);
+      return;
+    }
+    setState(() {
+      if (_warmupSecondsLeft <= 0) _warmupSecondsLeft = _warmupTotalSeconds;
+      _warmupRunning = true;
+    });
+    _warmupTimer?.cancel();
+    _warmupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_warmupSecondsLeft <= 1) {
+        timer.cancel();
+        setState(() {
+          _warmupSecondsLeft = 0;
+          _warmupRunning = false;
+        });
+      } else {
+        setState(() => _warmupSecondsLeft -= 1);
+      }
+    });
+  }
+
+  void _resetWarmupTimer() {
+    _warmupTimer?.cancel();
+    setState(() {
+      _warmupRunning = false;
+      _warmupSecondsLeft = _warmupTotalSeconds;
+    });
+  }
+
+  String _fmtClock(int totalSeconds) {
+    final m = totalSeconds ~/ 60;
+    final s = totalSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  double get _dayProgress {
+    if (_steps.isEmpty) return 0;
+    return (_loggedKeys.length / _steps.length).clamp(0.0, 1.0);
+  }
+
   int get _loggedValue {
     if (_exercise.metric != ExerciseMetric.seconds || !_holdTimerUsed) {
       return _value;
@@ -314,6 +377,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
       _holdTimer?.cancel();
       _holdRunning = false;
       _holdSecondsLeft = 0;
+      _warmupTimer?.cancel();
+      _warmupRunning = false;
       if (restSeconds != null) _startRest(restSeconds);
       if (!wasLast) {
         _current++;
@@ -439,144 +504,215 @@ class _LoggerScreenState extends State<LoggerScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _dailyProgressBar(),
               Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      if (_hasSupersets)
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Superset mode'),
-                          subtitle: Text(_superset
-                              ? 'Alternate the paired exercises, rest after each pair'
-                              : 'Run every exercise as straight sets'),
-                          value: _superset,
-                          onChanged: _toggleSuperset,
-                        ),
-                      if (e.isWarmup)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade700,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'Warmup',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            if (_hasSupersets)
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Superset mode'),
+                                subtitle: Text(_superset
+                                    ? 'Alternate the paired exercises, rest after each pair'
+                                    : 'Run every exercise as straight sets'),
+                                value: _superset,
+                                onChanged: _toggleSuperset,
+                              ),
+                            if (e.isWarmup)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade700,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Warmup',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              )
+                            else if (e.isTravel)
+                              const Chip(
+                                avatar: Icon(Icons.luggage_outlined, size: 18),
+                                label: Text('Travel · no equipment'),
+                              ),
+                            if (!e.isWarmup && _superset && partner != null)
+                              Chip(
+                                avatar: const Icon(Icons.swap_vert, size: 18),
+                                label: Text('Superset — next: $partner'),
+                              ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Target: ${e.targetLabel}'
+                              '${currentLoadDisplay == null ? '' : ' @ $currentLoadDisplay'}',
+                              style: Theme.of(context).textTheme.bodyLarge,
+                              textAlign: TextAlign.center,
                             ),
-                          ),
-                        )
-                      else if (e.isTravel)
-                        const Chip(
-                          avatar: Icon(Icons.luggage_outlined, size: 18),
-                          label: Text('Travel · no equipment'),
+                            // Interactive controls sit directly under the target
+                            // so the timer and pain button are visible without
+                            // scrolling; reference copy (instruction, progression
+                            // detail) follows below.
+                            const SizedBox(height: 16),
+                            if (e.loadTotal != null || e.loadSteps != null)
+                              _weightStepper(
+                                currentLoadDisplay,
+                              )
+                            else if (!e.isWarmup)
+                              const Text('Bodyweight', style: TextStyle(fontWeight: FontWeight.bold)),
+                            _valueStepper(),
+                            if (e.metric == ExerciseMetric.seconds) _holdCountdown(),
+                            if (_isMinuteWarmup) _warmupCountdown(),
+                            const SizedBox(height: 16),
+                            if (!e.isWarmup)
+                              Wrap(
+                                spacing: 8,
+                                alignment: WrapAlignment.center,
+                                children: Rir.values
+                                    .map((r) => ChoiceChip(
+                                          label: Text(_rirLabel(r)),
+                                          selected: _rir == r,
+                                          onSelected: (_) => setState(() => _rir = r),
+                                        ))
+                                    .toList(),
+                              ),
+                            if (!e.isWarmup) const SizedBox(height: 12),
+                            if (!e.isWarmup)
+                              Tooltip(
+                                message: 'Stops progression for this exercise today. '
+                                    'Identify persistent pain at your next check-in.',
+                                child: FilterChip(
+                                  label: const Text('Pain — stop progression today'),
+                                  selected: _painFlag,
+                                  onSelected: (v) => setState(() => _painFlag = v),
+                                ),
+                              ),
+                            if (_painFlag)
+                              Text(
+                                'Persistent pain? Identify its location and symptoms at your next check-in.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            if (_restSecondsLeft > 0) ...[
+                              const SizedBox(height: 16),
+                              Text('Rest: $_restSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
+                            ],
+                            if (e.instruction != null) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                e.instruction!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                            if (!e.isWarmup &&
+                                e.progressionFraction != null) ...[
+                              const SizedBox(height: 12),
+                              ProgressionPanel(exercise: e),
+                            ],
+                          ],
                         ),
-                      if (!e.isWarmup && _superset && partner != null)
-                        Chip(
-                          avatar: const Icon(Icons.swap_vert, size: 18),
-                          label: Text('Superset — next: $partner'),
-                        ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Target: ${e.targetLabel}'
-                        '${currentLoadDisplay == null ? '' : ' @ $currentLoadDisplay'}',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                        textAlign: TextAlign.center,
                       ),
-                      if (e.instruction != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          e.instruction!,
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                      if (!e.isWarmup &&
-                          e.progressionFraction != null) ...[
-                        const SizedBox(height: 12),
-                        ProgressionPanel(exercise: e),
-                      ],
-                      const SizedBox(height: 20),
-                      if (e.loadTotal != null || e.loadSteps != null)
-                        _weightStepper(
-                          currentLoadDisplay,
-                        )
-                      else if (!e.isWarmup)
-                        const Text('Bodyweight', style: TextStyle(fontWeight: FontWeight.bold)),
-                      _valueStepper(),
-                      if (e.metric == ExerciseMetric.seconds) _holdCountdown(),
-                      const SizedBox(height: 16),
-                      if (!e.isWarmup)
-                        Wrap(
-                          spacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: Rir.values
-                              .map((r) => ChoiceChip(
-                                    label: Text(_rirLabel(r)),
-                                    selected: _rir == r,
-                                    onSelected: (_) => setState(() => _rir = r),
-                                  ))
-                              .toList(),
-                        ),
-                      const SizedBox(height: 12),
-                      Tooltip(
-                        message: 'Stops progression for this exercise today. '
-                            'Identify persistent pain at your next check-in.',
-                        child: FilterChip(
-                          label: const Text('Pain — stop progression today'),
-                          selected: _painFlag,
-                          onSelected: (v) => setState(() => _painFlag = v),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed:
+                            _finishing || _loggedValue <= 0 ? null : _logSet,
+                        child: Text(_logButtonLabel(e, isLast)),
+                      ),
+                    ),
+                    if (!isLast) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _finishing
+                              ? null
+                              : () async {
+                                  if (await _confirmFinishEarly()) {
+                                    await _finish(wrapUp: true);
+                                  }
+                                },
+                          child: const Text('Finish early'),
                         ),
                       ),
-                      if (_painFlag)
-                        Text(
-                          'Persistent pain? Identify its location and symptoms at your next check-in.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      if (_restSecondsLeft > 0) ...[
-                        const SizedBox(height: 16),
-                        Text('Rest: $_restSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed:
-                      _finishing || _loggedValue <= 0 ? null : _logSet,
-                  child: Text(_logButtonLabel(e, isLast)),
-                ),
-              ),
-              if (!isLast) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _finishing
-                        ? null
-                        : () async {
-                            if (await _confirmFinishEarly()) {
-                              await _finish(wrapUp: true);
-                            }
-                          },
-                    child: const Text('Finish early'),
-                  ),
-                ),
-              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// A thin vertical bar down the left edge that fills top-to-bottom as the
+  /// day's sets are logged — a minimal at-a-glance sense of "how far in am I".
+  Widget _dailyProgressBar() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 6,
+      margin: const EdgeInsets.only(right: 14),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: FractionallySizedBox(
+            heightFactor: _dayProgress,
+            widthFactor: 1,
+            child: Container(color: scheme.primary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _warmupCountdown() {
+    final done = _warmupSecondsLeft <= 0 && !_warmupRunning;
+    return Card(
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _fmtClock(_warmupSecondsLeft),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(width: 12),
+            FilledButton.tonalIcon(
+              onPressed: _warmupTotalSeconds <= 0 ? null : _toggleWarmupTimer,
+              icon: Icon(_warmupRunning ? Icons.pause : Icons.play_arrow),
+              label: Text(_warmupRunning
+                  ? 'Pause'
+                  : (done ? 'Done' : 'Start warm-up')),
+            ),
+            IconButton(
+              tooltip: 'Reset warm-up timer',
+              onPressed: _resetWarmupTimer,
+              icon: const Icon(Icons.replay),
+            ),
+          ],
         ),
       ),
     );

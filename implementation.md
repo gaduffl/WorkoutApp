@@ -312,3 +312,25 @@ treat filename as canonical version).
     with a bounded retry loop. Also added a manual `release-cleanup.yml`
     (`workflow_dispatch`, tag input) to prune stray debug prereleases —
     used to remove the empty `debug-aa91c96` release the race left behind.
+
+## Session 2026-07-29 (logger view polish)
+
+38. **Logger view: four ergonomics changes.**
+    - **Warm-up timer.** Minute-based warm-ups (general prep + S4 ATG block,
+      `metric == minutes`) now carry a mm:ss countdown (start/pause/reset) so
+      the timed schedule in their instruction is easy to follow. It is a guide
+      only — it never changes what gets logged; loaded-rep ramp/feeder
+      warm-ups are unaffected (they keep their rep steppers + 45 s rest).
+    - **Default value = top of range.** Rep work now prefills the *top* of the
+      target range instead of the bottom (`targetRange.$2`), so the user rarely
+      steps it up. Timed holds still use their progression-driven
+      `suggestedValue`.
+    - **Vertical daily-progress bar.** A thin bar down the left edge fills
+      top→bottom as `loggedSteps / totalSteps`. Built from a
+      `FractionallySizedBox` (not a `LinearProgressIndicator`, so it never
+      collides with the ProgressionPanel's indicator in tests).
+    - **Layout: timer + pain above the fold.** The interactive controls
+      (steppers, timer, RIR, pain) were reordered to sit directly under the
+      target line, with the bulky reference copy (instruction, ProgressionPanel)
+      moved below them. The log/finish buttons stay pinned. A single scroll
+      view is kept, so the existing narrow-phone overflow guard still holds.
