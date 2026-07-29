@@ -724,13 +724,106 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.add));
+    // Rep work now defaults to the TOP of the range (12 for an (8, 12) target).
+    expect(find.text('12'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.remove));
     await tester.pump();
     await tester.tap(find.text('Log set & finish'));
     await tester.pump();
 
     expect(controller.lastLoggedSets.single.metric, ExerciseMetric.reps);
-    expect(controller.lastLoggedSets.single.value, 9);
+    expect(controller.lastLoggedSets.single.value, 11);
+  });
+
+  testWidgets('rep work defaults to the top of the target range', (tester) async {
+    final repPlan = SessionPlan(
+      sessionId: SessionTypeId.s5,
+      sessionName: 'Rep work',
+      tier: SessionTier.full,
+      estimatedDurationMin: 20,
+      exercises: const [
+        PlannedExercise(
+          trackKey: 'curl',
+          pattern: MovementPattern.coreGrip,
+          name: 'Curl',
+          sets: 1,
+          targetRange: (8, 15),
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: LoggerScreen(plan: repPlan)));
+    // Starts at 15 (top), not 8 (bottom), so the user rarely has to step up.
+    expect(find.text('15'), findsOneWidget);
+    expect(find.text('8'), findsNothing);
+  });
+
+  testWidgets('minute-based warm-up shows a countdown timer that can run',
+      (tester) async {
+    final prepPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [
+        const PlannedExercise(
+          trackKey: 'warmup:s1',
+          pattern: MovementPattern.kneeHealth,
+          name: 'General warm-up & movement prep',
+          sets: 1,
+          metric: ExerciseMetric.minutes,
+          targetRange: (3, 3),
+          rirTarget: Rir.rir4plus,
+          isWarmup: true,
+        ),
+        ex('squat', MovementPattern.squat, 24, null, sets: 1),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp(home: LoggerScreen(plan: prepPlan)));
+
+    // A 3-minute block shows 3:00 and a start control.
+    expect(find.text('3:00'), findsOneWidget);
+    expect(find.text('Start warm-up'), findsOneWidget);
+
+    await tester.tap(find.text('Start warm-up'));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('2:58'), findsOneWidget);
+
+    // Cancel the running timer so no pending timer leaks past the test.
+    await tester.tap(find.byTooltip('Reset warm-up timer'));
+    await tester.pump();
+    expect(find.text('3:00'), findsOneWidget);
+  });
+
+  testWidgets('a vertical daily-progress bar fills as sets are logged',
+      (tester) async {
+    final controller = captureController();
+    // Two straight sets so the first log advances progress without finishing.
+    final twoSetPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [ex('squat', MovementPattern.squat, 24, null, sets: 2)],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: twoSetPlan)),
+      ),
+    );
+
+    FractionallySizedBox bar() => tester.widget<FractionallySizedBox>(
+          find.byType(FractionallySizedBox),
+        );
+    expect(bar().heightFactor, 0.0); // nothing logged yet
+
+    await tester.tap(find.text('Log set'));
+    await tester.pump();
+    expect(bar().heightFactor, closeTo(0.5, 1e-9)); // 1 of 2 sets done
+
+    // Cancel the rest timer started after the first set.
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   SessionPlan s2Plan(int sets) => SessionPlan(
