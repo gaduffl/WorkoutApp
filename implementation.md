@@ -334,3 +334,14 @@ treat filename as canonical version).
       target line, with the bulky reference copy (instruction, ProgressionPanel)
       moved below them. The log/finish buttons stay pinned. A single scroll
       view is kept, so the existing narrow-phone overflow guard still holds.
+39. **ProgressionPanel header wrapped.** On the Today card the panel renders
+    inside a `ListTile` subtitle squeezed by the trailing "RIR n"; its header
+    text lacked a `Flexible`, so it overflowed ~16 px. Wrapped in `Expanded`.
+40. **Second-REHIT nudge is now its own opt-in.** The later-day "add a short
+    REHIT" push nudge already existed end-to-end (eligibility engine →
+    `suggestedNudgeTime` → `syncSecondRehitNudge`) but was gated by the shared
+    `notificationsEnabled` flag with no dedicated control. Added
+    `UserSettings.secondRehitNudgeEnabled` (opt-in, its own Settings switch
+    with its own permission request) and switched the sync's `enabled` gate to
+    it — so the user can take just this reminder, or just the morning ones,
+    independently.

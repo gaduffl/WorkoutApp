@@ -270,6 +270,17 @@ void main() {
     expect(legacy.secondRehitNudgeScheduledDay, isNull);
     expect(legacy.secondRehitNudgeScheduledFor, isNull);
 
+    // The opt-in toggle round-trips and defaults off on legacy settings.
+    expect(
+      userSettingsFromJson(userSettingsToJson(
+        const UserSettings(secondRehitNudgeEnabled: true),
+      )).secondRehitNudgeEnabled,
+      isTrue,
+    );
+    final legacyNoToggle = userSettingsToJson(const UserSettings())
+      ..remove('secondRehitNudgeEnabled');
+    expect(userSettingsFromJson(legacyNoToggle).secondRehitNudgeEnabled, isFalse);
+
     final malformedString = userSettingsToJson(settings)
       ..['secondRehitNudgeScheduledFor'] = 'not-a-timestamp';
     final restoredMalformedString = userSettingsFromJson(malformedString);

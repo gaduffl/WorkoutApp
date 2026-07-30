@@ -788,7 +788,7 @@ class AppController extends ChangeNotifier {
         checkedInToday: todayTrace != null,
       );
       final rehitNudgeSync = await NotificationService.syncSecondRehitNudge(
-        enabled: settings.notificationsEnabled,
+        enabled: settings.secondRehitNudgeEnabled,
         eligibility: secondRehitEligibility,
         scheduledDay: settings.secondRehitNudgeScheduledDay,
         scheduledFor: settings.secondRehitNudgeScheduledFor,
