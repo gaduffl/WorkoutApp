@@ -63,10 +63,21 @@ jobs:
       # makes every APK installable as an update over the previous one
       # (signature continuity comes from the pinned android/app/debug.keystore).
       - run: flutter build apk --debug --build-number=${{ github.run_number }}
-      - run: cp build/app/outputs/flutter-apk/app-debug.apk MorningCoach-debug.apk
+      - name: Name the APK with the app version
+        id: apk
+        run: |
+          # versionName from pubspec (part before "+"); build number is the CI
+          # run number (the versionCode baked in above).
+          version="$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
+          name="MorningCoach-v${version}-build${{ github.run_number }}-debug.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk "${name}"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
       - name: Publish APK as GitHub Release asset
         env:
           GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.apk.outputs.name }}
+          APP_VERSION: ${{ steps.apk.outputs.version }}
         run: |
           short_sha="${GITHUB_SHA::7}"
           tag="debug-${short_sha}"
@@ -77,13 +88,13 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" \
               --target "${GITHUB_SHA}" \
-              --title "MorningCoach debug ${short_sha}" \
-              --notes "Automated debug APK from commit ${GITHUB_SHA}." \
+              --title "MorningCoach v${APP_VERSION} (build ${{ github.run_number }}) · ${short_sha}" \
+              --notes "Automated debug APK · v${APP_VERSION} build ${{ github.run_number }} · commit ${GITHUB_SHA}." \
               --prerelease
           fi
           # Upload the asset separately, retrying through the propagation lag.
           for attempt in 1 2 3 4 5; do
-            if gh release upload "${tag}" MorningCoach-debug.apk --clobber; then
+            if gh release upload "${tag}" "${APK}" --clobber; then
               echo "Uploaded APK on attempt ${attempt}."
               exit 0
             fi

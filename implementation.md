@@ -345,3 +345,7 @@ treat filename as canonical version).
     with its own permission request) and switched the sync's `enabled` gate to
     it — so the user can take just this reminder, or just the morning ones,
     independently.
+41. **APK filename carries the version.** The published debug APK is now named
+    `MorningCoach-v<versionName>-build<runNumber>-debug.apk` (versionName from
+    pubspec, build number = the CI run number / versionCode), and the release
+    title/notes include the same, so a downloaded file is self-identifying.
