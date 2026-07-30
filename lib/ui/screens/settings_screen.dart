@@ -97,6 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
       travelMode: _settings.travelMode,
       notificationsEnabled: _settings.notificationsEnabled,
+      secondRehitNudgeEnabled: _settings.secondRehitNudgeEnabled,
       wakeWindow: _settings.wakeWindow,
     );
     await controller.saveSettings(newSettings);
@@ -273,6 +274,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
                       ));
                 }
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Second REHIT reminder'),
+              subtitle: const Text(
+                'On days where a short extra REHIT would add value, get a '
+                'push nudge later in the day to fit one in.',
+              ),
+              value: _settings.secondRehitNudgeEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final granted = await NotificationService.requestPermission();
+                  if (!granted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Notification permission was denied - the REHIT reminder stays off.')),
+                    );
+                    return;
+                  }
+                }
+                setState(() => _settings = _settings.copyWith(secondRehitNudgeEnabled: v));
               },
             ),
             if (frozenTracks.isNotEmpty) ...[

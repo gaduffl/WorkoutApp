@@ -37,6 +37,11 @@ class UserSettings {
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
 
+  /// Opt-in push nudge on days where a second, short REHIT exposure would add
+  /// value (§2.1 optional finisher). Independent of [notificationsEnabled] so
+  /// the user can take just this reminder, or just the morning ones.
+  final bool secondRehitNudgeEnabled;
+
   /// Internal local-day marker for the optional second-session REHIT nudge.
   /// Persisting it prevents app restarts from scheduling the same nudge twice.
   final String? secondRehitNudgeScheduledDay;
@@ -63,6 +68,7 @@ class UserSettings {
     this.checkInCutoffHour = 10,
     this.travelMode = false,
     this.notificationsEnabled = false,
+    this.secondRehitNudgeEnabled = false,
     this.secondRehitNudgeScheduledDay,
     this.secondRehitNudgeScheduledFor,
   });
@@ -88,6 +94,7 @@ class UserSettings {
     int? checkInCutoffHour,
     bool? travelMode,
     bool? notificationsEnabled,
+    bool? secondRehitNudgeEnabled,
     String? secondRehitNudgeScheduledDay,
     DateTime? secondRehitNudgeScheduledFor,
     bool clearHrMaxOverride = false,
@@ -114,6 +121,8 @@ class UserSettings {
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      secondRehitNudgeEnabled:
+          secondRehitNudgeEnabled ?? this.secondRehitNudgeEnabled,
       secondRehitNudgeScheduledDay: clearSecondRehitNudgeScheduledDay
           ? null
           : secondRehitNudgeScheduledDay ?? this.secondRehitNudgeScheduledDay,

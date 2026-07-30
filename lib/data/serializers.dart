@@ -426,6 +426,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'checkInCutoffHour': u.checkInCutoffHour,
       'travelMode': u.travelMode,
       'notificationsEnabled': u.notificationsEnabled,
+      'secondRehitNudgeEnabled': u.secondRehitNudgeEnabled,
       'secondRehitNudgeScheduledDay': u.secondRehitNudgeScheduledDay,
       'secondRehitNudgeScheduledFor':
           u.secondRehitNudgeScheduledFor?.toIso8601String(),
@@ -448,6 +449,7 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
+      secondRehitNudgeEnabled: j['secondRehitNudgeEnabled'] as bool? ?? false,
       secondRehitNudgeScheduledDay: j['secondRehitNudgeScheduledDay'] as String?,
       secondRehitNudgeScheduledFor:
           _tryParseOptionalDateTime(j['secondRehitNudgeScheduledFor']),
