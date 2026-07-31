@@ -86,6 +86,12 @@ class PlannedExercise {
   /// clear the freeze.
   final bool isPainReentryTest;
 
+  /// The prescription is performed one side at a time (split squat, one-arm
+  /// bench/row). The logged rep count is *per side*, so a "set" costs roughly
+  /// twice the time of a bilateral set — which is what the duration model
+  /// needs to know to keep a plan inside its hard time window.
+  final bool unilateral;
+
   const PlannedExercise({
     required this.trackKey,
     required this.pattern,
@@ -114,6 +120,7 @@ class PlannedExercise {
     this.isCompoundWork = false,
     this.isFeederWarmup = false,
     this.isPainReentryTest = false,
+    this.unilateral = false,
   });
 
   /// Compatibility alias for existing callers and persisted plan consumers.
@@ -154,6 +161,7 @@ class PlannedExercise {
         isCompoundWork: isCompoundWork,
         isFeederWarmup: isFeederWarmup,
         isPainReentryTest: isPainReentryTest,
+        unilateral: unilateral,
       );
 }
 
@@ -183,6 +191,11 @@ class SessionPlan {
   /// create an unbudgeted finisher.
   final bool optionalRehitFinisherReserved;
 
+  /// §5 Step 7: a natively-60-minute session assembled for a shorter hard
+  /// window. Set counts are cut to the compressed count and the accessory
+  /// block is dropped, so the plan must not present itself as a full tier.
+  final bool timeCompressed;
+
   const SessionPlan({
     required this.sessionId,
     required this.sessionName,
@@ -193,6 +206,7 @@ class SessionPlan {
     this.grantsQueueCredit = true,
     this.travelMode = false,
     this.optionalRehitFinisherReserved = false,
+    this.timeCompressed = false,
   });
 
   int get plannedWorkSets =>

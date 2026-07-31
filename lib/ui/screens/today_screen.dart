@@ -69,7 +69,11 @@ const optionalRehitFinisherMessage =
 String planTimingLabel(SessionPlan plan) => switch (plan.sessionId) {
       SessionTypeId.s3 => 'CAROL bike preset · 30 min',
       SessionTypeId.s7 => 'CAROL bike preset · 08:40',
-      _ => '${plan.tier.name} tier - ~${plan.estimatedDurationMin} min',
+      // A natively-60-min session squeezed into a shorter window must not
+      // call itself a "full tier" — that is exactly what it is not.
+      _ => plan.timeCompressed
+          ? 'compressed to fit - ~${plan.estimatedDurationMin} min'
+          : '${plan.tier.name} tier - ~${plan.estimatedDurationMin} min',
     };
 
 String candidateTimingLabel(

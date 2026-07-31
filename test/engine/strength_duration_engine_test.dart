@@ -650,4 +650,44 @@ void main() {
       }
     });
   });
+
+  group('unilateral work costs two bouts per set', () {
+    PlannedExercise lift({required bool unilateral}) => PlannedExercise(
+          trackKey: 'pushHorizontal',
+          pattern: MovementPattern.pushHorizontal,
+          name: unilateral ? 'One-arm DB bench' : 'DB bench on bolster',
+          sets: 3,
+          targetRange: const (6, 10),
+          loadTotal: 40,
+          rirTarget: Rir.rir2,
+          isCompoundWork: true,
+          unilateral: unilateral,
+        );
+
+    test('a per-side set is charged twice the bilateral set time', () {
+      const estimator = StrengthDurationEstimator();
+      final bilateral = estimator.estimateSeconds([lift(unilateral: false)]);
+      final perSide = estimator.estimateSeconds([lift(unilateral: true)]);
+      // Only the working time doubles; rest and setup are unchanged.
+      expect(
+        perSide - bilateral,
+        3 * StrengthDurationEstimator.workSetSeconds,
+        reason: 'a unilateral prescription is written per side, so each '
+            'logged set is physically two working bouts',
+      );
+    });
+
+    test('the ladder marks single-DB one-arm compounds as per-side', () {
+      for (final (pattern, stepName) in const [
+        (MovementPattern.pushHorizontal, 'One-arm DB bench'),
+        (MovementPattern.pushVertical, 'Single-arm standing press'),
+        (MovementPattern.pullHorizontal, 'Single-arm row +pause'),
+      ]) {
+        final step = ladders[pattern]!
+            .steps
+            .firstWhere((candidate) => candidate.name == stepName);
+        expect(step.unilateral, isTrue, reason: stepName);
+      }
+    });
+  });
 }

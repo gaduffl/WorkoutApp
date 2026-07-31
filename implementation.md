@@ -349,3 +349,29 @@ treat filename as canonical version).
     `MorningCoach-v<versionName>-build<runNumber>-debug.apk` (versionName from
     pubspec, build number = the CI run number / versionCode), and the release
     title/notes include the same, so a downloaded file is self-identifying.
+42. **35-minute sessions genuinely overran their window (three defects).**
+    Reported: a 35-min slot advertised "compressed" but emitted the 60-min S4.
+    Reproduced with the real engine — at 35 min S4 emitted 4 compounds × 3 =
+    **12 work sets**, identical to the 60-min plan minus one plank.
+    - **(A) Compression now cuts volume, not just the accessory block.**
+      §5 Step 7's "60 → 35" only dropped accessories; every primary pair kept
+      its 3 hard sets, so a 35-minute slot carried the entire 60-minute
+      compound workload. `setsFor(..., timeCompressed:)` now resolves the
+      *compressed* set counts (2) while `slotsForTier` still keeps all primary
+      superset pairs. S4 @ 35 min: 12 → 8 work sets.
+    - **(B) The duration model was blind to unilateral work.** `LadderStep`
+      already knew `unilateral`, but it was only consumed for uneven-pair load
+      resolution and never reached `PlannedExercise` or the estimator, which
+      charged a flat 45 s per set. A per-side prescription is written per side,
+      so one logged set is two working bouts. Added `PlannedExercise.unilateral`
+      (plumbed from the step, serialized with a legacy-false default) and a
+      side factor in the estimator. Also flagged the five single-DB one-arm
+      compound steps that were missing `unilateral` — safe for loads, because
+      that flag only alters *2-DB* uneven-pair resolution. Honest estimates
+      also let the existing budgeter trim on its own when a slot is too small.
+    - **(C) The plan no longer mislabels itself.** 35 min resolves to
+      `SessionTier.full`, so tier alone cannot distinguish "full 35-min
+      session" from "60-min session squeezed into 35". Added
+      `SessionPlan.timeCompressed` (via the shared `isTimeCompressedSession`
+      helper, replacing two subtly different inline conditions) and Today now
+      shows "compressed to fit" instead of "full tier".

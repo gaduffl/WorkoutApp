@@ -57,7 +57,8 @@ class StrengthDurationEstimator {
         seconds += exercise.targetRange.$2 * 60 * exercise.sets;
       } else {
         seconds += exercise.sets *
-            (loadWarmupWorkSeconds + loadWarmupRestSeconds);
+            (loadWarmupWorkSeconds * _sideFactor(exercise) +
+                loadWarmupRestSeconds);
       }
     }
 
@@ -105,7 +106,14 @@ class StrengthDurationEstimator {
   int estimateMinutes(List<PlannedExercise> exercises) =>
       (estimateSeconds(exercises) / 60).ceil();
 
-  int _workSecondsPerSet(PlannedExercise exercise) => switch (exercise.metric) {
+  /// A unilateral prescription is written *per side*, so one logged set is
+  /// physically two working bouts. Ignoring this made every split-squat /
+  /// one-arm session read as roughly half its true length.
+  int _sideFactor(PlannedExercise exercise) => exercise.unilateral ? 2 : 1;
+
+  int _workSecondsPerSet(PlannedExercise exercise) =>
+      _sideFactor(exercise) *
+      switch (exercise.metric) {
         ExerciseMetric.reps => workSetSeconds,
         ExerciseMetric.seconds => exercise.targetRange.$2,
         ExerciseMetric.minutes => exercise.targetRange.$2 * 60,

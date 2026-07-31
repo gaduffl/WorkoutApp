@@ -559,7 +559,8 @@ class DecisionEngine {
     var progressionEligible = recovery.bucket == ReadinessBucket.green;
     var redTechnique = false;
 
-    if (checkin.timeMinutes != 60 && chosen.tier == SessionTier.full && sessionTypes[effectiveSessionId]!.fullDurationMin == 60) {
+    if (checkin.timeMinutes != 60 &&
+        isTimeCompressedSession(effectiveSessionId, chosen.tier)) {
       fired.add(const FiredRule(RuleKey.timeCompress60_35));
     }
     if (checkin.timeMinutes == 20 &&
@@ -782,7 +783,11 @@ class DecisionEngine {
       for (final (pattern, usesCompoundSetCount, namedExercise) in slots) {
         final isGenuineCompound = namedExercise == null &&
             template.compoundPatterns.contains(pattern);
-        final baseSets = template.setsFor(usesCompoundSetCount, tier);
+        final baseSets = template.setsFor(
+          usesCompoundSetCount,
+          tier,
+          timeCompressed: isTimeCompressedSession(template.id, tier),
+        );
         final cutSets = (baseSets * setMultiplier).floor().clamp(baseSets == 0 ? 0 : 1, baseSets);
 
         final trackKey = namedExercise?.trackKey ?? pattern.name;
@@ -1247,6 +1252,7 @@ class DecisionEngine {
       grantsQueueCredit: queueCreditType != null,
       travelMode: input.settings.travelMode,
       optionalRehitFinisherReserved: optionalRehitFinisherReserved,
+      timeCompressed: isTimeCompressedSession(effectiveSessionId, tier),
     );
 
     return DecisionEngineOutput(
@@ -1437,8 +1443,7 @@ class DecisionEngine {
     required bool travelMode,
   }) {
     final template = sessionTemplates[sessionId]!;
-    final compress60to35 = tier == SessionTier.full &&
-        sessionTypes[sessionId]!.fullDurationMin >= 60;
+    final compress60to35 = isTimeCompressedSession(sessionId, tier);
     final slots = _slotsForPlan(
       sessionId: sessionId,
       tier: tier,
@@ -1506,7 +1511,14 @@ class DecisionEngine {
     var hasPainSafeWork = false;
     final stimulusSlots = <_TemplateSlot>[];
     for (final slot in slots) {
-      if (template.setsFor(slot.$2, tier) <= 0) continue;
+      if (template.setsFor(
+            slot.$2,
+            tier,
+            timeCompressed: isTimeCompressedSession(template.id, tier),
+          ) <=
+          0) {
+        continue;
+      }
       final resolution = _resolvePainAdjustedSlot(
         slot,
         input: input,
@@ -1845,7 +1857,11 @@ class DecisionEngine {
         pattern: pattern,
         exerciseName: named?.name,
       );
-      final baseSets = template.setsFor(isCompound, tier);
+      final baseSets = template.setsFor(
+        isCompound,
+        tier,
+        timeCompressed: isTimeCompressedSession(template.id, tier),
+      );
       final sets = setMultiplier <= 0 || baseSets == 0
           ? 0
           : (baseSets * setMultiplier)
@@ -1999,6 +2015,7 @@ class DecisionEngine {
       instruction: 'Rest <= 45 s',
       progressionEligible: false,
       isFeederWarmup: isFeederWarmup,
+      unilateral: step.unilateral,
     );
   }
 
@@ -2129,6 +2146,7 @@ class DecisionEngine {
       persistLoadOnCompletion: persistLoadOnCompletion,
       progressionEligible: progressionEligible,
       isCompoundWork: isCompoundWork,
+      unilateral: step.unilateral,
       isPainReentryTest: isPainReentryTest,
     );
   }
