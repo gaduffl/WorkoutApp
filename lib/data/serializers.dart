@@ -499,6 +499,7 @@ Map<String, dynamic> plannedExerciseToJson(PlannedExercise e) => {
       'isCompoundWork': e.isCompoundWork,
       'isFeederWarmup': e.isFeederWarmup,
       'isPainReentryTest': e.isPainReentryTest,
+      'unilateral': e.unilateral,
     };
 
 PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExercise(
@@ -533,6 +534,7 @@ PlannedExercise plannedExerciseFromJson(Map<String, dynamic> j) => PlannedExerci
       isCompoundWork: _plannedExerciseIsCompoundWorkFromJson(j),
       isFeederWarmup: j['isFeederWarmup'] as bool? ?? false,
       isPainReentryTest: j['isPainReentryTest'] as bool? ?? false,
+      unilateral: j['unilateral'] as bool? ?? false,
     );
 
 Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
@@ -547,6 +549,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
       'grantsQueueCredit': p.grantsQueueCredit,
       'travelMode': p.travelMode,
       'optionalRehitFinisherReserved': p.optionalRehitFinisherReserved,
+      'timeCompressed': p.timeCompressed,
     };
 
 SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
@@ -564,6 +567,7 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
       travelMode: j['travelMode'] as bool? ?? false,
       optionalRehitFinisherReserved:
           j['optionalRehitFinisherReserved'] as bool? ?? false,
+      timeCompressed: j['timeCompressed'] as bool? ?? false,
     );
 
 Map<String, dynamic> effectiveSetTargetBandToJson(

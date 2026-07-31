@@ -840,7 +840,7 @@ void main() {
     expect(prep.instruction, isNot(contains('scapular push-ups')));
   });
 
-  test('§5 Step 7 "60->35": a 60-min session in a 35-min slot drops the accessory block', () {
+  test('§5 Step 7 "60->35": a 60-min session in a 35-min slot drops the accessory block and cuts compound volume', () {
     final output = decisionEngine.decide(buildInput(
       time: 35,
       subjective: 4,
@@ -853,7 +853,12 @@ void main() {
     // all four primary superset compounds survive, the core/grip accessory does not
     expect(work.length, 4);
     expect(work.every((e) => e.pattern != MovementPattern.coreGrip), isTrue);
-    expect(output.trace.plan!.plannedWorkSets, 12); // 4 x 3, fits the slot
+    // Compression must cut volume, not only the accessory block: keeping 3
+    // hard sets per pair left the 35-minute slot carrying the 60-minute
+    // session's entire compound workload (4 x 3 = 12) and ran long.
+    expect(output.trace.plan!.plannedWorkSets, 8); // 4 x 2 compressed sets
+    // and the plan says so, rather than presenting itself as a full tier
+    expect(output.trace.plan!.timeCompressed, isTrue);
     // at a true 60-min slot the accessory comes back (extended tier)
     final ext = decisionEngine.decide(buildInput(
       time: 60,
@@ -867,6 +872,8 @@ void main() {
       ext.trace.plan!.exercises.any((e) => !e.isWarmup && e.pattern == MovementPattern.coreGrip),
       isTrue,
     );
+    expect(ext.trace.plan!.timeCompressed, isFalse);
+    expect(ext.trace.plan!.plannedWorkSets, greaterThan(output.trace.plan!.plannedWorkSets));
   });
 
   test('§2.6: work exercises carry their PowerBlock achievable-total steps', () {

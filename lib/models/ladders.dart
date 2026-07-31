@@ -65,8 +65,8 @@ final Map<MovementPattern, MovementLadder> ladders = {
     steps: [
       LadderStep(name: 'Push-up'),
       LadderStep(name: 'DB bench on bolster', dumbbells: 2),
-      LadderStep(name: 'One-arm DB bench', dumbbells: 1),
-      LadderStep(name: 'One-arm DB bench +3s eccentric', dumbbells: 1),
+      LadderStep(name: 'One-arm DB bench', dumbbells: 1, unilateral: true),
+      LadderStep(name: 'One-arm DB bench +3s eccentric', dumbbells: 1, unilateral: true),
       LadderStep(name: 'Deficit push-up (blocks), weighted', dumbbells: 1),
     ],
   ),
@@ -75,8 +75,8 @@ final Map<MovementPattern, MovementLadder> ladders = {
     steps: [
       LadderStep(name: 'Seated DB press', dumbbells: 2),
       LadderStep(name: 'Standing DB press', dumbbells: 2),
-      LadderStep(name: 'Single-arm standing press', dumbbells: 1),
-      LadderStep(name: 'Single-arm standing press +pause/tempo', dumbbells: 1),
+      LadderStep(name: 'Single-arm standing press', dumbbells: 1, unilateral: true),
+      LadderStep(name: 'Single-arm standing press +pause/tempo', dumbbells: 1, unilateral: true),
     ],
   ),
   MovementPattern.pullVertical: const MovementLadder(
@@ -93,7 +93,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
     steps: [
       LadderStep(name: 'DB row', dumbbells: 2),
       LadderStep(name: 'Chest-supported row (bolster)', dumbbells: 2),
-      LadderStep(name: 'Single-arm row +pause', dumbbells: 1),
+      LadderStep(name: 'Single-arm row +pause', dumbbells: 1, unilateral: true),
     ],
   ),
   MovementPattern.kneeHealth: const MovementLadder(

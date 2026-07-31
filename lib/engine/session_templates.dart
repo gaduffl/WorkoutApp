@@ -67,10 +67,20 @@ class SessionTemplateDef {
     return [...compounds, ...named, ...accessories];
   }
 
-  int setsFor(bool usesCompoundSetCount, SessionTier tier) {
+  /// §5 Step 7's "60 → 35" compression cuts *volume*, not just the accessory
+  /// block: keeping 3 hard sets on every primary pair left a 35-minute slot
+  /// with the 60-minute session's entire compound workload. When
+  /// [timeCompressed] is set the compressed set counts apply while
+  /// [slotsForTier] still keeps all primary superset pairs.
+  int setsFor(
+    bool usesCompoundSetCount,
+    SessionTier tier, {
+    bool timeCompressed = false,
+  }) {
+    final effective = timeCompressed ? SessionTier.compressed : tier;
     return usesCompoundSetCount
-        ? compoundSetsByTier[tier]!
-        : accessorySetsByTier[tier]!;
+        ? compoundSetsByTier[effective]!
+        : accessorySetsByTier[effective]!;
   }
 }
 
@@ -112,6 +122,14 @@ final Map<SessionTypeId, SessionTemplateDef> sessionTemplates = {
   SessionTypeId.s6: const SessionTemplateDef(id: SessionTypeId.s6, isCardioOnly: true),
   SessionTypeId.s7: const SessionTemplateDef(id: SessionTypeId.s7, isCardioOnly: true),
 };
+
+/// §5 Step 7: a natively-60-minute session assembled for a shorter hard
+/// window. A 35-minute slot resolves to [SessionTier.full], so the tier alone
+/// cannot distinguish "full 35-minute session" from "60-minute session
+/// squeezed into 35 minutes" — this does.
+bool isTimeCompressedSession(SessionTypeId sessionId, SessionTier tier) =>
+    tier == SessionTier.full &&
+    sessionTypes[sessionId]!.fullDurationMin >= 60;
 
 SessionTier tierForTime(int minutes) {
   if (minutes >= 60) return SessionTier.extended;
