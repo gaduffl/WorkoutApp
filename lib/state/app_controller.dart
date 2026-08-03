@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/repository.dart';
+import '../engine/analytics_engine.dart';
 import '../engine/cardio_engine.dart';
 import '../engine/decision_engine.dart';
 import '../engine/equipment_engine.dart';
@@ -15,12 +16,15 @@ import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
 import '../engine/rehit_eligibility_engine.dart';
+import '../engine/rest_day_rehit_engine.dart';
+import '../engine/schedule_fit_engine.dart';
 import '../engine/session_templates.dart';
 import '../engine/stimulus_ledger_engine.dart';
 import '../engine/training_status_engine.dart';
 import '../integrations/onedrive_client.dart';
 import '../integrations/oura_client.dart';
 import '../notifications/notification_service.dart';
+import '../models/analytics_event.dart';
 import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
@@ -35,6 +39,7 @@ import '../models/plan.dart';
 import '../models/recovery_snapshot.dart';
 import '../models/rule_key.dart';
 import '../models/session_log.dart';
+import '../models/session_timing.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
 import '../models/training_targets.dart';
@@ -106,9 +111,24 @@ class AppController extends ChangeNotifier {
   /// seven-day high-intensity target.
   List<SessionLog> _recentLogs = [];
 
+  /// A wider window than [_recentLogs], used only to learn *when* the user
+  /// trains. Kept separate so no recovery, ledger, or queue decision silently
+  /// changes shape by seeing more history than it was designed around.
+  List<SessionLog> _scheduleLogs = [];
+
+  /// Today's analytics events, so once-per-day observations are not written
+  /// again on every notification sync or app resume.
+  List<AnalyticsEvent> _todayEvents = [];
+
   @visibleForTesting
   void replaceRecentLogsForTesting(Iterable<SessionLog> logs) {
     _recentLogs = List<SessionLog>.unmodifiable(logs);
+    _scheduleLogs = List<SessionLog>.unmodifiable(logs);
+  }
+
+  @visibleForTesting
+  void replaceScheduleLogsForTesting(Iterable<SessionLog> logs) {
+    _scheduleLogs = List<SessionLog>.unmodifiable(logs);
   }
 
   List<SessionLog> get _todaysLogs =>
@@ -581,7 +601,172 @@ class AppController extends ChangeNotifier {
     _recentLogs = await repo.loadSessionLogsSince(
       today().subtract(const Duration(days: 7)),
     );
+    _scheduleLogs = await repo.loadSessionLogsSince(
+      today().subtract(const Duration(days: scheduleHabitWindowDays - 1)),
+    );
+    _todayEvents = await repo.loadAnalyticsEventsSince(today());
     manualLoadEntries = await repo.loadManualLoadEntries();
+  }
+
+  /// Trailing window used to learn training-time habits. Eight weeks covers a
+  /// month of holidays without letting a routine from six months ago drive
+  /// today's reminder.
+  static const scheduleHabitWindowDays = 56;
+
+  static const _scheduleFitEngine = ScheduleFitEngine();
+  static const _analyticsEngine = AnalyticsEngine();
+  static const _restDayRehitEngine = RestDayRehitEngine();
+
+  /// The user's observed training rhythm, from the wider schedule window.
+  ScheduleHabits scheduleHabitsAt(DateTime nowLocal) =>
+      _scheduleFitEngine.buildHabits(
+        logs: _scheduleLogs,
+        asOf: nowLocal,
+        windowDays: scheduleHabitWindowDays,
+      );
+
+  /// Records one analytics observation. Best-effort by design: an analytics
+  /// write must never fail a check-in or a completed workout.
+  ///
+  /// [oncePerDay] events are skipped when the same type already exists for
+  /// today, which is what makes "when did the app first suggest this" a
+  /// meaningful timestamp rather than the most recent re-evaluation.
+  Future<void> recordAnalyticsEvent(
+    AnalyticsEventType type, {
+    Map<String, String> properties = const {},
+    bool oncePerDay = false,
+    DateTime? at,
+  }) async {
+    try {
+      final timestamp = at ?? DateTime.now();
+      final day = DateTime(timestamp.year, timestamp.month, timestamp.day);
+      _todayEvents = _todayEvents
+          .where((event) => _isSameDate(event.date, day))
+          .toList();
+      if (oncePerDay && _todayEvents.any((event) => event.type == type)) {
+        return;
+      }
+      final event = AnalyticsEvent(
+        id: '${day.toIso8601String()}-${type.name}-'
+            '${timestamp.microsecondsSinceEpoch}',
+        type: type,
+        timestamp: timestamp,
+        date: day,
+        properties: properties,
+      );
+      _todayEvents = [..._todayEvents, event];
+      await repo.saveAnalyticsEvent(event);
+    } catch (_) {
+      // Analytics is observation, never a precondition for training.
+    }
+  }
+
+  /// Called when the user actually begins a session, so the gap between the
+  /// plan being ready and training starting is measurable.
+  Future<void> markSessionStarted(SessionPlan plan, {DateTime? at}) =>
+      recordAnalyticsEvent(
+        AnalyticsEventType.sessionStarted,
+        at: at,
+        properties: {
+          'sessionId': plan.sessionId.name,
+          'tier': plan.tier.name,
+          'estimatedDurationMin': '${plan.estimatedDurationMin}',
+          'plannedWorkSets': '${plan.plannedWorkSets}',
+        },
+      );
+
+  /// The rest-day REHIT reminder decision: is today going unused, is a short
+  /// high-intensity exposure safe, and when would it fit?
+  RestDayRehitResult restDayRehitEligibilityAt(DateTime nowLocal) {
+    final trace = todayTrace;
+    final currentTrace =
+        trace != null && _isSameDate(trace.date, nowLocal) ? trace : null;
+    final visibleLogs = _recentLogs
+        .where((log) => !log.completedAt.isAfter(nowLocal))
+        .toList();
+    final safety = _intensityRecoveryPolicy.evaluateHighIntensitySafety(
+      logs: visibleLogs,
+      asOf: nowLocal,
+      checkInPain: currentTrace?.checkin.pain ?? const <PainFlag>[],
+      exerciseStates: exerciseStates.values,
+      travelMode: settings.travelMode,
+    );
+    final ledger = const StimulusLedgerEngine().buildFromSessionLogs(
+      logs: visibleLogs,
+      asOf: nowLocal,
+    );
+    final status = const TrainingStatusEngine()
+        .build(targets: TrainingTargets(), ledger: ledger);
+    final highIntensityTargetDue = status.aerobic
+            .firstWhere(
+              (entry) =>
+                  entry.target == AerobicTargetKind.highIntensityDistinctDays,
+            )
+            .distinctDayDeficit >
+        0;
+
+    final slot = _scheduleFitEngine.suggestSlot(
+      habits: scheduleHabitsAt(nowLocal),
+      nowLocal: nowLocal,
+      earliestHour: settings.restDayRehitNudgeEarliestHour,
+      latestHour: settings.restDayRehitNudgeLatestHour,
+    );
+
+    return _restDayRehitEngine.evaluate(
+      _restDayRehitEngine.inputFromSafety(
+        safety: safety,
+        trainingLoggedToday:
+            RestDayRehitEngine.hasTrainingOn(_recentLogs, nowLocal),
+        readinessBucket: currentTrace?.recovery.bucket,
+        illnessGuardActive: currentTrace?.firedRules.any(
+              (rule) => rule.key == RuleKey.illnessGuard,
+            ) ??
+            false,
+        highIntensityTargetDue: highIntensityTargetDue,
+        scheduleSlot: slot,
+        nowLocal: nowLocal,
+      ),
+    );
+  }
+
+  RestDayRehitResult get restDayRehitEligibility =>
+      restDayRehitEligibilityAt(DateTime.now());
+
+  /// Whether a rest-day REHIT may be *logged* right now, not merely
+  /// suggested.
+  ///
+  /// Stricter than the reminder: the reminder may go out on a day with no
+  /// check-in (inviting one), but nothing high-intensity is recorded through
+  /// this path without a GREEN readiness decision on file. Every other gate
+  /// is the same, and all of them are re-checked inside [logCardioSession].
+  bool canLogRestDayRehitAt(DateTime nowLocal) {
+    final result = restDayRehitEligibilityAt(nowLocal);
+    return result.eligible && !result.checkInMissing;
+  }
+
+  bool get canLogRestDayRehit => canLogRestDayRehitAt(DateTime.now());
+
+  /// Loads the full analytics surface. Uses the same 84-day read window as
+  /// History so both screens describe the same stretch of training.
+  Future<TrainingTimeInsights> loadInsights({
+    DateTime? asOf,
+    int windowDays = 56,
+  }) async {
+    final effectiveAsOf = asOf ?? DateTime.now();
+    final day = DateTime(
+      effectiveAsOf.year,
+      effectiveAsOf.month,
+      effectiveAsOf.day,
+    );
+    final since = day.subtract(Duration(days: windowDays - 1));
+    final logs = await repo.loadSessionLogsSince(since);
+    final events = await repo.loadAnalyticsEventsSince(since);
+    return _analyticsEngine.build(
+      logs: logs,
+      events: events,
+      asOf: effectiveAsOf,
+      windowDays: windowDays,
+    );
   }
 
   /// Loads the complete History surface and calculates its read-only dose
@@ -715,6 +900,8 @@ class AppController extends ChangeNotifier {
     settings = newSettings.copyWith(
       secondRehitNudgeScheduledDay: settings.secondRehitNudgeScheduledDay,
       secondRehitNudgeScheduledFor: settings.secondRehitNudgeScheduledFor,
+      restDayRehitNudgeScheduledDay: settings.restDayRehitNudgeScheduledDay,
+      restDayRehitNudgeScheduledFor: settings.restDayRehitNudgeScheduledFor,
     );
     await repo.saveSettings(settings);
     unawaited(syncNotifications());
@@ -787,9 +974,25 @@ class AppController extends ChangeNotifier {
         cutoffHour: settings.checkInCutoffHour,
         checkedInToday: todayTrace != null,
       );
+
+      final rehitEligibility = secondRehitEligibility;
+      if (rehitEligibility.eligible) {
+        // The first moment the app judged a second REHIT worthwhile. Recorded
+        // whether or not a push nudge is enabled, so the suggestion→completion
+        // latency is measurable for a user who never turns notifications on.
+        await recordAnalyticsEvent(
+          AnalyticsEventType.rehitSuggested,
+          at: rehitEligibility.observedAt,
+          oncePerDay: true,
+          properties: {
+            'suggestedNudgeTime':
+                rehitEligibility.suggestedNudgeTime?.toIso8601String() ?? '',
+          },
+        );
+      }
       final rehitNudgeSync = await NotificationService.syncSecondRehitNudge(
         enabled: settings.secondRehitNudgeEnabled,
-        eligibility: secondRehitEligibility,
+        eligibility: rehitEligibility,
         scheduledDay: settings.secondRehitNudgeScheduledDay,
         scheduledFor: settings.secondRehitNudgeScheduledFor,
       );
@@ -801,6 +1004,54 @@ class AppController extends ChangeNotifier {
               rehitNudgeSync.scheduledDay == null,
         );
         await repo.saveSettings(settings);
+        if (rehitNudgeSync.scheduledFor != null) {
+          await recordAnalyticsEvent(
+            AnalyticsEventType.rehitNudgeScheduled,
+            oncePerDay: true,
+            properties: {
+              'scheduledFor': rehitNudgeSync.scheduledFor!.toIso8601String(),
+            },
+          );
+        }
+      }
+
+      final restDayEligibility = restDayRehitEligibility;
+      if (restDayEligibility.eligible) {
+        await recordAnalyticsEvent(
+          AnalyticsEventType.restDayRehitSuggested,
+          at: restDayEligibility.observedAt,
+          oncePerDay: true,
+          properties: {
+            'suggestedNudgeTime':
+                restDayEligibility.suggestedNudgeTime?.toIso8601String() ?? '',
+            'slotSource': restDayEligibility.slotSource?.name ?? '',
+            'checkInMissing': '${restDayEligibility.checkInMissing}',
+          },
+        );
+      }
+      final restDayNudgeSync = await NotificationService.syncRestDayRehitNudge(
+        enabled: settings.restDayRehitNudgeEnabled,
+        eligibility: restDayEligibility,
+        scheduledDay: settings.restDayRehitNudgeScheduledDay,
+        scheduledFor: settings.restDayRehitNudgeScheduledFor,
+      );
+      if (restDayNudgeSync.stateChanged) {
+        settings = settings.copyWith(
+          restDayRehitNudgeScheduledDay: restDayNudgeSync.scheduledDay,
+          restDayRehitNudgeScheduledFor: restDayNudgeSync.scheduledFor,
+          clearRestDayRehitNudgeScheduledDay:
+              restDayNudgeSync.scheduledDay == null,
+        );
+        await repo.saveSettings(settings);
+        if (restDayNudgeSync.scheduledFor != null) {
+          await recordAnalyticsEvent(
+            AnalyticsEventType.restDayRehitNudgeScheduled,
+            oncePerDay: true,
+            properties: {
+              'scheduledFor': restDayNudgeSync.scheduledFor!.toIso8601String(),
+            },
+          );
+        }
       }
     } catch (_) {
       // best-effort only
@@ -826,6 +1077,21 @@ class AppController extends ChangeNotifier {
     );
     await repo.saveCheckIn(checkin);
     if (recovery != null) await repo.saveRecoverySnapshot(recovery);
+    await recordAnalyticsEvent(
+      AnalyticsEventType.checkInSubmitted,
+      at: checkin.timestamp,
+      oncePerDay: true,
+      properties: {
+        'timeMinutes': '$timeMinutes',
+        'subjective': '$subjective',
+        'painFlags': '${pain.length}',
+        'recoverySource': recovery == null
+            ? 'none'
+            : recovery.manualEntry
+                ? 'manual'
+                : 'oura',
+      },
+    );
     return _recomputeAndPersist(checkin: checkin, todaySnapshot: recovery);
   }
 
@@ -885,6 +1151,20 @@ class AppController extends ChangeNotifier {
     await repo.saveExerciseStates(exerciseStates);
     await repo.saveDecisionTrace(output.trace);
     todayTrace = output.trace;
+    // First plan of the day only: a swap or a settings refresh must not reset
+    // the "plan was ready at" instant the start latency is measured from.
+    await recordAnalyticsEvent(
+      AnalyticsEventType.planGenerated,
+      oncePerDay: true,
+      properties: {
+        'sessionId': output.trace.plan?.sessionId.name ?? 'rest',
+        'tier': output.trace.plan?.tier.name ?? 'none',
+        'estimatedDurationMin':
+            '${output.trace.plan?.estimatedDurationMin ?? 0}',
+        'readiness': output.trace.recovery.bucket.name,
+        'forced': '${forcedSessionId != null}',
+      },
+    );
     unawaited(syncNotifications()); // check-in done -> today's cutoff nudge moves to tomorrow
     notifyListeners();
     return output.trace;
@@ -1124,6 +1404,8 @@ class AppController extends ChangeNotifier {
     SessionPlan plan,
     List<SetLog> loggedSets, {
     required int durationMinutes,
+    DateTime? startedAt,
+    int? elapsedSeconds,
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
@@ -1132,6 +1414,8 @@ class AppController extends ChangeNotifier {
       plan,
       loggedSets,
       durationMinutes: durationMinutes,
+      startedAt: startedAt,
+      elapsedSeconds: elapsedSeconds,
       cardioCompletion: cardioCompletion,
       rehitFinisherCompletion: rehitFinisherCompletion,
       endedEarly: endedEarly,
@@ -1144,6 +1428,8 @@ class AppController extends ChangeNotifier {
     List<SetLog> loggedSets, {
     required int durationMinutes,
     required bool isSupplemental,
+    DateTime? startedAt,
+    int? elapsedSeconds,
     bool isUnplanned = false,
     bool bypassProspectiveHighIntensityGate = false,
     CardioCompletion? cardioCompletion,
@@ -1432,6 +1718,21 @@ class AppController extends ChangeNotifier {
         countsAs.add(FloorCategory.aerobic);
       }
 
+      // A bike-guided attempt has no in-app stopwatch, but its completed dose
+      // *is* its duration, so its start instant is exactly recoverable.
+      final measuredElapsedSeconds =
+          elapsedSeconds ?? cardioCompletion?.completedDurationSeconds;
+      final resolvedStartedAt = startedAt ??
+          (measuredElapsedSeconds == null
+              ? null
+              : completedAt
+                  .subtract(Duration(seconds: measuredElapsedSeconds)));
+      final timings = SessionTimings(
+        startedAt: resolvedStartedAt,
+        elapsedSeconds: measuredElapsedSeconds,
+        plannedDurationMinutes: plan.estimatedDurationMin,
+      );
+
       final log = SessionLog(
         id: '${now.toIso8601String()}-${plan.sessionId.name}-${completedAt.microsecondsSinceEpoch}',
         templateId: plan.sessionId,
@@ -1443,6 +1744,7 @@ class AppController extends ChangeNotifier {
         completedWorkSets:
             loggedSets.where((s) => !s.isWarmup && s.value > 0).length,
         durationMinutes: durationMinutes,
+        timings: timings,
         countsAs: countsAs,
         cardioCompletion: cardioCompletion ?? rehitFinisherCompletion,
         cardioCompletedAsPrescribed: cardioOnly
@@ -1460,6 +1762,32 @@ class AppController extends ChangeNotifier {
       );
       await repo.saveSessionLog(log);
       _recentLogs = [..._recentLogs, log];
+      _scheduleLogs = [..._scheduleLogs, log];
+      await recordAnalyticsEvent(
+        AnalyticsEventType.sessionCompleted,
+        at: completedAt,
+        properties: {
+          'sessionId': plan.sessionId.name,
+          'tier': plan.tier.name,
+          'plannedDurationMin': '${plan.estimatedDurationMin}',
+          'elapsedSeconds': '${measuredElapsedSeconds ?? durationMinutes * 60}',
+          'plannedWorkSets': '${plan.plannedWorkSets}',
+          'completedWorkSets': '${log.completedWorkSets}',
+          'endedEarly': '$endedEarly',
+          'supplemental': '$isSupplemental',
+        },
+      );
+      if (AnalyticsEngine.isQualifyingRehitLog(log)) {
+        await recordAnalyticsEvent(
+          AnalyticsEventType.rehitCompleted,
+          at: completedAt,
+          properties: {
+            'sessionId': plan.sessionId.name,
+            'asFinisher': '${log.rehitFinisherCompleted}',
+            'unplanned': '$isUnplanned',
+          },
+        );
+      }
       unawaited(syncNotifications());
 
       if (log.countsTowardQueueAndFloor && plan.grantsQueueCredit) {
@@ -1507,9 +1835,14 @@ class AppController extends ChangeNotifier {
         'Only the optional second-session REHIT can be logged without a plan.',
       );
     }
-    if (plan == null && !secondRehitEligibility.eligible) {
+    // Two independent openings for a plan-less REHIT: after a qualifying
+    // first session, or on a day with no training at all. Both carry the same
+    // recovery, pain, deload, travel, and target gates.
+    if (plan == null &&
+        !secondRehitEligibility.eligible &&
+        !canLogRestDayRehit) {
       throw StateError(
-        'The optional second REHIT is not currently eligible.',
+        'An optional REHIT is not currently eligible.',
       );
     }
     final effectivePlan = plan ??

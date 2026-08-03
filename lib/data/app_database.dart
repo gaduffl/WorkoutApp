@@ -16,7 +16,7 @@ class AppDatabase {
     final path = join(dir, 'morningcoach.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE exercise_states (trackKey TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE check_ins (date TEXT PRIMARY KEY, json TEXT NOT NULL)');
@@ -24,10 +24,21 @@ class AppDatabase {
         await db.execute('CREATE TABLE session_logs (id TEXT PRIMARY KEY, date TEXT NOT NULL, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE decision_traces (date TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, json TEXT NOT NULL)');
+        await _createAnalyticsEvents(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v1 -> v2 adds the analytics event timeline. Existing rows are
+        // untouched; history simply has no events before the upgrade.
+        if (oldVersion < 2) await _createAnalyticsEvents(db);
       },
     );
     return _db!;
   }
+
+  static Future<void> _createAnalyticsEvents(Database db) => db.execute(
+        'CREATE TABLE IF NOT EXISTS analytics_events '
+        '(id TEXT PRIMARY KEY, date TEXT NOT NULL, json TEXT NOT NULL)',
+      );
 
   Future<void> putJson(String table, String keyColumn, String key, Map<String, dynamic> json) async {
     final db = await open();
@@ -91,6 +102,7 @@ class AppDatabase {
     'recovery_snapshots': ['date', 'json'],
     'session_logs': ['id', 'date', 'json'],
     'decision_traces': ['date', 'json'],
+    'analytics_events': ['id', 'date', 'json'],
     'meta': ['key', 'json'],
   };
 

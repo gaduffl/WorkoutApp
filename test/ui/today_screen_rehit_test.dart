@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
+import 'package:morningcoach/engine/rest_day_rehit_engine.dart';
+import 'package:morningcoach/engine/schedule_fit_engine.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
@@ -135,6 +137,77 @@ void main() {
           servedBefore: {},
         ),
       );
+
+  group('rest-day REHIT offer', () {
+    final now = DateTime(2026, 7, 15, 13);
+
+    RestDayRehitResult restDay({
+      bool eligible = true,
+      bool checkInMissing = false,
+      ScheduleSlotSource source = ScheduleSlotSource.weekdayHabit,
+    }) =>
+        RestDayRehitResult(
+          closedReasons: eligible
+              ? const []
+              : const [RestDayRehitClosedReason.trainingLoggedToday],
+          observedAt: now,
+          suggestedNudgeTime:
+              eligible ? DateTime(2026, 7, 15, 17, 30) : null,
+          slotSource: eligible ? source : null,
+          checkInMissing: checkInMissing,
+        );
+
+    Widget todayWith(RestDayRehitResult result) =>
+        ChangeNotifierProvider<AppController>.value(
+          value: _RestDayController(result),
+          child: MaterialApp(home: TodayScreen(trace: trace(now))),
+        );
+
+    testWidgets('an untrained GREEN day offers the short bike session',
+        (tester) async {
+      await tester.pumpWidget(todayWith(restDay()));
+      await tester.pump();
+
+      expect(find.byKey(const Key('today-rest-day-rehit')), findsOneWidget);
+      expect(find.text('Nothing logged today'), findsOneWidget);
+      expect(
+        find.text('Around 17:30 fits the time you usually train.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a closed rest-day decision shows nothing', (tester) async {
+      await tester.pumpWidget(todayWith(restDay(eligible: false)));
+      await tester.pump();
+      expect(find.byKey(const Key('today-rest-day-rehit')), findsNothing);
+    });
+
+    testWidgets('without a check-in the in-app offer stays hidden',
+        (tester) async {
+      // The push reminder may still go out; logging high-intensity work
+      // without a readiness decision must not be one tap away.
+      await tester.pumpWidget(todayWith(restDay(checkInMissing: true)));
+      await tester.pump();
+      expect(find.byKey(const Key('today-rest-day-rehit')), findsNothing);
+    });
+
+    test('the slot line claims a habit only when one was learned', () {
+      expect(
+        restDayRehitSlotLine(restDay()),
+        'Around 17:30 fits the time you usually train.',
+      );
+      expect(
+        restDayRehitSlotLine(
+          restDay(source: ScheduleSlotSource.overallHabit),
+        ),
+        contains('usually train'),
+      );
+      expect(
+        restDayRehitSlotLine(restDay(source: ScheduleSlotSource.fallback)),
+        'There is still room for it around 17:30.',
+      );
+    });
+  });
 
   testWidgets('finisher hint appears only from the shared safe preview',
       (tester) async {
@@ -762,6 +835,25 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+/// Drives only the rest-day offer; every other Today decision is left at the
+/// fixture defaults so the card cannot be shown by an unrelated stub.
+class _RestDayController extends _EligibilityController {
+  final RestDayRehitResult restDay;
+
+  _RestDayController(this.restDay)
+      : super(
+          RehitEligibilityResult(
+            closedReasons: const [RehitClosedReason.noFirstSession],
+            observedAt: restDay.observedAt,
+            suggestedNudgeTime: null,
+          ),
+          loggedToday: false,
+        );
+
+  @override
+  RestDayRehitResult restDayRehitEligibilityAt(DateTime nowLocal) => restDay;
 }
 
 class _EligibilityController extends AppController {

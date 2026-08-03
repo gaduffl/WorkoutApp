@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../ai/ai_explainer.dart';
 import '../../engine/cardio_engine.dart';
+import '../../engine/rest_day_rehit_engine.dart';
+import '../../engine/schedule_fit_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../models/decision_trace.dart';
 import '../../models/plan.dart';
@@ -149,6 +151,21 @@ String candidateReason(ScoredCandidate candidate) {
     return 'Prioritized for your weekend schedule';
   }
   return 'Next up in your rotation';
+}
+
+/// One line describing when the rest-day REHIT would fit, claiming a learned
+/// habit only when the slot really came from training history.
+String restDayRehitSlotLine(RestDayRehitResult result) {
+  final at = result.suggestedNudgeTime;
+  if (at == null) return 'A short bike session would still fit today.';
+  final clock = '${at.hour.toString().padLeft(2, '0')}:'
+      '${at.minute.toString().padLeft(2, '0')}';
+  return switch (result.slotSource) {
+    ScheduleSlotSource.weekdayHabit ||
+    ScheduleSlotSource.overallHabit =>
+      'Around $clock fits the time you usually train.',
+    _ => 'There is still room for it around $clock.',
+  };
 }
 
 /// Fully pain-blocked strength candidates remain in the trace for audit, but
@@ -336,6 +353,22 @@ class _TodayScreenState extends State<TodayScreen> {
     }();
     final secondRehitEligibility = controller.secondRehitEligibility;
     final secondRehitPrescription = secondRehitEligibility.eligible
+        ? const CardioEngine().prescriptionFor(
+            sessionId: SessionTypeId.s7,
+            durationMinutes:
+                sessionTypes[SessionTypeId.s7]!.fullDurationMin,
+            heartRateMaxBpm: controller.settings.hrMax,
+          )
+        : null;
+    // The rest-day offer is the in-app half of the same reminder the push
+    // nudge sends. It appears only while today is genuinely unused, and never
+    // beside a plan that is already the same short bike session.
+    final restDayRehit = controller.restDayRehitEligibilityAt(DateTime.now());
+    final restDayRehitPrescription = restDayRehit.eligible &&
+            !restDayRehit.checkInMissing &&
+            secondRehitPrescription == null &&
+            plan?.sessionId != SessionTypeId.s7 &&
+            plan?.sessionId != SessionTypeId.s3
         ? const CardioEngine().prescriptionFor(
             sessionId: SessionTypeId.s7,
             durationMinutes:
@@ -586,6 +619,43 @@ class _TodayScreenState extends State<TodayScreen> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       ...cardioPrescriptionSummaryLines(secondRehitPrescription)
+                          .map((line) => Text(line)),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.bolt),
+                          onPressed: _loggingCardio
+                              ? null
+                              : () => _logCardio(SessionTypeId.s7),
+                          label: const Text('Log CAROL preset'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (restDayRehitPrescription != null) ...[
+              const SizedBox(height: 12),
+              Card(
+                key: const Key('today-rest-day-rehit'),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nothing logged today',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        restDayRehitSlotLine(restDayRehit),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 6),
+                      ...cardioPrescriptionSummaryLines(restDayRehitPrescription)
                           .map((line) => Text(line)),
                       const SizedBox(height: 8),
                       Align(

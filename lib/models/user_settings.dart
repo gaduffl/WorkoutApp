@@ -51,6 +51,21 @@ class UserSettings {
   /// that day rather than risking a duplicate notification.
   final DateTime? secondRehitNudgeScheduledFor;
 
+  /// Opt-in push reminder on days where *nothing* has been trained yet and a
+  /// short REHIT would still fit the time the user normally trains. Separate
+  /// from [secondRehitNudgeEnabled], which only fires after a first session.
+  final bool restDayRehitNudgeEnabled;
+
+  /// Internal local-day / exact-target markers for the rest-day reminder,
+  /// mirroring the second-REHIT pair so a restart cannot double-schedule.
+  final String? restDayRehitNudgeScheduledDay;
+  final DateTime? restDayRehitNudgeScheduledFor;
+
+  /// Earliest and latest local hour a rest-day reminder may be delivered.
+  /// The exact minute inside that window comes from observed training times.
+  final int restDayRehitNudgeEarliestHour;
+  final int restDayRehitNudgeLatestHour;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -71,7 +86,15 @@ class UserSettings {
     this.secondRehitNudgeEnabled = false,
     this.secondRehitNudgeScheduledDay,
     this.secondRehitNudgeScheduledFor,
-  });
+    this.restDayRehitNudgeEnabled = false,
+    this.restDayRehitNudgeScheduledDay,
+    this.restDayRehitNudgeScheduledFor,
+    this.restDayRehitNudgeEarliestHour = 8,
+    this.restDayRehitNudgeLatestHour = 20,
+  })  : assert(restDayRehitNudgeEarliestHour >= 0 &&
+            restDayRehitNudgeEarliestHour <= 23),
+        assert(restDayRehitNudgeLatestHour >= 1 &&
+            restDayRehitNudgeLatestHour <= 24);
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
   double get hrMax => hrMaxOverride ?? (208 - 0.7 * age);
@@ -97,9 +120,15 @@ class UserSettings {
     bool? secondRehitNudgeEnabled,
     String? secondRehitNudgeScheduledDay,
     DateTime? secondRehitNudgeScheduledFor,
+    bool? restDayRehitNudgeEnabled,
+    String? restDayRehitNudgeScheduledDay,
+    DateTime? restDayRehitNudgeScheduledFor,
+    int? restDayRehitNudgeEarliestHour,
+    int? restDayRehitNudgeLatestHour,
     bool clearHrMaxOverride = false,
     bool clearAnthropicApiKey = false,
     bool clearSecondRehitNudgeScheduledDay = false,
+    bool clearRestDayRehitNudgeScheduledDay = false,
   }) {
     return UserSettings(
       equipment: equipment ?? this.equipment,
@@ -129,6 +158,18 @@ class UserSettings {
       secondRehitNudgeScheduledFor: clearSecondRehitNudgeScheduledDay
           ? null
           : secondRehitNudgeScheduledFor ?? this.secondRehitNudgeScheduledFor,
+      restDayRehitNudgeEnabled:
+          restDayRehitNudgeEnabled ?? this.restDayRehitNudgeEnabled,
+      restDayRehitNudgeScheduledDay: clearRestDayRehitNudgeScheduledDay
+          ? null
+          : restDayRehitNudgeScheduledDay ?? this.restDayRehitNudgeScheduledDay,
+      restDayRehitNudgeScheduledFor: clearRestDayRehitNudgeScheduledDay
+          ? null
+          : restDayRehitNudgeScheduledFor ?? this.restDayRehitNudgeScheduledFor,
+      restDayRehitNudgeEarliestHour:
+          restDayRehitNudgeEarliestHour ?? this.restDayRehitNudgeEarliestHour,
+      restDayRehitNudgeLatestHour:
+          restDayRehitNudgeLatestHour ?? this.restDayRehitNudgeLatestHour,
     );
   }
 }

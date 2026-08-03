@@ -2,107 +2,149 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../engine/rehit_eligibility_engine.dart';
+import '../engine/rest_day_rehit_engine.dart';
+import '../engine/schedule_fit_engine.dart';
+import '../models/daily_nudge.dart';
 
 const secondRehitNudgeTitle = 'Still up for CAROL REHIT Intense?';
 const secondRehitNudgeBody =
     'The bike-guided CAROL REHIT Intense preset can add one short high-intensity exposure today.';
 
-String _secondRehitNudgeDay(DateTime now) =>
-    '${now.year.toString().padLeft(4, '0')}-'
+const restDayRehitNudgeTitle = 'Nothing logged today';
+const restDayRehitNudgeBody =
+    'The bike-guided CAROL REHIT Intense preset fits the time you usually train.';
+const restDayRehitNudgeCheckInBody =
+    'The bike-guided CAROL REHIT Intense preset fits the time you usually train. Check in first so the app can confirm today is a good day for it.';
+
+/// Body text for the rest-day reminder. A learned slot is claimed as "the
+/// time you usually train" only when the slot really came from history; a
+/// fallback time says nothing about the user's habits.
+String restDayRehitNudgeBodyFor({
+  required bool checkInMissing,
+  ScheduleSlotSource? slotSource,
+}) {
+  final learned = slotSource == ScheduleSlotSource.weekdayHabit ||
+      slotSource == ScheduleSlotSource.overallHabit;
+  if (learned) {
+    return checkInMissing ? restDayRehitNudgeCheckInBody : restDayRehitNudgeBody;
+  }
+  const generic =
+      'The bike-guided CAROL REHIT Intense preset is one short session you could still fit in.';
+  return checkInMissing
+      ? '$generic Check in first so the app can confirm today is a good day for it.'
+      : generic;
+}
+
+String _nudgeDay(DateTime now) => '${now.year.toString().padLeft(4, '0')}-'
     '${now.month.toString().padLeft(2, '0')}-'
     '${now.day.toString().padLeft(2, '0')}';
 
-enum SecondRehitNudgeSyncDecision { cancel, keep, schedule }
+enum DailyNudgeSyncDecision { cancel, keep, schedule }
 
 /// Explicit marker mutation returned by the best-effort platform sync. A
 /// nullable day alone cannot distinguish "keep the current marker" from
 /// "clear it after cancellation".
-class SecondRehitNudgeSyncOutcome {
+class DailyNudgeSyncOutcome {
   final bool stateChanged;
   final String? scheduledDay;
   final DateTime? scheduledFor;
 
-  const SecondRehitNudgeSyncOutcome({
+  const DailyNudgeSyncOutcome({
     required this.stateChanged,
     required this.scheduledDay,
     required this.scheduledFor,
   });
 }
 
+/// Retained names for the second-session REHIT nudge, which was the only
+/// once-per-day nudge before the rest-day reminder shared this machinery.
+typedef SecondRehitNudgeSyncDecision = DailyNudgeSyncDecision;
+typedef SecondRehitNudgeSyncOutcome = DailyNudgeSyncOutcome;
+
 /// Pure once-per-local-day gate used before touching the notification
 /// plugin. Cancellation always wins when the feature is disabled or no
 /// longer eligible.
-SecondRehitNudgeSyncDecision secondRehitNudgeSyncDecision({
+DailyNudgeSyncDecision dailyNudgeSyncDecision({
   required bool enabled,
-  required RehitEligibilityResult eligibility,
+  required DailyNudgeEligibility eligibility,
   required String? scheduledDay,
 }) {
   if (!enabled || !eligibility.eligible) {
-    return SecondRehitNudgeSyncDecision.cancel;
+    return DailyNudgeSyncDecision.cancel;
   }
-  if (scheduledDay == _secondRehitNudgeDay(eligibility.observedAt)) {
-    return SecondRehitNudgeSyncDecision.keep;
+  if (scheduledDay == _nudgeDay(eligibility.observedAt)) {
+    return DailyNudgeSyncDecision.keep;
   }
   return eligibility.suggestedNudgeTime == null
-      ? SecondRehitNudgeSyncDecision.cancel
-      : SecondRehitNudgeSyncDecision.schedule;
+      ? DailyNudgeSyncDecision.cancel
+      : DailyNudgeSyncDecision.schedule;
 }
+
+DailyNudgeSyncDecision secondRehitNudgeSyncDecision({
+  required bool enabled,
+  required DailyNudgeEligibility eligibility,
+  required String? scheduledDay,
+}) =>
+    dailyNudgeSyncDecision(
+      enabled: enabled,
+      eligibility: eligibility,
+      scheduledDay: scheduledDay,
+    );
 
 /// Pure marker transition paired with [secondRehitNudgeSyncDecision]. A
 /// successful cancellation clears the marker, allowing a genuinely eligible
 /// result later the same day to schedule once again. A failed platform
 /// operation keeps the old marker so an existing notification cannot become
 /// untracked or be duplicated.
-SecondRehitNudgeSyncOutcome secondRehitNudgeMarkerTransition({
-  required SecondRehitNudgeSyncDecision decision,
-  required RehitEligibilityResult eligibility,
+DailyNudgeSyncOutcome dailyNudgeMarkerTransition({
+  required DailyNudgeSyncDecision decision,
+  required DailyNudgeEligibility eligibility,
   required String? scheduledDay,
   required DateTime? scheduledFor,
   bool operationSucceeded = true,
 }) {
   switch (decision) {
-    case SecondRehitNudgeSyncDecision.cancel:
+    case DailyNudgeSyncDecision.cancel:
       if (!operationSucceeded) {
-        return SecondRehitNudgeSyncOutcome(
+        return DailyNudgeSyncOutcome(
           stateChanged: false,
           scheduledDay: scheduledDay,
           scheduledFor: scheduledFor,
         );
       }
-      final observedDay = _secondRehitNudgeDay(eligibility.observedAt);
+      final observedDay = _nudgeDay(eligibility.observedAt);
       final targetMayHaveFired = scheduledDay == observedDay &&
           (scheduledFor == null ||
               !eligibility.observedAt.isBefore(scheduledFor));
       if (targetMayHaveFired) {
-        return SecondRehitNudgeSyncOutcome(
+        return DailyNudgeSyncOutcome(
           stateChanged: false,
           scheduledDay: scheduledDay,
           scheduledFor: scheduledFor,
         );
       }
-      return SecondRehitNudgeSyncOutcome(
+      return DailyNudgeSyncOutcome(
         stateChanged: scheduledDay != null || scheduledFor != null,
         scheduledDay: null,
         scheduledFor: null,
       );
-    case SecondRehitNudgeSyncDecision.keep:
-      return SecondRehitNudgeSyncOutcome(
+    case DailyNudgeSyncDecision.keep:
+      return DailyNudgeSyncOutcome(
         stateChanged: false,
         scheduledDay: scheduledDay,
         scheduledFor: scheduledFor,
       );
-    case SecondRehitNudgeSyncDecision.schedule:
+    case DailyNudgeSyncDecision.schedule:
       if (!operationSucceeded) {
-        return SecondRehitNudgeSyncOutcome(
+        return DailyNudgeSyncOutcome(
           stateChanged: false,
           scheduledDay: scheduledDay,
           scheduledFor: scheduledFor,
         );
       }
-      final nextDay = _secondRehitNudgeDay(eligibility.observedAt);
+      final nextDay = _nudgeDay(eligibility.observedAt);
       final nextTarget = eligibility.suggestedNudgeTime;
-      return SecondRehitNudgeSyncOutcome(
+      return DailyNudgeSyncOutcome(
         stateChanged:
             scheduledDay != nextDay || scheduledFor != nextTarget,
         scheduledDay: nextDay,
@@ -110,6 +152,21 @@ SecondRehitNudgeSyncOutcome secondRehitNudgeMarkerTransition({
       );
   }
 }
+
+DailyNudgeSyncOutcome secondRehitNudgeMarkerTransition({
+  required DailyNudgeSyncDecision decision,
+  required DailyNudgeEligibility eligibility,
+  required String? scheduledDay,
+  required DateTime? scheduledFor,
+  bool operationSucceeded = true,
+}) =>
+    dailyNudgeMarkerTransition(
+      decision: decision,
+      eligibility: eligibility,
+      scheduledDay: scheduledDay,
+      scheduledFor: scheduledFor,
+      operationSucceeded: operationSucceeded,
+    );
 
 /// §3.1 wake-window nudge ("Ready to plan today?") and §12 no-check-in
 /// cutoff ("No plan yet - tap for a 20-min default").
@@ -124,6 +181,7 @@ class NotificationService {
   static const _wakeId = 1;
   static const _cutoffId = 2;
   static const _secondRehitId = 3;
+  static const _restDayRehitId = 4;
 
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(
@@ -250,19 +308,60 @@ class NotificationService {
 
   /// Keeps one optional second-session REHIT nudge in sync with the current
   /// log state. This is a single inexact notification, never a daily alarm.
-  static Future<SecondRehitNudgeSyncOutcome> syncSecondRehitNudge({
+  static Future<DailyNudgeSyncOutcome> syncSecondRehitNudge({
     required bool enabled,
-    required RehitEligibilityResult eligibility,
+    required DailyNudgeEligibility eligibility,
     required String? scheduledDay,
     required DateTime? scheduledFor,
+  }) =>
+      _syncDailyNudge(
+        notificationId: _secondRehitId,
+        enabled: enabled,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+        title: secondRehitNudgeTitle,
+        body: secondRehitNudgeBody,
+      );
+
+  /// Keeps the rest-day REHIT reminder in sync. Same once-per-day contract as
+  /// the second-session nudge; the two are mutually exclusive by construction
+  /// (one requires a completed first session, the other requires none).
+  static Future<DailyNudgeSyncOutcome> syncRestDayRehitNudge({
+    required bool enabled,
+    required RestDayRehitResult eligibility,
+    required String? scheduledDay,
+    required DateTime? scheduledFor,
+  }) =>
+      _syncDailyNudge(
+        notificationId: _restDayRehitId,
+        enabled: enabled,
+        eligibility: eligibility,
+        scheduledDay: scheduledDay,
+        scheduledFor: scheduledFor,
+        title: restDayRehitNudgeTitle,
+        body: restDayRehitNudgeBodyFor(
+          checkInMissing: eligibility.checkInMissing,
+          slotSource: eligibility.slotSource,
+        ),
+      );
+
+  static Future<DailyNudgeSyncOutcome> _syncDailyNudge({
+    required int notificationId,
+    required bool enabled,
+    required DailyNudgeEligibility eligibility,
+    required String? scheduledDay,
+    required DateTime? scheduledFor,
+    required String title,
+    required String body,
   }) async {
-    final decision = secondRehitNudgeSyncDecision(
+    final decision = dailyNudgeSyncDecision(
       enabled: enabled,
       eligibility: eligibility,
       scheduledDay: scheduledDay,
     );
-    if (decision == SecondRehitNudgeSyncDecision.keep) {
-      return secondRehitNudgeMarkerTransition(
+    if (decision == DailyNudgeSyncDecision.keep) {
+      return dailyNudgeMarkerTransition(
         decision: decision,
         eligibility: eligibility,
         scheduledDay: scheduledDay,
@@ -270,7 +369,7 @@ class NotificationService {
       );
     }
     if (!await _init()) {
-      return secondRehitNudgeMarkerTransition(
+      return dailyNudgeMarkerTransition(
         decision: decision,
         eligibility: eligibility,
         scheduledDay: scheduledDay,
@@ -279,9 +378,9 @@ class NotificationService {
       );
     }
     try {
-      await _plugin.cancel(_secondRehitId);
-      if (decision != SecondRehitNudgeSyncDecision.schedule) {
-        return secondRehitNudgeMarkerTransition(
+      await _plugin.cancel(notificationId);
+      if (decision != DailyNudgeSyncDecision.schedule) {
+        return dailyNudgeMarkerTransition(
           decision: decision,
           eligibility: eligibility,
           scheduledDay: scheduledDay,
@@ -301,15 +400,15 @@ class NotificationService {
         target.second,
       );
       await _plugin.zonedSchedule(
-        _secondRehitId,
-        secondRehitNudgeTitle,
-        secondRehitNudgeBody,
+        notificationId,
+        title,
+        body,
         localTarget,
         _trainingNudgeDetails,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
-      return secondRehitNudgeMarkerTransition(
+      return dailyNudgeMarkerTransition(
         decision: decision,
         eligibility: eligibility,
         scheduledDay: scheduledDay,
@@ -317,7 +416,7 @@ class NotificationService {
       );
     } catch (_) {
       // best-effort only
-      return secondRehitNudgeMarkerTransition(
+      return dailyNudgeMarkerTransition(
         decision: decision,
         eligibility: eligibility,
         scheduledDay: scheduledDay,
