@@ -66,6 +66,17 @@ class _LoggerScreenState extends State<LoggerScreen> {
   bool _warmupRunning = false;
   final _stopwatch = Stopwatch()..start();
 
+  /// Wall-clock start of the session, and of the step currently on screen.
+  /// Both are needed: the stopwatch measures elapsed time exactly, while the
+  /// timestamps place the session in the day for schedule analysis.
+  final DateTime _sessionStartedAt = DateTime.now();
+  DateTime _stepStartedAt = DateTime.now();
+
+  /// Prescribed rest counting down into the current step (0 when the previous
+  /// step had none). Recorded per set so rest and work can be separated
+  /// afterwards without guessing.
+  int _plannedRestIntoStep = 0;
+
   List<PlannedExercise> get _ex => widget.plan.exercises;
   PlannedExercise get _exercise => _ex[_steps[_current].exIdx];
   bool get _hasSupersets => _ex.any((e) => !e.isWarmup && e.supersetGroup != null);
@@ -78,6 +89,14 @@ class _LoggerScreenState extends State<LoggerScreen> {
     }
     _steps = _buildSteps(_superset);
     _syncSetInputs();
+    // Fire-and-forget: the session start observation must never delay the
+    // first step appearing, and a missing provider (logger tests, legacy
+    // callers) simply means no event.
+    final controller = Provider.of<AppController?>(context, listen: false);
+    unawaited(
+      controller?.markSessionStarted(widget.plan, at: _sessionStartedAt) ??
+          Future<void>.value(),
+    );
   }
 
   @override
@@ -164,6 +183,11 @@ class _LoggerScreenState extends State<LoggerScreen> {
   }
 
   void _syncSetInputs() {
+    // Each step is timed from the moment it becomes visible. Callers that
+    // move into a step behind a running rest timer restore
+    // [_plannedRestIntoStep] straight after.
+    _stepStartedAt = DateTime.now();
+    _plannedRestIntoStep = 0;
     _holdTimer?.cancel();
     _holdRunning = false;
     // Default to the TOP of the target range so the user rarely has to step it
@@ -366,6 +390,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
       painFlag: _painFlag,
       isWarmup: ex.isWarmup,
       timestamp: DateTime.now(),
+      startedAt: _stepStartedAt,
+      plannedRestSecondsBefore: _plannedRestIntoStep,
     );
     setState(() {
       _logged.add(log);
@@ -383,6 +409,9 @@ class _LoggerScreenState extends State<LoggerScreen> {
       if (!wasLast) {
         _current++;
         _syncSetInputs();
+        // The next step opens with this rest already running, so its cycle
+        // splits into prescribed rest plus everything after it.
+        _plannedRestIntoStep = restSeconds ?? 0;
       }
     });
     // Logging the final set finishes the workout automatically.
@@ -454,6 +483,10 @@ class _LoggerScreenState extends State<LoggerScreen> {
         widget.plan,
         _logged,
         durationMinutes: _stopwatch.elapsed.inMinutes.clamp(1, 999),
+        // The stopwatch is the exact measurement; durationMinutes stays as
+        // the whole-minute value every existing consumer already reads.
+        startedAt: _sessionStartedAt,
+        elapsedSeconds: _stopwatch.elapsed.inSeconds,
         rehitFinisherCompletion: rehitCompletion,
         endedEarly: endedEarly,
       );

@@ -1,3 +1,4 @@
+import '../models/analytics_event.dart';
 import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
@@ -13,6 +14,7 @@ import '../models/plan.dart';
 import '../models/recovery_snapshot.dart';
 import '../models/rule_key.dart';
 import '../models/session_log.dart';
+import '../models/session_timing.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
 import '../models/training_status.dart';
@@ -182,6 +184,8 @@ Map<String, dynamic> setLogToJson(SetLog s) => {
       'painFlag': s.painFlag,
       'isWarmup': s.isWarmup,
       'timestamp': s.timestamp.toIso8601String(),
+      'startedAt': s.startedAt?.toIso8601String(),
+      'plannedRestSecondsBefore': s.plannedRestSecondsBefore,
     };
 
 SetLog setLogFromJson(Map<String, dynamic> j) => SetLog(
@@ -195,7 +199,56 @@ SetLog setLogFromJson(Map<String, dynamic> j) => SetLog(
       painFlag: j['painFlag'] as bool? ?? false,
       isWarmup: j['isWarmup'] as bool? ?? false,
       timestamp: DateTime.parse(j['timestamp'] as String),
+      startedAt: _tryParseOptionalDateTime(j['startedAt']),
+      plannedRestSecondsBefore: (j['plannedRestSecondsBefore'] as num?)?.toInt(),
     );
+
+Map<String, dynamic> sessionTimingsToJson(SessionTimings t) => {
+      'startedAt': t.startedAt?.toIso8601String(),
+      'elapsedSeconds': t.elapsedSeconds,
+      'plannedDurationMinutes': t.plannedDurationMinutes,
+    };
+
+SessionTimings sessionTimingsFromJson(Map<String, dynamic> j) => SessionTimings(
+      startedAt: _tryParseOptionalDateTime(j['startedAt']),
+      elapsedSeconds: (j['elapsedSeconds'] as num?)?.toInt(),
+      plannedDurationMinutes: (j['plannedDurationMinutes'] as num?)?.toInt(),
+    );
+
+Map<String, dynamic> analyticsEventToJson(AnalyticsEvent e) => {
+      'id': e.id,
+      'type': e.type.name,
+      'timestamp': e.timestamp.toIso8601String(),
+      'date': _dateStr(e.date),
+      'properties': e.properties,
+    };
+
+/// Returns null for an event whose type this build does not know, so a
+/// backup written by a newer version can be restored without losing the rest
+/// of the timeline.
+AnalyticsEvent? analyticsEventFromJson(Map<String, dynamic> j) {
+  final rawType = j['type'];
+  AnalyticsEventType? type;
+  for (final candidate in AnalyticsEventType.values) {
+    if (candidate.name == rawType) type = candidate;
+  }
+  final timestamp = _tryParseOptionalDateTime(j['timestamp']);
+  final id = j['id'];
+  if (type == null || timestamp == null || id is! String) return null;
+  final rawProperties = j['properties'];
+  return AnalyticsEvent(
+    id: id,
+    type: type,
+    timestamp: timestamp,
+    date: _tryParseOptionalDateTime(j['date']),
+    properties: rawProperties is Map
+        ? {
+            for (final entry in rawProperties.entries)
+              entry.key.toString(): entry.value.toString(),
+          }
+        : const {},
+  );
+}
 
 Map<String, dynamic> cardioProtocolToJson(CardioProtocol protocol) => {
       'type': protocol.type.name,
@@ -283,6 +336,7 @@ Map<String, dynamic> sessionLogToJson(SessionLog l) => {
       'plannedWorkSets': l.plannedWorkSets,
       'completedWorkSets': l.completedWorkSets,
       'durationMinutes': l.durationMinutes,
+      'timings': l.timings == null ? null : sessionTimingsToJson(l.timings!),
       'notes': l.notes,
       'cardioCompletion': l.cardioCompletion == null
           ? null
@@ -331,6 +385,9 @@ SessionLog sessionLogFromJson(Map<String, dynamic> j) => SessionLog(
       plannedWorkSets: j['plannedWorkSets'] as int,
       completedWorkSets: j['completedWorkSets'] as int,
       durationMinutes: j['durationMinutes'] as int,
+      timings: j['timings'] is Map<String, dynamic>
+          ? sessionTimingsFromJson(j['timings'] as Map<String, dynamic>)
+          : null,
       notes: j['notes'] as String?,
       cardioCompletion: j['cardioCompletion'] == null
           ? null
@@ -430,6 +487,12 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'secondRehitNudgeScheduledDay': u.secondRehitNudgeScheduledDay,
       'secondRehitNudgeScheduledFor':
           u.secondRehitNudgeScheduledFor?.toIso8601String(),
+      'restDayRehitNudgeEnabled': u.restDayRehitNudgeEnabled,
+      'restDayRehitNudgeScheduledDay': u.restDayRehitNudgeScheduledDay,
+      'restDayRehitNudgeScheduledFor':
+          u.restDayRehitNudgeScheduledFor?.toIso8601String(),
+      'restDayRehitNudgeEarliestHour': u.restDayRehitNudgeEarliestHour,
+      'restDayRehitNudgeLatestHour': u.restDayRehitNudgeLatestHour,
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -453,7 +516,38 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       secondRehitNudgeScheduledDay: j['secondRehitNudgeScheduledDay'] as String?,
       secondRehitNudgeScheduledFor:
           _tryParseOptionalDateTime(j['secondRehitNudgeScheduledFor']),
+      restDayRehitNudgeEnabled:
+          j['restDayRehitNudgeEnabled'] as bool? ?? false,
+      restDayRehitNudgeScheduledDay:
+          j['restDayRehitNudgeScheduledDay'] as String?,
+      restDayRehitNudgeScheduledFor:
+          _tryParseOptionalDateTime(j['restDayRehitNudgeScheduledFor']),
+      restDayRehitNudgeEarliestHour: _clampHour(
+        j['restDayRehitNudgeEarliestHour'],
+        fallback: 8,
+        min: 0,
+        max: 23,
+      ),
+      restDayRehitNudgeLatestHour: _clampHour(
+        j['restDayRehitNudgeLatestHour'],
+        fallback: 20,
+        min: 1,
+        max: 24,
+      ),
     );
+
+/// A persisted hour outside the legal range would trip the settings
+/// assertions on load and make the app unopenable, so clamp instead.
+int _clampHour(
+  Object? value, {
+  required int fallback,
+  required int min,
+  required int max,
+}) {
+  final parsed = value is num ? value.toInt() : null;
+  if (parsed == null) return fallback;
+  return parsed < min ? min : (parsed > max ? max : parsed);
+}
 
 Map<String, dynamic> firedRuleToJson(FiredRule r) => {
       'key': r.key.name,

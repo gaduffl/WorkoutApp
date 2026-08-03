@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
+import 'package:morningcoach/engine/rest_day_rehit_engine.dart';
+import 'package:morningcoach/engine/schedule_fit_engine.dart';
 import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/notifications/notification_service.dart';
 
@@ -234,6 +236,157 @@ void main() {
       expect(outcome.stateChanged, isFalse);
       expect(outcome.scheduledDay, '2026-07-15');
       expect(outcome.scheduledFor, isNull);
+    });
+  });
+
+  group('rest-day REHIT reminder copy', () {
+    test('claims a usual training time only when one was learned', () {
+      expect(
+        restDayRehitNudgeBodyFor(
+          checkInMissing: false,
+          slotSource: ScheduleSlotSource.weekdayHabit,
+        ),
+        contains('the time you usually train'),
+      );
+      expect(
+        restDayRehitNudgeBodyFor(
+          checkInMissing: false,
+          slotSource: ScheduleSlotSource.overallHabit,
+        ),
+        contains('the time you usually train'),
+      );
+      expect(
+        restDayRehitNudgeBodyFor(
+          checkInMissing: false,
+          slotSource: ScheduleSlotSource.fallback,
+        ),
+        isNot(contains('usually train')),
+      );
+      expect(
+        restDayRehitNudgeBodyFor(checkInMissing: false, slotSource: null),
+        isNot(contains('usually train')),
+      );
+    });
+
+    test('asks for a check-in when readiness is unknown', () {
+      expect(
+        restDayRehitNudgeBodyFor(
+          checkInMissing: true,
+          slotSource: ScheduleSlotSource.weekdayHabit,
+        ),
+        contains('Check in first'),
+      );
+      expect(
+        restDayRehitNudgeBodyFor(
+          checkInMissing: false,
+          slotSource: ScheduleSlotSource.weekdayHabit,
+        ),
+        isNot(contains('Check in first')),
+      );
+    });
+
+    test('never asserts a duration the CAROL preset does not have', () {
+      for (final missing in [true, false]) {
+        for (final source in [
+          ScheduleSlotSource.weekdayHabit,
+          ScheduleSlotSource.fallback,
+          null,
+        ]) {
+          final body = restDayRehitNudgeBodyFor(
+            checkInMissing: missing,
+            slotSource: source,
+          );
+          expect(body, isNot(contains('minute')));
+          expect(body, contains('CAROL REHIT Intense'));
+        }
+      }
+    });
+  });
+
+  group('the rest-day reminder shares the once-per-day gate', () {
+    RestDayRehitResult result({
+      required bool eligible,
+      required DateTime observedAt,
+      DateTime? suggestedNudgeTime,
+    }) =>
+        RestDayRehitResult(
+          closedReasons: eligible
+              ? const []
+              : const [RestDayRehitClosedReason.trainingLoggedToday],
+          observedAt: observedAt,
+          suggestedNudgeTime: eligible ? suggestedNudgeTime : null,
+          slotSource: eligible ? ScheduleSlotSource.weekdayHabit : null,
+          checkInMissing: false,
+        );
+
+    final observedAt = DateTime(2026, 8, 3, 10);
+
+    test('schedules once, then keeps the same day marker', () {
+      final eligible = result(
+        eligible: true,
+        observedAt: observedAt,
+        suggestedNudgeTime: DateTime(2026, 8, 3, 17),
+      );
+      expect(
+        dailyNudgeSyncDecision(
+          enabled: true,
+          eligibility: eligible,
+          scheduledDay: null,
+        ),
+        DailyNudgeSyncDecision.schedule,
+      );
+      final outcome = dailyNudgeMarkerTransition(
+        decision: DailyNudgeSyncDecision.schedule,
+        eligibility: eligible,
+        scheduledDay: null,
+        scheduledFor: null,
+      );
+      expect(outcome.stateChanged, isTrue);
+      expect(outcome.scheduledDay, '2026-08-03');
+      expect(outcome.scheduledFor, DateTime(2026, 8, 3, 17));
+      expect(
+        dailyNudgeSyncDecision(
+          enabled: true,
+          eligibility: eligible,
+          scheduledDay: outcome.scheduledDay,
+        ),
+        DailyNudgeSyncDecision.keep,
+      );
+    });
+
+    test('training logged later in the day cancels a pending reminder', () {
+      final closed = result(eligible: false, observedAt: observedAt);
+      expect(
+        dailyNudgeSyncDecision(
+          enabled: true,
+          eligibility: closed,
+          scheduledDay: '2026-08-03',
+        ),
+        DailyNudgeSyncDecision.cancel,
+      );
+      final outcome = dailyNudgeMarkerTransition(
+        decision: DailyNudgeSyncDecision.cancel,
+        eligibility: closed,
+        scheduledDay: '2026-08-03',
+        scheduledFor: DateTime(2026, 8, 3, 17),
+      );
+      expect(outcome.stateChanged, isTrue);
+      expect(outcome.scheduledDay, isNull);
+    });
+
+    test('disabled always cancels', () {
+      expect(
+        dailyNudgeSyncDecision(
+          enabled: false,
+          eligibility: result(
+            eligible: true,
+            observedAt: observedAt,
+            suggestedNudgeTime: DateTime(2026, 8, 3, 17),
+          ),
+          scheduledDay: null,
+        ),
+        DailyNudgeSyncDecision.cancel,
+      );
     });
   });
 }

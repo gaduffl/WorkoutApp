@@ -1,4 +1,5 @@
 import '../engine/queue_engine.dart';
+import '../models/analytics_event.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/exercise_state.dart';
@@ -96,6 +97,22 @@ class Repository {
     await db.putJsonWithDate('session_logs', log.id, log.date, sessionLogToJson(log));
   }
 
+  /// Append-only analytics timeline. Writes are best-effort at the call site:
+  /// losing an observation must never cost the user a workout.
+  Future<void> saveAnalyticsEvent(AnalyticsEvent event) async {
+    await db.putJsonWithDate(
+      'analytics_events',
+      event.id,
+      event.timestamp,
+      analyticsEventToJson(event),
+    );
+  }
+
+  Future<List<AnalyticsEvent>> loadAnalyticsEventsSince(DateTime since) async {
+    final rows = await db.getJsonSince('analytics_events', 'date', since);
+    return rows.map(analyticsEventFromJson).nonNulls.toList();
+  }
+
   Future<void> saveDecisionTrace(DecisionTrace trace) async {
     await db.putJson('decision_traces', 'date', _dateKey(trace.date), decisionTraceToJson(trace));
   }
@@ -122,6 +139,10 @@ class Repository {
     await db.deleteByDatePrefix('recovery_snapshots', 'date', prefix);
     await db.deleteByDatePrefix('decision_traces', 'date', prefix);
     await db.deleteByDatePrefix('session_logs', 'date', prefix);
+    // The analytics timeline describes the day that is being erased, so it
+    // goes with it — otherwise "Reset day" would leave latencies pointing at
+    // a check-in and a session that no longer exist.
+    await db.deleteByDatePrefix('analytics_events', 'date', prefix);
   }
 
   /// A snapshot of exercise-state + queue taken at the start of a calendar

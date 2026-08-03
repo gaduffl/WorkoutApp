@@ -67,6 +67,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final tile = find.text('Progression rules');
+    // Settings is a lazily built ListView, so the tile has to be scrolled
+    // into view before it exists in the tree.
+    await tester.scrollUntilVisible(
+      tile,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(tile, findsOneWidget);
 
     await tester.tap(tile);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../engine/schedule_fit_engine.dart';
 import '../../models/ladders.dart';
 import '../../models/movement_pattern.dart';
 import '../../notifications/notification_service.dart';
@@ -8,6 +9,7 @@ import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
 import '../widgets/progression_help_dialog.dart';
+import 'insights_screen.dart' show formatMinuteOfDay;
 
 String _editableHrMax(double? value) {
   if (value == null) return '';
@@ -98,10 +100,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       travelMode: _settings.travelMode,
       notificationsEnabled: _settings.notificationsEnabled,
       secondRehitNudgeEnabled: _settings.secondRehitNudgeEnabled,
+      restDayRehitNudgeEnabled: _settings.restDayRehitNudgeEnabled,
       wakeWindow: _settings.wakeWindow,
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+  }
+
+  /// The reminder's time is learned from history rather than configured, so
+  /// state what it would actually be instead of describing a rule.
+  String _restDayNudgeSubtitle(BuildContext context) {
+    const base =
+        'On days with nothing logged yet, get one push nudge to fit a short '
+        'CAROL REHIT in.';
+    final habits =
+        context.read<AppController>().scheduleHabitsAt(DateTime.now());
+    final median = habits.medianStartMinuteOfDay;
+    if (median == null ||
+        habits.startSampleCount < ScheduleFitEngine.minOverallSamples) {
+      return '$base The time is learned from when you normally train.';
+    }
+    return '$base Aimed near ${formatMinuteOfDay(median)}, from when you '
+        'normally train.';
   }
 
   void _showSaveValidationError(String message) {
@@ -295,6 +315,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 }
                 setState(() => _settings = _settings.copyWith(secondRehitNudgeEnabled: v));
+              },
+            ),
+            SwitchListTile(
+              key: const Key('settings-rest-day-rehit-nudge'),
+              title: const Text('Rest-day REHIT reminder'),
+              subtitle: Text(_restDayNudgeSubtitle(context)),
+              value: _settings.restDayRehitNudgeEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final granted = await NotificationService.requestPermission();
+                  if (!granted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Notification permission was denied - the rest-day reminder stays off.')),
+                    );
+                    return;
+                  }
+                }
+                setState(() => _settings = _settings.copyWith(restDayRehitNudgeEnabled: v));
               },
             ),
             if (frozenTracks.isNotEmpty) ...[

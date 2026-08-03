@@ -1,5 +1,6 @@
 import 'cardio_protocol.dart';
 import 'floor_category.dart';
+import 'session_timing.dart';
 import 'session_type.dart';
 import 'set_log.dart';
 
@@ -28,6 +29,11 @@ class SessionLog {
   final int plannedWorkSets;
   final int completedWorkSets;
   final int durationMinutes;
+
+  /// Exact wall-clock facts about the performance itself. Null for sessions
+  /// logged before timing capture existed; every consumer must degrade to
+  /// [durationMinutes] rather than assume it is present.
+  final SessionTimings? timings;
   final String? notes;
 
   /// Exact cardio dose actually completed. Null for strength sessions and
@@ -67,6 +73,7 @@ class SessionLog {
     required this.plannedWorkSets,
     required this.completedWorkSets,
     required this.durationMinutes,
+    this.timings,
     required this.countsAs,
     this.cardioCompletion,
     this.cardioCompletedAsPrescribed,
@@ -114,6 +121,28 @@ class SessionLog {
   /// §8: >=50% -> counts & queue advances; <50% -> partial, queue frozen.
   bool get countsTowardQueueAndFloor =>
       _isCardioOnlyTemplate ? cardioDoseQualifies : completionRatio >= 0.5;
+
+  /// Best available start instant: the recorded one, else back-calculated
+  /// from an exact completion timestamp and the elapsed time. Null when only
+  /// a calendar date is known, so time-of-day analysis can skip the row
+  /// instead of inventing a plausible hour for it.
+  DateTime? get startedAtOrNull {
+    final recorded = timings?.startedAt;
+    if (recorded != null) return recorded;
+    if (completedAtPrecision != CompletionTimePrecision.exact) return null;
+    final seconds = timings?.elapsedSeconds ?? durationMinutes * 60;
+    if (seconds <= 0) return null;
+    return completedAt.subtract(Duration(seconds: seconds));
+  }
+
+  /// Elapsed seconds, exact when recorded and otherwise reconstructed from
+  /// the whole-minute legacy field.
+  int get elapsedSecondsOrEstimate =>
+      timings?.elapsedSeconds ?? durationMinutes * 60;
+
+  /// Whether [elapsedSecondsOrEstimate] came from a real measurement rather
+  /// than a minute-rounded legacy value.
+  bool get hasExactElapsedSeconds => timings?.elapsedSeconds != null;
 
   /// Home/Today completion is prescription adherence, not stimulus credit.
   /// Legacy records retain their historical counted-session behavior because

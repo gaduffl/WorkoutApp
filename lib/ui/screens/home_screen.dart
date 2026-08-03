@@ -7,6 +7,7 @@ import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
 import 'checkin_screen.dart';
 import 'history_screen.dart';
+import 'insights_screen.dart';
 import 'settings_screen.dart';
 import 'today_screen.dart';
 
@@ -140,7 +141,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.history),
+            tooltip: 'History',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+          ),
+          IconButton(
+            key: const Key('home-open-insights'),
+            icon: const Icon(Icons.query_stats),
+            tooltip: 'Training insights',
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const InsightsScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.settings),

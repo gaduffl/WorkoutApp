@@ -1,3 +1,4 @@
+import '../models/daily_nudge.dart';
 import '../models/decision_trace.dart';
 import '../models/session_log.dart';
 import 'intensity_recovery_policy.dart';
@@ -105,14 +106,16 @@ class RehitEligibilityInput {
   }) : assert(nudgeCutoffHour >= 0 && nudgeCutoffHour <= 23);
 }
 
-class RehitEligibilityResult {
+class RehitEligibilityResult implements DailyNudgeEligibility {
   final List<RehitClosedReason> closedReasons;
 
   /// Exact local time at which this shared result was evaluated.
+  @override
   final DateTime observedAt;
 
   /// Null when unsafe/inapplicable or when the otherwise-eligible target
   /// would land at/after the local nudge cutoff.
+  @override
   final DateTime? suggestedNudgeTime;
 
   const RehitEligibilityResult({
@@ -121,6 +124,7 @@ class RehitEligibilityResult {
     required this.suggestedNudgeTime,
   });
 
+  @override
   bool get eligible => closedReasons.isEmpty;
 }
 

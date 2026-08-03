@@ -375,3 +375,74 @@ treat filename as canonical version).
       `SessionPlan.timeCompressed` (via the shared `isTimeCompressedSession`
       helper, replacing two subtly different inline conditions) and Today now
       shows "compressed to fit" instead of "full tier".
+
+## Session 2026-08-03 (training-time analytics + rest-day REHIT reminder)
+
+43. **Timing is captured as raw observations, never as derived metrics.**
+    Persisted: `SetLog.startedAt` + `plannedRestSecondsBefore` per set, and
+    `SessionLog.timings` (`startedAt`, exact `elapsedSeconds`, and the
+    `plannedDurationMinutes` the planner predicted for the plan that was
+    actually run). Everything else — work/rest split, density, estimate bias,
+    latencies — is recalculated by `AnalyticsEngine` on read. Redefining a
+    metric therefore never requires rewriting history. `durationMinutes` is
+    left untouched so no existing consumer changes behavior; the exact
+    seconds sit beside it, which matters for an 8:40 REHIT preset that the
+    whole-minute field renders as "8".
+44. **Prescribed rest is the only defensible work/rest boundary.** The app
+    cannot observe when the user *stops* resting, so a set's cycle
+    (activation → submission) is split into `min(cycle, prescribedRest)` and
+    the remainder, and the remainder is named `activeSecondsEstimate` — it is
+    setup + execution + any rest overrun, and the naming says so rather than
+    implying time-under-tension. Session time no logged step accounts for is
+    reported separately as "unaccounted" instead of being smeared over the
+    steps; the four buckets sum exactly to elapsed time.
+45. **A day-level event timeline (`analytics_events`, schema v1→v2).** Session
+    logs cannot answer "how long from check-in to actually starting" or "how
+    long from the app suggesting a REHIT to the REHIT happening", so
+    check-in / plan-generated / session-started / session-completed /
+    REHIT-suggested / nudge-scheduled / REHIT-completed are appended as
+    timestamped events. Milestone events are once-per-local-day, so
+    "suggested at" is the first such decision rather than the most recent
+    re-evaluation. Writes are swallowed on failure — analytics is observation,
+    never a precondition for training — and the table joins the OneDrive
+    backup and "Reset day"'s per-day delete.
+46. **Rest-day REHIT reminder gates exactly like the second-session one,
+    except for the day shape.** `RestDayRehitEngine` reuses the same
+    `HighIntensitySafetyStatus` (48-hour intensity window, contraindicating
+    pain, escalation, deload, travel) plus the rolling high-intensity target,
+    and adds "nothing logged today" where the existing engine requires a
+    completed first session. The two are mutually exclusive by construction.
+    The once-per-day scheduling/marker machinery was generalized to
+    `DailyNudgeEligibility` rather than duplicated; the old
+    `secondRehitNudge*` names remain as typedefs/wrappers.
+47. **A missing check-in blocks logging, not the reminder.** The commonest
+    untrained day has no check-in at all, so requiring GREEN readiness would
+    silence the reminder precisely when it is wanted. A no-check-in day is
+    therefore still eligible, and the notification asks for a check-in first
+    ("Check in first so the app can confirm today is a good day for it").
+    The *logging* path is stricter: `canLogRestDayRehit` additionally requires
+    a check-in on file, so `logCardioSession`'s new plan-less opening never
+    records high-intensity work without a readiness decision, and the Today
+    card is hidden in that state.
+48. **"Fits my schedule" is learned, not configured.** `ScheduleFitEngine`
+    derives per-weekday median start times from the trailing 56 days
+    (2+ same-weekday samples, else 3+ overall, else a 17:00 fallback) and
+    proposes today's slot, pushed to at least 45 minutes out (rounded up to a
+    quarter hour) and clamped into the user's earliest/latest hours; a slot
+    that cannot fit before the cutoff returns null rather than being shoved
+    into the evening. `ScheduleSlot.source` travels with the result so the
+    reminder claims "the time you usually train" only when that is true.
+    Start times come from `SessionLog.startedAtOrNull`, which refuses to
+    invent an hour for date-only legacy rows.
+49. **Habit history is read into its own list.** `_scheduleLogs` (56 days) is
+    separate from `_recentLogs` (7 days) so that widening the window for
+    schedule learning cannot silently change what the recovery, ledger, or
+    queue logic sees.
+50. **Insights screen answers "what should the app change", not "how fit am
+    I".** History keeps stimulus and progression; the new screen is time only:
+    session length vs. plan estimate per session type (with a median *signed*
+    bias, suppressed below three sessions as inconclusive), where the time
+    goes, per-exercise cost per set, observed training rhythm by weekday,
+    the REHIT suggested→nudged→done funnel with its latencies, and
+    consistency. Plain Material, no chart package — same flat-dependency rule
+    as the §11.4 charts.

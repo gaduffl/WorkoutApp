@@ -100,6 +100,83 @@ void main() {
         ),
       );
 
+  // The widget tester advances timers on a fake clock while DateTime.now()
+  // and Stopwatch keep running on the real one, so these cover the wiring —
+  // which instants and rest values reach the log — and the arithmetic on top
+  // of them is covered by the analytics engine tests.
+  testWidgets('each logged set carries its own start and its rest context',
+      (tester) async {
+    final controller = captureController();
+    final twoSetPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [ex('squat', MovementPattern.squat, 24, null, sets: 2)],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: twoSetPlan)),
+      ),
+    );
+
+    await tester.pump(const Duration(seconds: 20));
+    await tester.tap(find.text('Log set'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 100));
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+
+    final sets = controller.lastLoggedSets;
+    expect(sets, hasLength(2));
+
+    // Each step is timed from its own activation, not from session start.
+    expect(sets.first.startedAt, isNotNull);
+    expect(sets.last.startedAt, isNotNull);
+    expect(sets.last.startedAt!.isBefore(sets.first.startedAt!), isFalse);
+    // The next step's clock starts when the previous set is submitted, so the
+    // rest that follows belongs to the set it precedes.
+    expect(sets.last.startedAt!.isBefore(sets.first.timestamp), isFalse);
+
+    // No rest ran into the first set; the second opened behind the 90 s
+    // compound rest, so its cycle is splittable into rest and work.
+    expect(sets.first.plannedRestSecondsBefore, 0);
+    expect(sets.last.plannedRestSecondsBefore, 90);
+  });
+
+  testWidgets('finishing reports the exact elapsed time and the start instant',
+      (tester) async {
+    final controller = captureController();
+    final onePlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [ex('squat', MovementPattern.squat, 24, null, sets: 1)],
+    );
+    final before = DateTime.now();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: onePlan)),
+      ),
+    );
+
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+
+    // Exact seconds are reported alongside the whole-minute legacy field, so
+    // a sub-minute session is no longer indistinguishable from a 1-minute one.
+    expect(controller.lastElapsedSeconds, isNotNull);
+    expect(controller.lastElapsedSeconds, greaterThanOrEqualTo(0));
+    expect(controller.lastStartedAt, isNotNull);
+    expect(
+      controller.lastStartedAt!.isBefore(before.subtract(const Duration(seconds: 1))),
+      isFalse,
+    );
+  });
+
   testWidgets('weight stepper snaps to PowerBlock steps, not flat +5', (tester) async {
     await tester.pumpWidget(MaterialApp(home: LoggerScreen(plan: plan)));
 
@@ -924,6 +1001,8 @@ class _FinisherController extends AppController {
   bool completed = false;
   bool? lastEndedEarly;
   List<SetLog> lastLoggedSets = [];
+  DateTime? lastStartedAt;
+  int? lastElapsedSeconds;
 
   _FinisherController(this.baseEligibility)
       : super(Repository(AppDatabase()));
@@ -951,6 +1030,8 @@ class _FinisherController extends AppController {
     SessionPlan plan,
     List<SetLog> loggedSets, {
     required int durationMinutes,
+    DateTime? startedAt,
+    int? elapsedSeconds,
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
@@ -958,5 +1039,7 @@ class _FinisherController extends AppController {
     completed = true;
     lastEndedEarly = endedEarly;
     lastLoggedSets = List.of(loggedSets);
+    lastStartedAt = startedAt;
+    lastElapsedSeconds = elapsedSeconds;
   }
 }
