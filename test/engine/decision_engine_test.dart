@@ -11,6 +11,7 @@ import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/ladders.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/pain.dart';
 import 'package:morningcoach/models/recovery_snapshot.dart';
@@ -148,6 +149,127 @@ void main() {
           .sessionsScheduledWhileFlagged,
       1,
     );
+  });
+
+  test('lower-back recovery replaces the hinge slot and freezes its track',
+      () {
+    final originalHinge = baseStates()['hinge']!;
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 3,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: {
+        ...baseStates(),
+        'hinge': originalHinge,
+      },
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 1)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s1,
+    ));
+
+    final plan = output.trace.plan!;
+    expect(plan.lowerBackRecoveryMode, isTrue);
+    expect(
+      plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name),
+      isFalse,
+    );
+    final recovery = plan.exercises.firstWhere(
+      (exercise) => exercise.trackKey == lowerBackRecoveryTrackKey,
+    );
+    expect(recovery.name, 'Static back-extension hold');
+    expect(recovery.loadTotal, isNull);
+    expect(recovery.progressionEligible, isFalse);
+    expect(
+      output.patchedExerciseStates['hinge']!.currentLoad,
+      originalHinge.currentLoad,
+    );
+    expect(
+      output.trace.firedRules.map((rule) => rule.key),
+      contains(RuleKey.lowerBackRecoveryActive),
+    );
+  });
+
+  test('recovery spacing gate keeps loaded hinge out of the plan', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 3,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          recoverySessionDates: [today.subtract(const Duration(days: 1))],
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s1,
+    ));
+
+    final plan = output.trace.plan!;
+    expect(
+      plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name),
+      isFalse,
+    );
+    expect(
+      plan.exercises.any((e) => e.trackKey == lowerBackRecoveryTrackKey),
+      isFalse,
+    );
+    expect(
+      plan.exercises.any(
+        (e) => e.trackKey == bridgeHamstringCurl.trackKey,
+      ),
+      isTrue,
+    );
+    expect(
+      output.trace.firedRules.map((rule) => rule.key),
+      contains(RuleKey.lowerBackRecoverySpacing),
+    );
+  });
+
+  test('neurological warning signs block the entire plan', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 5,
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+          tags: const {PainTag.bladderBowelChange},
+        ),
+      ],
+      forcedSessionId: SessionTypeId.s2,
+    ));
+
+    expect(output.trace.plan, isNull);
+    expect(
+      output.trace.firedRules.map((rule) => rule.key),
+      contains(RuleKey.urgentMedicalAssessment),
+    );
+    expect(output.trace.restReason, 'Urgent neurological warning signs');
   });
 
   test('rest-day pain persists only affected normal tracks without scheduling them', () {

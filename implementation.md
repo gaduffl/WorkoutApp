@@ -446,3 +446,28 @@ treat filename as canonical version).
     the REHIT suggested→nudged→done funnel with its latencies, and
     consistency. Plain Material, no chart package — same flat-dependency rule
     as the §11.4 charts.
+
+## Session 2026-08-08 (lower-back recovery mode)
+
+51. **Recovery state is persisted inside `UserSettings`, but only dedicated
+    controller methods mutate it.** This keeps backup/import compatibility and
+    lets old settings default to an inactive mode, while preventing a stale
+    Settings draft from overwriting a same-day or next-morning response.
+52. **The normal hinge track is never repurposed for recovery work.** The mode
+    snapshots its load/ladder state and emits a distinct
+    `recovery:lower_back:back_extension` track with progression disabled.
+    Non-due days use the existing bridge-hamstring-curl substitute. Therefore
+    neither an extension log nor a substitute can advance loaded deadlifts.
+53. **Dose progression requires two observations across time.** A completed
+    exposure saves same-day better/same/worse and becomes pending. A response
+    on a later calendar day is mandatory; two consecutive non-worse pairs
+    unlock one small dose step. A worse response regresses the stage/dose.
+54. **Frequency and return are hard engine gates.** Recovery work is limited
+    to two rolling-seven-day exposures, at least 48 hours apart. The final
+    stage is two tolerated `1 × 8` elevated-start hinge exposures at an
+    achievable load no higher than 50% of the pre-mode load; that performed
+    load becomes the normal hinge baseline on automatic completion.
+55. **Medical boundaries are fixed product copy.** Activation refuses to
+    proceed unless the user denies neurological/emergency warning signs, the
+    logger repeats the stop/escalate instruction, and the mode never labels a
+    diagnosis, tissue healing, cure, or a self-built apparatus as certified.

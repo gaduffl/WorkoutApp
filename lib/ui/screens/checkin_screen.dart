@@ -42,6 +42,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
     PainTag.radiating: 'Radiating',
     PainTag.numbness: 'Numbness',
     PainTag.tingling: 'Tingling',
+    PainTag.weakness: 'New weakness',
+    PainTag.saddleNumbness: 'Saddle numbness',
+    PainTag.bladderBowelChange: 'Bladder/bowel change',
   };
 
   @override
@@ -218,6 +221,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                             child: Wrap(
                               spacing: 6,
                               children: _tagLabels.entries
+                                  .where(
+                                    (tag) =>
+                                        region == BodyRegion.lowerBack ||
+                                        (tag.key != PainTag.saddleNumbness &&
+                                            tag.key !=
+                                                PainTag.bladderBowelChange),
+                                  )
                                   .map((tag) => FilterChip(
                                         visualDensity: VisualDensity.compact,
                                         label: Text(tag.value),
@@ -230,6 +240,22 @@ class _CheckInScreenState extends State<CheckInScreen> {
                         ],
                       ),
                     )),
+                if (_painTags.values.any(
+                  (tags) => tags.any(
+                    const {
+                      PainTag.weakness,
+                      PainTag.saddleNumbness,
+                      PainTag.bladderBowelChange,
+                    }.contains,
+                  ),
+                ))
+                  Text(
+                    'Do not train. These warning signs need urgent medical assessment.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
               ],
               const SizedBox(height: 24),
               Row(

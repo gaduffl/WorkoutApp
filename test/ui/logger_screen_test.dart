@@ -7,6 +7,7 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -994,6 +995,50 @@ void main() {
     expect(find.text('Log optional REHIT finisher'), findsNothing);
     expect(nominallySafe.lastEndedEarly, isTrue);
   });
+
+  testWidgets('recovery work requires a same-day symptom response',
+      (tester) async {
+    final controller = captureController();
+    final recoveryPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      lowerBackRecoveryMode: true,
+      exercises: const [
+        PlannedExercise(
+          trackKey: lowerBackRecoveryTrackKey,
+          pattern: MovementPattern.hinge,
+          name: 'Static back-extension hold',
+          sets: 1,
+          metric: ExerciseMetric.seconds,
+          targetRange: (30, 30),
+          suggestedValue: 30,
+          rirTarget: Rir.rir4plus,
+          progressionEligible: false,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(home: LoggerScreen(plan: recoveryPlan)),
+      ),
+    );
+
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+    expect(find.text('How does your lower back feel now?'), findsOneWidget);
+    expect(controller.completed, isFalse);
+
+    await tester.tap(find.text('Same'));
+    await tester.pumpAndSettle();
+    expect(controller.completed, isTrue);
+    expect(
+      controller.lastLowerBackResponse,
+      LowerBackSymptomResponse.unchanged,
+    );
+  });
 }
 
 class _FinisherController extends AppController {
@@ -1003,6 +1048,7 @@ class _FinisherController extends AppController {
   List<SetLog> lastLoggedSets = [];
   DateTime? lastStartedAt;
   int? lastElapsedSeconds;
+  LowerBackSymptomResponse? lastLowerBackResponse;
 
   _FinisherController(this.baseEligibility)
       : super(Repository(AppDatabase()));
@@ -1035,11 +1081,13 @@ class _FinisherController extends AppController {
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
+    LowerBackSymptomResponse? lowerBackSameDayResponse,
   }) async {
     completed = true;
     lastEndedEarly = endedEarly;
     lastLoggedSets = List.of(loggedSets);
     lastStartedAt = startedAt;
     lastElapsedSeconds = elapsedSeconds;
+    lastLowerBackResponse = lowerBackSameDayResponse;
   }
 }

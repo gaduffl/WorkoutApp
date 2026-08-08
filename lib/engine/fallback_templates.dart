@@ -121,6 +121,18 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? 'Reisemodus ist aktiv: keine Geräte, Fortschritt über Wiederholungen, Tempo oder Bewegungsumfang; die Laststeigerung pausiert.'
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
+    case RuleKey.lowerBackRecoveryActive:
+      return lang == AppLanguage.de
+          ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; heute gilt nur die konservative Recovery-Dosis.'
+          : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; only the conservative recovery dose applies today.';
+    case RuleKey.lowerBackRecoverySpacing:
+      return lang == AppLanguage.de
+          ? 'Recovery-Arbeit ist heute wegen des 48-Stunden-Abstands, der Grenze von zwei Einheiten pro sieben Tage oder des noch offenen Morgen-Feedbacks nicht fällig; Heben bleibt ersetzt.'
+          : 'Recovery work is not due today because of the 48-hour spacing, two-per-seven-day cap, or pending morning feedback; hinge work stays replaced.';
+    case RuleKey.lowerBackRecoveryReentry:
+      return lang == AppLanguage.de
+          ? 'Die symptomgesteuerten Kriterien erlauben einen vorsichtigen Heben-Wiedereinstieg mit 50% und erhöhtem Start; heute keine Laststeigerung.'
+          : 'Symptom-gated criteria opened a graded elevated-start deadlift re-entry at 50%; no load increase today.';
     case RuleKey.painSubMild:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: leichter Schmerz - Last reduziert und Bewegungsradius angepasst.'
@@ -137,6 +149,10 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? 'Betroffene Bewegung stoppen und vor der Wiederaufnahme eine qualifizierte medizinische Abklärung suchen.'
           : 'Stop the affected movement and seek a qualified medical assessment before resuming it.';
+    case RuleKey.urgentMedicalAssessment:
+      return lang == AppLanguage.de
+          ? 'Heute nicht trainieren. Neue Schwäche sowie Taubheit im Sattelbereich oder Blasen-/Darmveränderungen brauchen eine dringende medizinische Abklärung.'
+          : 'Do not train today. New weakness, saddle-area numbness, or bladder/bowel changes need urgent medical assessment.';
     case RuleKey.painReentryTest:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: seit 2 Einheiten gemeldet - heute ein leichter Test (50% x 8).'

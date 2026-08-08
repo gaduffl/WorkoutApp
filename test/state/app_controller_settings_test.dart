@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
+import 'package:morningcoach/models/exercise_state.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/state/app_controller.dart';
 
 void main() {
@@ -36,6 +38,47 @@ void main() {
     expect(restored.hrMaxOverride, isNull);
     expect(restored.hrMax, 208 - 0.7 * 50);
     expect(restored.anthropicApiKey, isNull);
+  });
+
+  test('ordinary settings saves cannot overwrite recovery lifecycle state',
+      () async {
+    final db = _SettingsMemoryDatabase();
+    final repository = Repository(db);
+    final controller = _SettingsController(repository)
+      ..exerciseStates = {
+        MovementPattern.hinge.name: ExerciseState(
+          trackKey: MovementPattern.hinge.name,
+          pattern: MovementPattern.hinge,
+          currentLoad: 90,
+          ladderStepIndex: 2,
+        ),
+      };
+    final staleDraft = controller.settings;
+
+    await controller.activateLowerBackRecovery(
+      symptomOnsetDate: DateTime.now().subtract(const Duration(days: 21)),
+      confirmedNoRedFlags: true,
+    );
+    await controller.saveSettings(staleDraft.copyWith(age: 40));
+
+    expect(controller.lowerBackRecovery.active, isTrue);
+    expect(controller.lowerBackRecovery.preRecoveryHingeLoad, 90);
+    expect((await repository.loadSettings()).lowerBackRecovery.active, isTrue);
+  });
+
+  test('controller refuses activation without the red-flag confirmation',
+      () async {
+    final controller = _SettingsController(
+      Repository(_SettingsMemoryDatabase()),
+    );
+    await expectLater(
+      controller.activateLowerBackRecovery(
+        symptomOnsetDate: DateTime.now(),
+        confirmedNoRedFlags: false,
+      ),
+      throwsStateError,
+    );
+    expect(controller.lowerBackRecovery.active, isFalse);
   });
 }
 

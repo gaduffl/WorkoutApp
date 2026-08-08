@@ -5,7 +5,14 @@ enum BodyRegion { lowerBack, kneeLeft, kneeRight, shoulderLeft, shoulderRight, e
 enum PainSeverity { mild, sharp }
 
 /// Extra symptom tags that trigger the hard-coded escalation rule (§7.2).
-enum PainTag { radiating, numbness, tingling }
+enum PainTag {
+  radiating,
+  numbness,
+  tingling,
+  weakness,
+  saddleNumbness,
+  bladderBowelChange,
+}
 
 extension BodyRegionX on BodyRegion {
   /// §7.1 region -> affected pattern(s) table.

@@ -102,9 +102,19 @@ class PainEngine {
       PainTag.radiating,
       PainTag.numbness,
       PainTag.tingling,
+      PainTag.weakness,
+      PainTag.saddleNumbness,
+      PainTag.bladderBowelChange,
     }).isNotEmpty;
     return (flag.severity == PainSeverity.sharp && daysSince > 7) || hardTag;
   }
+
+  bool requiresUrgentMedicalAssessment(PainFlag flag) =>
+      flag.tags.intersection(const {
+        PainTag.weakness,
+        PainTag.saddleNumbness,
+        PainTag.bladderBowelChange,
+      }).isNotEmpty;
 
   /// Advances one pattern's pain-freeze bookkeeping for today. Call once
   /// per pattern per day, in Step 6.2.4/§7.2 order: after any session

@@ -185,6 +185,10 @@ class SessionPlan {
   /// plans and historical logs retain the correct context too.
   final bool travelMode;
 
+  /// The plan was generated while the dedicated lower-back recovery mode
+  /// was active. Persisting the flag keeps safety context visible in history.
+  final bool lowerBackRecoveryMode;
+
   /// The conservative 9-minute upper bound of CAROL's REHIT Intense preset
   /// was explicitly withheld from this strength plan after all
   /// recommendation-time hard gates passed. A later safety change cannot
@@ -205,6 +209,7 @@ class SessionPlan {
     this.cardioPrescription,
     this.grantsQueueCredit = true,
     this.travelMode = false,
+    this.lowerBackRecoveryMode = false,
     this.optionalRehitFinisherReserved = false,
     this.timeCompressed = false,
   });
