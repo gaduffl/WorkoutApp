@@ -5,6 +5,7 @@ import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/ladders.dart';
+import '../models/lower_back_recovery.dart';
 import '../models/movement_pattern.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
@@ -20,6 +21,7 @@ import '../models/user_settings.dart';
 import 'cardio_engine.dart';
 import 'equipment_engine.dart';
 import 'intensity_recovery_policy.dart';
+import 'lower_back_recovery_engine.dart';
 import 'pain_engine.dart';
 import 'progression_engine.dart';
 import 'queue_engine.dart';
@@ -110,6 +112,7 @@ class DecisionEngine {
   static const progressionEngine = ProgressionEngine();
   static const equipmentEngine = EquipmentEngine();
   static const intensityRecoveryPolicy = IntensityRecoveryPolicy();
+  static const lowerBackRecoveryEngine = LowerBackRecoveryEngine();
   static const stimulusLedgerEngine = StimulusLedgerEngine();
   static const trainingStatusEngine = TrainingStatusEngine();
   static const exerciseMuscleMap = ExerciseMuscleMap();
@@ -186,6 +189,37 @@ class DecisionEngine {
       checkin.pain,
       today,
     );
+    final urgentNeurologicalWarning = checkin.pain.any(
+          painEngine.requiresUrgentMedicalAssessment,
+        ) ||
+        patchedStates.values.any(
+          (state) =>
+              state.painFrozen &&
+              state.painRegion == BodyRegion.lowerBack &&
+              state.painTags.any(
+                const {
+                  PainTag.weakness,
+                  PainTag.saddleNumbness,
+                  PainTag.bladderBowelChange,
+                }.contains,
+              ),
+        );
+    if (urgentNeurologicalWarning) {
+      fired.add(const FiredRule(RuleKey.urgentMedicalAssessment));
+      return DecisionEngineOutput(
+        DecisionTrace(
+          date: today,
+          checkin: checkin,
+          recovery: recoveryTrace,
+          candidates: const [],
+          firedRules: fired,
+          plan: null,
+          restReason: 'Urgent neurological warning signs',
+          queue: queueTraceBase,
+        ),
+        patchedStates,
+      );
+    }
     final sharpHipPainActive = painEngine.hipSharpActive(checkin.pain) ||
         patchedStates.values.any(
           (state) =>
@@ -847,8 +881,38 @@ class DecisionEngine {
           continue;
         }
 
+        final lowerBackRecoveryActive =
+            input.settings.lowerBackRecovery.active &&
+                pattern == MovementPattern.hinge;
+        if (lowerBackRecoveryActive &&
+            !input.settings.travelMode &&
+            flag?.severity != PainSeverity.sharp) {
+          final recoveryExercise =
+              lowerBackRecoveryEngine.prescriptionFor(
+            input.settings.lowerBackRecovery,
+            today: today,
+            equipment: input.settings.equipment,
+          );
+          if (recoveryExercise != null) {
+            exercises.add(recoveryExercise);
+            fired.add(FiredRule(
+              input.settings.lowerBackRecovery.stage ==
+                      LowerBackRecoveryStage.deadliftReentry
+                  ? RuleKey.lowerBackRecoveryReentry
+                  : RuleKey.lowerBackRecoveryActive,
+            ));
+            continue;
+          }
+        }
+
         PainAction action = const PainAction(PainActionKind.none);
-        if (flag != null && !reentryPending) {
+        if (lowerBackRecoveryActive) {
+          action = const PainAction(
+            PainActionKind.substituteNamed,
+            substitute: bridgeHamstringCurl,
+          );
+          fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
+        } else if (flag != null && !reentryPending) {
           action = painEngine.resolve(flag.region, flag.severity, pattern);
           if (action.kind != PainActionKind.none) {
             fired.add(FiredRule(
@@ -1251,6 +1315,7 @@ class DecisionEngine {
       cardioPrescription: cardioPrescription,
       grantsQueueCredit: queueCreditType != null,
       travelMode: input.settings.travelMode,
+      lowerBackRecoveryMode: input.settings.lowerBackRecovery.active,
       optionalRehitFinisherReserved: optionalRehitFinisherReserved,
       timeCompressed: isTimeCompressedSession(effectiveSessionId, tier),
     );
@@ -1285,6 +1350,9 @@ class DecisionEngine {
     final currentPain = input.checkin.pain.any(
       (flag) => flag.region.affectedPatterns.any(rehearsedPatterns.contains),
     );
+    final recoveryModeAffectsPrep =
+        input.settings.lowerBackRecovery.active &&
+            rehearsedPatterns.contains(MovementPattern.hinge);
     final persistedPain = input.exerciseStates.values.any(
       (state) =>
           state.painFrozen &&
@@ -1293,7 +1361,7 @@ class DecisionEngine {
                       .any(rehearsedPatterns.contains) ??
                   false)),
     );
-    return currentPain || persistedPain;
+    return currentPain || persistedPain || recoveryModeAffectsPrep;
   }
 
   Map<String, ExerciseState> _persistCurrentCheckInPain(

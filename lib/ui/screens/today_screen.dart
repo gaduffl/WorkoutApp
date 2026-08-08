@@ -497,6 +497,22 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
               const SizedBox(height: 8),
             ],
+            if (plan?.lowerBackRecoveryMode == true) ...[
+              Card(
+                key: const Key('today-lower-back-recovery'),
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: const ListTile(
+                  leading: Icon(Icons.health_and_safety),
+                  title: Text('Lower-back recovery mode'),
+                  subtitle: Text(
+                    'Loaded deadlift progression is paused. Recovery work '
+                    'uses a symptom-gated dose; stop for worsening or '
+                    'spreading symptoms.',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (plan != null)
               ..._playOrder(plan.exercises).map((e) => Card(
                     child: ListTile(

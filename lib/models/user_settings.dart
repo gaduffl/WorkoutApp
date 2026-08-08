@@ -1,5 +1,6 @@
 import 'equipment.dart';
 import 'floor_category.dart';
+import 'lower_back_recovery.dart';
 import 'onedrive_connection.dart';
 import 'oura_connection.dart';
 
@@ -66,6 +67,10 @@ class UserSettings {
   final int restDayRehitNudgeEarliestHour;
   final int restDayRehitNudgeLatestHour;
 
+  /// Persistent, safety-gated training modification. This is operational
+  /// state rather than a diagnosis or a claim that an injury is healed.
+  final LowerBackRecoveryState lowerBackRecovery;
+
   const UserSettings({
     this.equipment = const EquipmentConfig(),
     this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
@@ -91,6 +96,7 @@ class UserSettings {
     this.restDayRehitNudgeScheduledFor,
     this.restDayRehitNudgeEarliestHour = 8,
     this.restDayRehitNudgeLatestHour = 20,
+    this.lowerBackRecovery = const LowerBackRecoveryState(),
   })  : assert(restDayRehitNudgeEarliestHour >= 0 &&
             restDayRehitNudgeEarliestHour <= 23),
         assert(restDayRehitNudgeLatestHour >= 1 &&
@@ -125,6 +131,7 @@ class UserSettings {
     DateTime? restDayRehitNudgeScheduledFor,
     int? restDayRehitNudgeEarliestHour,
     int? restDayRehitNudgeLatestHour,
+    LowerBackRecoveryState? lowerBackRecovery,
     bool clearHrMaxOverride = false,
     bool clearAnthropicApiKey = false,
     bool clearSecondRehitNudgeScheduledDay = false,
@@ -170,6 +177,7 @@ class UserSettings {
           restDayRehitNudgeEarliestHour ?? this.restDayRehitNudgeEarliestHour,
       restDayRehitNudgeLatestHour:
           restDayRehitNudgeLatestHour ?? this.restDayRehitNudgeLatestHour,
+      lowerBackRecovery: lowerBackRecovery ?? this.lowerBackRecovery,
     );
   }
 }

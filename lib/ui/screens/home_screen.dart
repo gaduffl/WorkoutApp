@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/cardio_engine.dart';
+import '../../models/lower_back_recovery.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
@@ -41,6 +42,21 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _loggingUnplannedRehit = false;
+
+  Future<void> _recordLowerBackMorningResponse(
+    LowerBackSymptomResponse response,
+  ) async {
+    await context
+        .read<AppController>()
+        .recordLowerBackNextMorningResponse(response);
+    if (!mounted) return;
+    final message = response == LowerBackSymptomResponse.worse
+        ? 'Dose stepped back. Stop and seek care for new spreading pain, numbness, tingling, weakness, or bladder/bowel changes.'
+        : 'Next-morning response saved.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   Future<void> _logUnplannedRehit() async {
     if (_loggingUnplannedRehit) return;
@@ -170,6 +186,82 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (controller.lowerBackRecovery.active) ...[
+                              Card(
+                                key: const Key('home-lower-back-recovery'),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .secondaryContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.health_and_safety),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Lower-back recovery mode',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(controller
+                                          .lowerBackRecovery.stageLabel),
+                                      Text(controller
+                                          .lowerBackRecovery.targetLabel),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Loaded deadlift progression is paused.',
+                                      ),
+                                      if (controller
+                                          .lowerBackMorningResponseDue) ...[
+                                        const SizedBox(height: 12),
+                                        const Text(
+                                          'Compared with before yesterday\'s recovery work, how does your lower back feel this morning?',
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          children: [
+                                            OutlinedButton(
+                                              onPressed: () =>
+                                                  _recordLowerBackMorningResponse(
+                                                LowerBackSymptomResponse.worse,
+                                              ),
+                                              child: const Text('Worse'),
+                                            ),
+                                            OutlinedButton(
+                                              onPressed: () =>
+                                                  _recordLowerBackMorningResponse(
+                                                LowerBackSymptomResponse
+                                                    .unchanged,
+                                              ),
+                                              child: const Text('Same'),
+                                            ),
+                                            FilledButton(
+                                              onPressed: () =>
+                                                  _recordLowerBackMorningResponse(
+                                                LowerBackSymptomResponse.better,
+                                              ),
+                                              child: const Text('Better'),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             if (controller.settings.travelMode) ...[
                               Card(
                                 color: Theme.of(context).colorScheme.tertiaryContainer,

@@ -309,6 +309,50 @@ Lowering weight after a break or a twinge is a **first-class engine event**, not
 - **Mild** flags: decay automatically after 1 pain-free session on the pattern.
 - **Escalation rule (hard-coded, deterministic, not AI):** sharp flag persisting > 7 days, OR user tags "radiating / numbness / tingling" → app displays a fixed medical-advice notice and stops recommending the pattern until the user clears the flag manually. The AI layer is prohibited from softening or overriding this text.
 
+### 7.3 Dedicated lower-back recovery mode
+
+This is a conservative training modification, not a diagnosis of disc injury
+and not a promise of healing. Activation explicitly screens for spreading leg
+pain, numbness/tingling, weakness, saddle sensory change, bladder/bowel change,
+fever, major trauma, and rapid worsening. Emergency neurological signs direct
+the user to urgent care; persistent symptoms direct the user to a qualified
+clinical assessment.
+
+While active, the normal hinge `ExerciseState` is snapshotted and frozen:
+loaded deadlifts and their load progression cannot appear. A scheduled hinge
+slot becomes either the due recovery exposure or a deliberately light bridge
+hamstring-curl substitute. The self-built stool/block/PowerBlock setup is never
+described as inspected or certified.
+
+1. Start with `3 × 30 s` static back-extension holds, neutral-to-near-neutral,
+   at least 4 RIR and no failure. Progress by 10 s only after two tolerated
+   exposures, capped at `3 × 60 s`.
+2. Continue with `2 × 6` slow, unloaded repetitions through a comfortable
+   range. Progress by 2 reps after two tolerated exposures, capped at
+   `2 × 12`.
+3. Re-enter with `1 × 8` elevated-start deadlifts at the nearest achievable
+   total no higher than 50% of the snapshotted load, at least 4 RIR and no
+   increase that day. Two tolerated re-entry exposures complete the mode; the
+   re-entry load becomes the new hinge baseline.
+
+Recovery exposures are capped at two per rolling seven days with at least 48
+hours between them. Completion alone never advances the dose: the logger
+requires an immediate better/same/worse response and Home requires the same
+comparison the following morning. Any worse response regresses one dose step;
+the pending morning response blocks another exposure.
+
+Evidence boundary: NICE NG59 supports self-management, continued normal
+activity, and exercise selected around the person's needs and capabilities;
+the WHO 2023 guideline supports structured exercise as one component of care
+for chronic primary low-back pain. Neither establishes one back-extension
+protocol as a cure or a way to diagnose a herniated disc. NHS cauda-equina
+guidance supplies the emergency bladder/bowel, saddle-sensation, and weakness
+warning signs used by the activation gate.
+
+Sources: https://www.nice.org.uk/guidance/ng59/chapter/recommendations ·
+https://www.who.int/publications/i/item/9789240081789 ·
+https://www.buckshealthcare.nhs.uk/pifs/cauda-equina-syndrome/
+
 ---
 
 ## 8. Abort & Partial-Session Handling

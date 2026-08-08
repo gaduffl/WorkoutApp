@@ -210,6 +210,9 @@ class IntensityRecoveryPolicy {
       PainTag.radiating,
       PainTag.numbness,
       PainTag.tingling,
+      PainTag.weakness,
+      PainTag.saddleNumbness,
+      PainTag.bladderBowelChange,
     }).isNotEmpty;
     final persistentSharp = severity == PainSeverity.sharp &&
         flaggedDate != null &&

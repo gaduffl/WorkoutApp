@@ -78,6 +78,12 @@ class AiExplainer {
         return 'compressed to the highest-need pair that fits 20 minutes';
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
+      case RuleKey.lowerBackRecoveryActive:
+        return 'dedicated lower-back recovery mode is active; loaded hinge work and load progression stay paused';
+      case RuleKey.lowerBackRecoverySpacing:
+        return 'recovery exposure is not due under its spacing, frequency, and next-morning-response gates; hinge work remains replaced';
+      case RuleKey.lowerBackRecoveryReentry:
+        return 'symptom-gated graded elevated-start deadlift re-entry at 50% with no load increase';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:
@@ -86,6 +92,8 @@ class AiExplainer {
         return 'progression paused on this pattern while pain is flagged';
       case RuleKey.painMedicalEscalation:
         return 'fixed safety instruction: stop the affected movement and seek qualified medical assessment before resuming';
+      case RuleKey.urgentMedicalAssessment:
+        return 'fixed urgent safety instruction: do not train and seek urgent medical assessment for neurological warning signs';
       case RuleKey.painReentryTest:
         return 'offering a light 50% x 8 test to check pain-free readiness';
       case RuleKey.deloadActive:
@@ -130,7 +138,9 @@ class AiExplainer {
     // it verbatim and never send it through the model where it could be
     // softened, paraphrased, or obscured by other rationale.
     final medicalEscalation = trace.firedRules.where(
-      (rule) => rule.key == RuleKey.painMedicalEscalation,
+      (rule) =>
+          rule.key == RuleKey.urgentMedicalAssessment ||
+          rule.key == RuleKey.painMedicalEscalation,
     );
     if (medicalEscalation.isNotEmpty) {
       return fallbackText(medicalEscalation.first, settings.language);

@@ -10,6 +10,7 @@ import '../../engine/strength_duration_engine.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/equipment.dart';
+import '../../models/lower_back_recovery.dart';
 import '../../models/plan.dart';
 import '../../models/session_type.dart';
 import '../../models/set_log.dart';
@@ -479,6 +480,18 @@ class _LoggerScreenState extends State<LoggerScreen> {
       }
       if (!mounted) return;
 
+      LowerBackSymptomResponse? lowerBackResponse;
+      final completedRecoveryWork = _logged.any(
+        (setLog) =>
+            !setLog.isWarmup &&
+            setLog.value > 0 &&
+            setLog.trackKey == lowerBackRecoveryTrackKey,
+      );
+      if (completedRecoveryWork) {
+        lowerBackResponse = await _askLowerBackSameDayResponse();
+      }
+      if (!mounted) return;
+
       await controller.completeSession(
         widget.plan,
         _logged,
@@ -489,12 +502,54 @@ class _LoggerScreenState extends State<LoggerScreen> {
         elapsedSeconds: _stopwatch.elapsed.inSeconds,
         rehitFinisherCompletion: rehitCompletion,
         endedEarly: endedEarly,
+        lowerBackSameDayResponse: lowerBackResponse,
       );
       if (!mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
     } finally {
       if (mounted) setState(() => _finishing = false);
     }
+  }
+
+  Future<LowerBackSymptomResponse> _askLowerBackSameDayResponse() async {
+    final response = await showDialog<LowerBackSymptomResponse>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('How does your lower back feel now?'),
+        content: const Text(
+          'Compare it with just before the recovery work. This does not '
+          'advance the dose yet; the app will ask again tomorrow morning.\n\n'
+          'Stop training and seek medical care if symptoms spread into a '
+          'leg or include numbness, tingling, weakness, saddle-area '
+          'numbness, or bladder/bowel changes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              LowerBackSymptomResponse.worse,
+            ),
+            child: const Text('Worse'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              LowerBackSymptomResponse.unchanged,
+            ),
+            child: const Text('Same'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              LowerBackSymptomResponse.better,
+            ),
+            child: const Text('Better'),
+          ),
+        ],
+      ),
+    );
+    return response ?? LowerBackSymptomResponse.worse;
   }
 
   @override

@@ -34,10 +34,14 @@ enum RuleKey {
   timeCompress60_35,
   timeCompress35_20,
   travelModeActive,
+  lowerBackRecoveryActive,
+  lowerBackRecoverySpacing,
+  lowerBackRecoveryReentry,
   painSubMild,
   painSubSharp,
   painFreeze,
   painMedicalEscalation,
+  urgentMedicalAssessment,
   painReentryTest,
   deloadActive,
   detrainAdjust,
@@ -126,6 +130,12 @@ extension RuleKeyCode on RuleKey {
         return 'TIME_COMPRESS_35_20';
       case RuleKey.travelModeActive:
         return 'TRAVEL_MODE_ACTIVE';
+      case RuleKey.lowerBackRecoveryActive:
+        return 'LOWER_BACK_RECOVERY_ACTIVE';
+      case RuleKey.lowerBackRecoverySpacing:
+        return 'LOWER_BACK_RECOVERY_SPACING';
+      case RuleKey.lowerBackRecoveryReentry:
+        return 'LOWER_BACK_RECOVERY_REENTRY';
       case RuleKey.painSubMild:
         return 'PAIN_SUB_${p}_MILD';
       case RuleKey.painSubSharp:
@@ -134,6 +144,8 @@ extension RuleKeyCode on RuleKey {
         return 'PAIN_FREEZE_$p';
       case RuleKey.painMedicalEscalation:
         return 'PAIN_MEDICAL_ESCALATION_$p';
+      case RuleKey.urgentMedicalAssessment:
+        return 'URGENT_MEDICAL_ASSESSMENT';
       case RuleKey.painReentryTest:
         return 'PAIN_REENTRY_TEST_$p';
       case RuleKey.deloadActive:

@@ -206,6 +206,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _odBusy = false);
   }
 
+  Future<void> _startLowerBackRecovery() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Start lower-back recovery mode?'),
+        content: const Text(
+          'This mode does not diagnose a disc injury or promise a cure. It '
+          'pauses loaded deadlift progression and substitutes a conservative, '
+          'symptom-gated progression. Because pain has persisted for weeks, '
+          'arrange an assessment with a qualified clinician.\n\n'
+          'Do not start this program if you have leg weakness, spreading leg '
+          'pain, numbness or tingling, saddle-area numbness, bladder/bowel '
+          'changes, fever, major trauma, or rapidly worsening pain. Seek '
+          'urgent medical care for bladder/bowel changes, saddle numbness, '
+          'or progressive weakness.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('I have none of these signs'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final now = DateTime.now();
+    final onset = await showDatePicker(
+      context: context,
+      helpText: 'When did the current pain start?',
+      initialDate: now.subtract(const Duration(days: 21)),
+      firstDate: DateTime(now.year - 2),
+      lastDate: now,
+    );
+    if (onset == null || !mounted) return;
+    final controller = context.read<AppController>();
+    await controller.activateLowerBackRecovery(
+      symptomOnsetDate: onset,
+      confirmedNoRedFlags: true,
+    );
+    if (mounted) {
+      setState(() => _settings = controller.settings);
+    }
+  }
+
+  Future<void> _stopLowerBackRecovery() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('End recovery mode?'),
+        content: const Text(
+          'Loaded hinge programming may return on the next plan. End the '
+          'mode only if you intentionally want to leave its staged re-entry.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep mode active'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('End mode'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final controller = context.read<AppController>();
+    await controller.deactivateLowerBackRecovery();
+    if (mounted) setState(() => _settings = controller.settings);
+  }
+
   String _fmtTime(DateTime t) {
     final l = t.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
@@ -254,6 +329,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _settings = _settings.copyWith(travelMode: v);
               }),
             ),
+            const Divider(height: 32),
+            Text(
+              'Lower-back recovery',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            SwitchListTile(
+              key: const Key('settings-lower-back-recovery'),
+              secondary: const Icon(Icons.health_and_safety_outlined),
+              title: const Text('Recovery mode'),
+              subtitle: Text(
+                controller.lowerBackRecovery.active
+                    ? '${controller.lowerBackRecovery.stageLabel}\n'
+                        '${controller.lowerBackRecovery.targetLabel} · deadlift progression paused'
+                    : 'Pause deadlift loading and use symptom-gated recovery work',
+              ),
+              value: controller.lowerBackRecovery.active,
+              onChanged: (enabled) => enabled
+                  ? _startLowerBackRecovery()
+                  : _stopLowerBackRecovery(),
+            ),
+            if (controller.lowerBackRecovery.active)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'At most 2 recovery sessions per rolling 7 days, at least '
+                  '48 hours apart. Progress requires both same-day and '
+                  'next-morning symptoms to be no worse.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             const Divider(height: 32),
             Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
             SwitchListTile(

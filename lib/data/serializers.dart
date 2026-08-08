@@ -6,6 +6,7 @@ import '../models/equipment.dart';
 import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
+import '../models/lower_back_recovery.dart';
 import '../models/movement_pattern.dart';
 import '../models/onedrive_connection.dart';
 import '../models/oura_connection.dart';
@@ -493,6 +494,8 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
           u.restDayRehitNudgeScheduledFor?.toIso8601String(),
       'restDayRehitNudgeEarliestHour': u.restDayRehitNudgeEarliestHour,
       'restDayRehitNudgeLatestHour': u.restDayRehitNudgeLatestHour,
+      'lowerBackRecovery':
+          lowerBackRecoveryStateToJson(u.lowerBackRecovery),
     };
 
 UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
@@ -534,7 +537,93 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
         min: 1,
         max: 24,
       ),
+      lowerBackRecovery: j['lowerBackRecovery'] is Map
+          ? lowerBackRecoveryStateFromJson(
+              (j['lowerBackRecovery'] as Map).cast<String, dynamic>(),
+            )
+          : const LowerBackRecoveryState(),
     );
+
+Map<String, dynamic> lowerBackRecoveryStateToJson(
+  LowerBackRecoveryState state,
+) =>
+    {
+      'active': state.active,
+      'activatedAt': state.activatedAt?.toIso8601String(),
+      'completedAt': state.completedAt?.toIso8601String(),
+      'symptomOnsetDate': state.symptomOnsetDate?.toIso8601String(),
+      'neurologicalSymptomsAbsentConfirmedAt': state
+          .neurologicalSymptomsAbsentConfirmedAt
+          ?.toIso8601String(),
+      'stage': state.stage.name,
+      'targetHoldSeconds': state.targetHoldSeconds,
+      'targetDynamicReps': state.targetDynamicReps,
+      'consecutiveToleratedSessions':
+          state.consecutiveToleratedSessions,
+      'recoverySessionDates': state.recoverySessionDates
+          .map((date) => date.toIso8601String())
+          .toList(),
+      'pendingNextMorningSessionDate':
+          state.pendingNextMorningSessionDate?.toIso8601String(),
+      'pendingSameDayResponse': state.pendingSameDayResponse?.name,
+      'lastNextMorningResponse': state.lastNextMorningResponse?.name,
+      'preRecoveryHingeLoad': state.preRecoveryHingeLoad,
+      'preRecoveryHingeLadderStepIndex':
+          state.preRecoveryHingeLadderStepIndex,
+      'lastReentryLoad': state.lastReentryLoad,
+    };
+
+LowerBackRecoveryState lowerBackRecoveryStateFromJson(
+  Map<String, dynamic> json,
+) {
+  T? enumValue<T extends Enum>(List<T> values, Object? raw) {
+    if (raw is! String) return null;
+    for (final value in values) {
+      if (value.name == raw) return value;
+    }
+    return null;
+  }
+
+  final dates = <DateTime>[];
+  for (final value in json['recoverySessionDates'] as List? ?? const []) {
+    final parsed = _tryParseOptionalDateTime(value);
+    if (parsed != null) dates.add(parsed);
+  }
+  return LowerBackRecoveryState(
+    active: json['active'] as bool? ?? false,
+    activatedAt: _tryParseOptionalDateTime(json['activatedAt']),
+    completedAt: _tryParseOptionalDateTime(json['completedAt']),
+    symptomOnsetDate: _tryParseOptionalDateTime(json['symptomOnsetDate']),
+    neurologicalSymptomsAbsentConfirmedAt: _tryParseOptionalDateTime(
+      json['neurologicalSymptomsAbsentConfirmedAt'],
+    ),
+    stage: enumValue(LowerBackRecoveryStage.values, json['stage']) ??
+        LowerBackRecoveryStage.isometricHold,
+    targetHoldSeconds:
+        (json['targetHoldSeconds'] as num?)?.toInt() ?? 30,
+    targetDynamicReps:
+        (json['targetDynamicReps'] as num?)?.toInt() ?? 6,
+    consecutiveToleratedSessions:
+        (json['consecutiveToleratedSessions'] as num?)?.toInt() ?? 0,
+    recoverySessionDates: dates,
+    pendingNextMorningSessionDate: _tryParseOptionalDateTime(
+      json['pendingNextMorningSessionDate'],
+    ),
+    pendingSameDayResponse: enumValue(
+      LowerBackSymptomResponse.values,
+      json['pendingSameDayResponse'],
+    ),
+    lastNextMorningResponse: enumValue(
+      LowerBackSymptomResponse.values,
+      json['lastNextMorningResponse'],
+    ),
+    preRecoveryHingeLoad:
+        (json['preRecoveryHingeLoad'] as num?)?.toDouble(),
+    preRecoveryHingeLadderStepIndex:
+        (json['preRecoveryHingeLadderStepIndex'] as num?)?.toInt(),
+    lastReentryLoad: (json['lastReentryLoad'] as num?)?.toDouble(),
+  );
+}
 
 /// A persisted hour outside the legal range would trip the settings
 /// assertions on load and make the app unopenable, so clamp instead.
@@ -642,6 +731,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
           : cardioPrescriptionToJson(p.cardioPrescription!),
       'grantsQueueCredit': p.grantsQueueCredit,
       'travelMode': p.travelMode,
+      'lowerBackRecoveryMode': p.lowerBackRecoveryMode,
       'optionalRehitFinisherReserved': p.optionalRehitFinisherReserved,
       'timeCompressed': p.timeCompressed,
     };
@@ -659,6 +749,8 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
             ),
       grantsQueueCredit: j['grantsQueueCredit'] as bool? ?? true,
       travelMode: j['travelMode'] as bool? ?? false,
+      lowerBackRecoveryMode:
+          j['lowerBackRecoveryMode'] as bool? ?? false,
       optionalRehitFinisherReserved:
           j['optionalRehitFinisherReserved'] as bool? ?? false,
       timeCompressed: j['timeCompressed'] as bool? ?? false,
