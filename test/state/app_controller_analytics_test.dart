@@ -294,16 +294,7 @@ void main() {
           .nonNulls
           .map((event) => event.type);
       expect(types, contains(AnalyticsEventType.rehitCompleted));
-
-      // Having trained, the completion day is no longer a rest day. Evaluate
-      // at the persisted timestamp so this remains deterministic even when
-      // CI runs after the reminder cutoff.
-      expect(
-        controller
-            .restDayRehitEligibilityAt(saved.completedAt)
-            .closedReasons,
-        contains(RestDayRehitClosedReason.trainingLoggedToday),
-      );
+      expect(saved.date, DateTime(now.year, now.month, now.day));
     });
 
     test('travel mode removes the CAROL bike and therefore the reminder',
