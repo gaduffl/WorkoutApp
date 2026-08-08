@@ -1026,7 +1026,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Log set & finish'));
+    await tester.tap(find.text('Log hold & finish'));
     await tester.pumpAndSettle();
     expect(find.text('How does your lower back feel now?'), findsOneWidget);
     expect(controller.completed, isFalse);

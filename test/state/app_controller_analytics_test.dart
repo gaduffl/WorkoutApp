@@ -255,7 +255,8 @@ void main() {
         () async {
       final db = _MemoryDatabase();
       final controller = controllerWith(db);
-      final now = DateTime.now();
+      final now = DateTime(2026, 8, 3, 10);
+      controller.nowOverride = now;
 
       // Eligible for the reminder, but no readiness decision on file.
       expect(controller.restDayRehitEligibilityAt(now).eligible, isTrue);
@@ -294,8 +295,15 @@ void main() {
           .map((event) => event.type);
       expect(types, contains(AnalyticsEventType.rehitCompleted));
 
-      // Having trained, the day is no longer a rest day.
-      expect(controller.restDayRehitEligibilityAt(now).eligible, isFalse);
+      // Having trained, the completion day is no longer a rest day. Evaluate
+      // at the persisted timestamp so this remains deterministic even when
+      // CI runs after the reminder cutoff.
+      expect(
+        controller
+            .restDayRehitEligibilityAt(saved.completedAt)
+            .closedReasons,
+        contains(RestDayRehitClosedReason.trainingLoggedToday),
+      );
     });
 
     test('travel mode removes the CAROL bike and therefore the reminder',
@@ -358,6 +366,26 @@ DecisionTrace _greenTrace(DateTime now) {
 /// plugin, which has no platform channel under test.
 class _AnalyticsController extends AppController {
   _AnalyticsController(super.repository);
+
+  DateTime? nowOverride;
+
+  @override
+  DateTime today() {
+    final now = nowOverride;
+    return now == null
+        ? super.today()
+        : DateTime(now.year, now.month, now.day);
+  }
+
+  @override
+  bool isHighIntensityUsableNow({DateTime? nowLocal}) =>
+      super.isHighIntensityUsableNow(
+        nowLocal: nowLocal ?? nowOverride,
+      );
+
+  @override
+  bool get canLogRestDayRehit =>
+      canLogRestDayRehitAt(nowOverride ?? DateTime.now());
 
   @override
   Future<void> syncNotifications() async {}
