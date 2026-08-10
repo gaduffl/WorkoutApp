@@ -35,6 +35,7 @@ enum RuleKey {
   timeCompress35_20,
   travelModeActive,
   lowerBackRecoveryActive,
+  lowerBackRecoveryLoadMinimized,
   lowerBackRecoverySpacing,
   lowerBackRecoveryReentry,
   painSubMild,
@@ -132,6 +133,8 @@ extension RuleKeyCode on RuleKey {
         return 'TRAVEL_MODE_ACTIVE';
       case RuleKey.lowerBackRecoveryActive:
         return 'LOWER_BACK_RECOVERY_ACTIVE';
+      case RuleKey.lowerBackRecoveryLoadMinimized:
+        return 'LOWER_BACK_RECOVERY_LOAD_MINIMIZED';
       case RuleKey.lowerBackRecoverySpacing:
         return 'LOWER_BACK_RECOVERY_SPACING';
       case RuleKey.lowerBackRecoveryReentry:

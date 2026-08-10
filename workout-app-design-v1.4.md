@@ -324,6 +324,26 @@ slot becomes either the due recovery exposure or a deliberately light bridge
 hamstring-curl substitute. The self-built stool/block/PowerBlock setup is never
 described as inspected or certified.
 
+The mode also replaces the normal strength catalogue rather than filtering
+only the hinge slot. No saved ladder position may reintroduce weighted squats,
+unsupported rows or presses, externally loaded pull-ups, L-sits, weighted
+hangs, or weighted dips. Strength sessions retain their original session IDs
+and queue credit but display as `Lower-back recovery · Pull + ATG 1` and use:
+
+- assisted-as-needed bodyweight pull-ups at 4+ RIR with normal pull-up
+  progression frozen;
+- floor press and chest-supported dumbbell row for supported upper-body work;
+- alternating curls, lateral raises, and bodyweight-only dips for ATG 1 / pump
+  work at 3+ RIR;
+- the existing low-load ATG/knee-health preparation where the template owns
+  it; and
+- the symptom-gated back-extension or bridge-hamstring-curl hinge dose.
+
+Compressed 20-minute sessions keep only the first safe pair. A 60-to-35-minute
+compression removes the pump accessories before supported primary work. Cardio
+sessions remain governed by their existing readiness and pain gates because
+they do not use the strength-exercise ladder.
+
 1. Start with `3 × 30 s` static back-extension holds, neutral-to-near-neutral,
    at least 4 RIR and no failure. Progress by 10 s only after two tolerated
    exposures, capped at `3 × 60 s`.

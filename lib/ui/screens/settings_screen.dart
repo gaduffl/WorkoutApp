@@ -213,8 +213,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('Start lower-back recovery mode?'),
         content: const Text(
           'This mode does not diagnose a disc injury or promise a cure. It '
-          'pauses loaded deadlift progression and substitutes a conservative, '
-          'symptom-gated progression. Because pain has persisted for weeks, '
+          'replaces high lumbar-load strength work with unweighted pull-ups, '
+          'supported upper-body work, ATG 1 pump work, and a conservative '
+          'symptom-gated back-extension progression. Because pain has persisted for weeks, '
           'arrange an assessment with a qualified clinician.\n\n'
           'Do not start this program if you have leg weakness, spreading leg '
           'pain, numbness or tingling, saddle-area numbness, bladder/bowel '
@@ -260,8 +261,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('End recovery mode?'),
         content: const Text(
-          'Loaded hinge programming may return on the next plan. End the '
-          'mode only if you intentionally want to leave its staged re-entry.',
+          'Normal loaded squat, hinge, press, row, pull-up, and core ladders '
+          'may return on the next plan. End the mode only if you intentionally '
+          'want to leave its staged re-entry.',
         ),
         actions: [
           TextButton(
@@ -341,8 +343,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(
                 controller.lowerBackRecovery.active
                     ? '${controller.lowerBackRecovery.stageLabel}\n'
-                        '${controller.lowerBackRecovery.targetLabel} · deadlift progression paused'
-                    : 'Pause deadlift loading and use symptom-gated recovery work',
+                        '${controller.lowerBackRecovery.targetLabel} · lumbar-load-minimized strength catalogue active'
+                    : 'Replace high lumbar-load strength work and use symptom-gated recovery work',
               ),
               value: controller.lowerBackRecovery.active,
               onChanged: (enabled) => enabled

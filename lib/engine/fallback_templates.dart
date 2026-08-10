@@ -125,6 +125,10 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; heute gilt nur die konservative Recovery-Dosis.'
           : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; only the conservative recovery dose applies today.';
+    case RuleKey.lowerBackRecoveryLoadMinimized:
+      return lang == AppLanguage.de
+          ? 'Der Rücken-Recovery-Modus minimiert die LWS-Last: keine belasteten Squats, ungestützten Rows oder Presses, Zusatzgewichte bei Pull-ups oder belastenden Core-Stufen. Stattdessen gelten gestützte Oberkörperarbeit, Pull-ups ohne Zusatzgewicht und ATG-1/Pump-Arbeit.'
+          : 'Lower-back recovery minimizes lumbar loading: no weighted squats, unsupported rows or presses, added pull-up load, or demanding core steps. Supported upper-body work, unweighted pull-ups, and ATG 1 pump work are used instead.';
     case RuleKey.lowerBackRecoverySpacing:
       return lang == AppLanguage.de
           ? 'Recovery-Arbeit ist heute wegen des 48-Stunden-Abstands, der Grenze von zwei Einheiten pro sieben Tage oder des noch offenen Morgen-Feedbacks nicht fällig; Heben bleibt ersetzt.'

@@ -219,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           .lowerBackRecovery.targetLabel),
                                       const SizedBox(height: 4),
                                       const Text(
-                                        'Loaded deadlift progression is paused.',
+                                        'High lumbar-load strength work is replaced by unweighted pull-ups, supported upper-body work, and ATG 1 pump work.',
                                       ),
                                       if (controller
                                           .lowerBackMorningResponseDue) ...[
