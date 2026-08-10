@@ -29,6 +29,18 @@ class ExerciseMuscleMap {
       primary: {MajorMuscleGroup.chest},
       secondary: {MajorMuscleGroup.delts, MajorMuscleGroup.triceps},
     ),
+    'sub:pullVertical:lower_back_pull_up': _MuscleProfile(
+      primary: {MajorMuscleGroup.back},
+      secondary: {MajorMuscleGroup.biceps},
+    ),
+    'sub:pullHorizontal:lower_back_chest_supported_row': _MuscleProfile(
+      primary: {MajorMuscleGroup.back},
+      secondary: {MajorMuscleGroup.biceps},
+    ),
+    'sub:pushVertical:lower_back_bodyweight_dip': _MuscleProfile(
+      primary: {MajorMuscleGroup.triceps},
+      secondary: {MajorMuscleGroup.chest, MajorMuscleGroup.delts},
+    ),
     'sub:coreGrip:db_curl': _MuscleProfile(
       primary: {MajorMuscleGroup.biceps},
     ),

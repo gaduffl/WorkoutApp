@@ -26,6 +26,13 @@ safety rules, validation, or delivery workflow changes.
 - While lower-back recovery mode is active, loaded hinge work and hinge progression
   stay blocked. Preserve the pre-recovery state for a graded return; merely completing
   a session must never unlock or advance it.
+- Every strength plan in lower-back recovery mode must come from the closed
+  low-lumbar-load catalogue. Normal weighted squat, unsupported row/press, loaded
+  pull-up, L-sit, weighted-hang, and weighted-dip ladder state must never leak into
+  the plan. Use the dedicated unweighted/assisted pull-up, supported press/row, ATG 1
+  accessories, and symptom-gated hinge tracks instead.
+- Recovery pull-ups carry no added load, stay at 4+ RIR, and cannot advance the normal
+  pull-up ladder. Bodyweight recovery dips likewise cannot unlock loaded dip work.
 - Back-extension recovery work advances only after recorded same-day and next-morning
   symptom tolerance. New/increasing radiating pain, numbness, tingling, weakness,
   saddle/genital sensory change, or bladder/bowel dysfunction blocks training and
@@ -40,8 +47,9 @@ safety rules, validation, or delivery workflow changes.
 - Use RED-GREEN-REFACTOR for behavior changes. Add engine, serialization, controller,
   and widget regressions at the layer where each rule is owned.
 - Cover legacy-data defaults, persistence round trips, safety precedence, no-loaded-
-  hinge guarantees, frequency spacing, symptom-response progression/regression, and
-  recovery-mode exit/re-entry.
+  hinge guarantees, the complete recovery strength catalogue across S1/S2/S4/S5,
+  advanced normal ladder states, frequency spacing, symptom-response
+  progression/regression, and recovery-mode exit/re-entry.
 - Run `dart format`, `flutter analyze`, and the complete `flutter test` suite. When the
   local runtime lacks Flutter, GitHub Actions is the authoritative validation and every
   failure must be fixed before merge.
@@ -54,4 +62,7 @@ safety rules, validation, or delivery workflow changes.
   for required CI checks.
 - Address every blocking review or CI finding, then squash-merge the pull request
   yourself. Do not leave the final merge to the user.
+- Publish APK releases only from the resulting `main` push (or an explicit manual
+  dispatch), never from the pull-request `closed` event; one merge must produce one
+  release/build identity.
 - Verify the merged `main` workflow and its APK release asset before reporting success.

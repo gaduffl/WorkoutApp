@@ -249,6 +249,237 @@ void main() {
     );
   });
 
+  test(
+      'lower-back recovery removes every normal high-lumbar-load ladder from strength plans',
+      () {
+    final advancedStates = <String, ExerciseState>{
+      for (final entry in ladders.entries)
+        entry.key.name: ExerciseState(
+          trackKey: entry.key.name,
+          pattern: entry.key,
+          ladderStepIndex: switch (entry.key) {
+            MovementPattern.coreGrip => 3,
+            _ => entry.value.steps.length - 1,
+          },
+          currentLoad: 24,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
+      dip.trackKey: ExerciseState(
+        trackKey: dip.trackKey,
+        pattern: dip.pattern,
+        currentLoad: 24,
+        lastTrainedDate: today.subtract(const Duration(days: 3)),
+      ),
+    };
+    final unsafeNames = <String>{
+      'Weighted pull-up (backpack/DB)',
+      'Weighted pull-up +pause at top',
+      dip.name,
+    };
+    for (final pattern in const [
+      MovementPattern.squat,
+      MovementPattern.hinge,
+      MovementPattern.pushVertical,
+      MovementPattern.pullHorizontal,
+      MovementPattern.coreGrip,
+    ]) {
+      unsafeNames.addAll(ladders[pattern]!.steps.map((step) => step.name));
+    }
+
+    for (final sessionId in const [
+      SessionTypeId.s1,
+      SessionTypeId.s2,
+      SessionTypeId.s4,
+      SessionTypeId.s5,
+    ]) {
+      final output = decisionEngine.decide(buildInput(
+        time: 60,
+        subjective: 4,
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        recoveryHistory: normalHrvHistory(),
+        sessionLogs: floorSatisfiedLogs(),
+        exerciseStates: advancedStates,
+        settings: UserSettings(
+          lowerBackRecovery: LowerBackRecoveryState(
+            active: true,
+            activatedAt: today.subtract(const Duration(days: 2)),
+            symptomOnsetDate: today.subtract(const Duration(days: 21)),
+            neurologicalSymptomsAbsentConfirmedAt: today,
+            preRecoveryHingeLoad: 90,
+          ),
+        ),
+        forcedSessionId: sessionId,
+      ));
+
+      final plan = output.trace.plan!;
+      final work = plan.exercises
+          .where((exercise) => !exercise.isWarmup)
+          .toList();
+      expect(
+        work.map((exercise) => exercise.name),
+        contains('Pull-up (bodyweight; assisted as needed)'),
+        reason: sessionId.name,
+      );
+      expect(
+        work.map((exercise) => exercise.name).toSet().intersection(
+              unsafeNames,
+            ),
+        isEmpty,
+        reason: sessionId.name,
+      );
+      expect(
+        work.every(
+          (exercise) => exercise.rirTarget.index >= Rir.rir3plus.index,
+        ),
+        isTrue,
+        reason: sessionId.name,
+      );
+      expect(
+        output.trace.firedRules.map((rule) => rule.key),
+        contains(RuleKey.lowerBackRecoveryLoadMinimized),
+        reason: sessionId.name,
+      );
+    }
+  });
+
+  test('recovery upper day uses supported work and an unweighted pull-up',
+      () {
+    final advancedStates = <String, ExerciseState>{
+      MovementPattern.pushHorizontal.name: ExerciseState(
+        trackKey: MovementPattern.pushHorizontal.name,
+        pattern: MovementPattern.pushHorizontal,
+        ladderStepIndex: 4,
+        currentLoad: 24,
+      ),
+      MovementPattern.pushVertical.name: ExerciseState(
+        trackKey: MovementPattern.pushVertical.name,
+        pattern: MovementPattern.pushVertical,
+        ladderStepIndex: 3,
+        currentLoad: 24,
+      ),
+      MovementPattern.pullHorizontal.name: ExerciseState(
+        trackKey: MovementPattern.pullHorizontal.name,
+        pattern: MovementPattern.pullHorizontal,
+        ladderStepIndex: 2,
+        currentLoad: 24,
+      ),
+      MovementPattern.pullVertical.name: ExerciseState(
+        trackKey: MovementPattern.pullVertical.name,
+        pattern: MovementPattern.pullVertical,
+        ladderStepIndex: 3,
+        currentLoad: 24,
+      ),
+      MovementPattern.coreGrip.name: ExerciseState(
+        trackKey: MovementPattern.coreGrip.name,
+        pattern: MovementPattern.coreGrip,
+        ladderStepIndex: 3,
+        currentLoad: 24,
+      ),
+    };
+    final output = decisionEngine.decide(buildInput(
+      time: 60,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      exerciseStates: advancedStates,
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s2,
+    ));
+
+    final plan = output.trace.plan!;
+    final work = plan.exercises
+        .where((exercise) => !exercise.isWarmup)
+        .toList();
+    expect(plan.sessionName, 'Lower-back recovery · Pull + ATG 1');
+    expect(
+      work.map((exercise) => exercise.name),
+      containsAll([
+        'Floor press',
+        'Chest-supported DB row (bolster)',
+        'Pull-up (bodyweight; assisted as needed)',
+        'Alternating lateral raise',
+      ]),
+    );
+    final pullUp = work.firstWhere(
+      (exercise) =>
+          exercise.name == 'Pull-up (bodyweight; assisted as needed)',
+    );
+    expect(pullUp.loadTotal, isNull);
+    expect(pullUp.rirTarget, Rir.rir4plus);
+    expect(pullUp.progressionEligible, isFalse);
+    expect(
+      work.any(
+        (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,
+      ),
+      isFalse,
+    );
+  });
+
+  test('recovery ATG 1 keeps pump work but removes weighted dips and core',
+      () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s5,
+    ));
+
+    final work = output.trace.plan!.exercises
+        .where((exercise) => !exercise.isWarmup)
+        .toList();
+    expect(
+      work.map((exercise) => exercise.name),
+      containsAll([
+        'Pull-up (bodyweight; assisted as needed)',
+        'Alternating DB curl',
+        'Alternating lateral raise',
+        'Dip (bodyweight)',
+      ]),
+    );
+    expect(work.map((exercise) => exercise.name), isNot(contains(dip.name)));
+    expect(
+      work.any(
+        (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,
+      ),
+      isFalse,
+    );
+  });
+
   test('neurological warning signs block the entire plan', () {
     final output = decisionEngine.decide(buildInput(
       time: 35,

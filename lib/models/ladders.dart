@@ -180,6 +180,28 @@ const floorPress = SubstituteExercise(
   dumbbells: 2,
 );
 
+/// Dedicated low-lumbar-load variants used only while the lower-back
+/// recovery mode is active. Separate tracks keep their intentionally
+/// constrained prescriptions from advancing the normal loaded ladders.
+const lowerBackRecoveryPullUp = SubstituteExercise(
+  slug: 'lower_back_pull_up',
+  name: 'Pull-up (bodyweight; assisted as needed)',
+  pattern: MovementPattern.pullVertical,
+);
+
+const lowerBackRecoveryChestSupportedRow = SubstituteExercise(
+  slug: 'lower_back_chest_supported_row',
+  name: 'Chest-supported DB row (bolster)',
+  pattern: MovementPattern.pullHorizontal,
+  dumbbells: 2,
+);
+
+const lowerBackRecoveryDip = SubstituteExercise(
+  slug: 'lower_back_bodyweight_dip',
+  name: 'Dip (bodyweight)',
+  pattern: MovementPattern.pushVertical,
+);
+
 /// §12 travel / no-equipment mode: each pattern's bodyweight resolution.
 /// Progression is by reps, hold duration, or ROM only — engine state is not advanced while
 /// travelling, but lastTrained still updates so §6.6 doesn't misfire later.
@@ -252,6 +274,9 @@ const Map<String, LadderStep> travelNamedSteps = {
   'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
   'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
   'sub:pushHorizontal:floor_press': LadderStep(name: 'Wall push-up (pain-free range)'),
+  'sub:pullVertical:lower_back_pull_up': LadderStep(name: 'Prone lat pull-down'),
+  'sub:pullHorizontal:lower_back_chest_supported_row': LadderStep(name: 'Prone W-row'),
+  'sub:pushVertical:lower_back_bodyweight_dip': LadderStep(name: 'Bench / chair dip (bodyweight)'),
   'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
   'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
   'sub:pushVertical:overhead_triceps': LadderStep(name: 'Diamond push-up'),
@@ -266,6 +291,9 @@ final Map<String, SubstituteExercise> substituteRegistry = {
     bridgeHamstringCurl,
     lightSingleLegRdl,
     floorPress,
+    lowerBackRecoveryPullUp,
+    lowerBackRecoveryChestSupportedRow,
+    lowerBackRecoveryDip,
     ...s5NamedAccessories,
   ])
     s.trackKey: s,

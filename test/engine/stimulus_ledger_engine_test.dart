@@ -258,6 +258,43 @@ void main() {
       }
     });
 
+    test('lower-back recovery variants keep explicit muscle attribution',
+        () {
+      final log = strengthLog(
+        id: 'lower-back-recovery-safe-work',
+        templateId: SessionTypeId.s2,
+        sets: [
+          set(
+            trackKey: 'sub:pullVertical:lower_back_pull_up',
+            pattern: MovementPattern.pullVertical,
+            name: 'Pull-up (bodyweight; assisted as needed)',
+            rir: Rir.rir3plus,
+          ),
+          set(
+            trackKey:
+                'sub:pullHorizontal:lower_back_chest_supported_row',
+            pattern: MovementPattern.pullHorizontal,
+            name: 'Chest-supported DB row (bolster)',
+            rir: Rir.rir3plus,
+          ),
+          set(
+            trackKey: 'sub:pushVertical:lower_back_bodyweight_dip',
+            pattern: MovementPattern.pushVertical,
+            name: 'Dip (bodyweight)',
+            rir: Rir.rir3plus,
+          ),
+        ],
+      );
+
+      final result = engine.buildFromSessionLogs(logs: [log], asOf: asOf);
+      expect(result.muscle(MajorMuscleGroup.back).effectiveSets7d, 2);
+      expect(result.muscle(MajorMuscleGroup.biceps).effectiveSets7d, 1);
+      expect(result.muscle(MajorMuscleGroup.triceps).effectiveSets7d, 1);
+      expect(result.muscle(MajorMuscleGroup.chest).effectiveSets7d, 0.5);
+      expect(result.muscle(MajorMuscleGroup.delts).effectiveSets7d, 0.5);
+      expect(result.muscle(MajorMuscleGroup.coreGrip).effectiveSets7d, 0);
+    });
+
     test('unknown substitute tracks do not inherit their broad pattern', () {
       final log = strengthLog(
         id: 'unknown-named',

@@ -471,3 +471,32 @@ treat filename as canonical version).
     proceed unless the user denies neurological/emergency warning signs, the
     logger repeats the stop/escalate instruction, and the mode never labels a
     diagnosis, tissue healing, cure, or a self-built apparatus as certified.
+
+## Session 2026-08-10 (low-lumbar-load recovery strength catalogue)
+
+56. **Recovery mode owns a closed strength-slot catalogue across S1/S2/S4/S5.**
+    Filtering only `MovementPattern.hinge` allowed an advanced squat, standing
+    press, unsupported row, weighted pull-up, or demanding core ladder step to
+    survive. Plan scoring, pain feasibility, travel resolution, and final
+    assembly now consume the same recovery slots, so no separate UI filter can
+    drift from the engine decision.
+57. **Original session identity and queue semantics remain intact.** Lower and
+    full-body slots become symptom-gated hinge work plus pull/ATG-1 work; upper
+    becomes supported press/row plus unweighted pull and pump work; S5 gains the
+    unweighted pull while dropping its general core ladder and loaded dip. The
+    plan title makes the substitution visible without pretending that a lower
+    workout was performed normally.
+58. **Recovery pull-ups and dips have dedicated substitute tracks.** Pull-ups
+    are bodyweight/assisted, fixed at 4+ RIR, and progression-ineligible; dips
+    are bodyweight-only and cannot advance the normal loaded-dip state.
+    Chest-supported rows also use a dedicated track, while floor press, curls,
+    and lateral raises reuse their existing explicit tracks and muscle maps.
+59. **Advanced normal ladder state is treated as hostile test input.** Engine
+    regressions force every strength family with the ordinary ladders at their
+    highest or loaded steps, then assert that the emitted recovery plan contains
+    none of their names and only work at 3+ RIR (4+ for pull-ups/hinge work).
+60. **A squash merge has exactly one APK publishing trigger.** Pull-request
+    validation still runs on open, synchronize, and reopen, but `closed` no longer
+    launches a second post-merge workflow. The `main` push is the sole automatic
+    publisher (with manual dispatch retained for recovery), preventing two CI run
+    numbers and two APK filenames from sharing one commit-tagged release.

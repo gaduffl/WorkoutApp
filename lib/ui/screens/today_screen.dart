@@ -505,8 +505,9 @@ class _TodayScreenState extends State<TodayScreen> {
                   leading: Icon(Icons.health_and_safety),
                   title: Text('Lower-back recovery mode'),
                   subtitle: Text(
-                    'Loaded deadlift progression is paused. Recovery work '
-                    'uses a symptom-gated dose; stop for worsening or '
+                    'Weighted squats, unsupported rows or presses, loaded '
+                    'pull-ups, and demanding core steps are replaced. Use '
+                    'the symptom-gated dose and stop for worsening or '
                     'spreading symptoms.',
                   ),
                 ),
