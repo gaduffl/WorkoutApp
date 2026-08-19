@@ -8,6 +8,7 @@ class PlannedExercise {
   final String trackKey;
   final MovementPattern pattern;
   final String name;
+  final String? visualId;
   final int sets;
   final ExerciseMetric metric;
   final (int, int) targetRange;
@@ -96,6 +97,7 @@ class PlannedExercise {
     required this.trackKey,
     required this.pattern,
     required this.name,
+    this.visualId,
     required this.sets,
     required this.targetRange,
     this.metric = ExerciseMetric.reps,
@@ -137,6 +139,7 @@ class PlannedExercise {
         trackKey: trackKey,
         pattern: pattern,
         name: name,
+        visualId: visualId,
         sets: sets ?? this.sets,
         targetRange: targetRange,
         metric: metric,

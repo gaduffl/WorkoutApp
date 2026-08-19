@@ -7,6 +7,7 @@ import '../../engine/cardio_engine.dart';
 import '../../engine/equipment_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../engine/strength_duration_engine.dart';
+import '../../integrations/screen_awake.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/equipment.dart';
@@ -17,6 +18,7 @@ import '../../models/set_log.dart';
 import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
 import '../widgets/progression_panel.dart';
+import '../widgets/exercise_visual.dart';
 
 /// §11.3: one exercise at a time, big steppers, RIR buttons, pain button,
 /// rest timer, "wrap up" button. Weight steps follow the exercise's real
@@ -40,7 +42,8 @@ class _Step {
   const _Step(this.exIdx, this.setNumber, {this.restAfter = false});
 }
 
-class _LoggerScreenState extends State<LoggerScreen> {
+class _LoggerScreenState extends State<LoggerScreen>
+    with WidgetsBindingObserver {
   late List<_Step> _steps;
   int _current = 0;
   bool _superset = true;
@@ -85,6 +88,8 @@ class _LoggerScreenState extends State<LoggerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(ScreenAwake.setEnabled(true));
     for (var i = 0; i < _ex.length; i++) {
       _weightByExercise[i] = _ex[i].loadTotal ?? 0;
     }
@@ -102,10 +107,24 @@ class _LoggerScreenState extends State<LoggerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(ScreenAwake.setEnabled(false));
     _restTimer?.cancel();
     _holdTimer?.cancel();
     _warmupTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ScreenAwake.setEnabled(true));
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(ScreenAwake.setEnabled(false));
+    }
   }
 
   bool get _isMinuteWarmup =>
@@ -569,6 +588,17 @@ class _LoggerScreenState extends State<LoggerScreen> {
     );
     final partner = _supersetPartnerName(step);
     final isLast = _current == _steps.length - 1;
+    final exerciseOrder = <int>[];
+    for (final item in _steps) {
+      if (!exerciseOrder.contains(item.exIdx)) exerciseOrder.add(item.exIdx);
+    }
+    final exercisePosition = exerciseOrder.indexOf(step.exIdx) + 1;
+    final lastPerformance = e.isWarmup
+        ? null
+        : controller?.lastPerformanceSummaryFor(
+            e.trackKey,
+            before: _sessionStartedAt,
+          );
 
     return Scaffold(
       appBar: AppBar(
@@ -603,6 +633,12 @@ class _LoggerScreenState extends State<LoggerScreen> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
+                            Text(
+                              'Exercise $exercisePosition/${exerciseOrder.length} · '
+                              'sets ${_loggedKeys.length}/${_steps.length}',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 8),
                             if (_hasSupersets)
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
@@ -643,12 +679,25 @@ class _LoggerScreenState extends State<LoggerScreen> {
                                 label: Text('Superset — next: $partner'),
                               ),
                             const SizedBox(height: 12),
+                            if (e.visualId != null)
+                              ExerciseVisualCard(
+                                visualId: e.visualId!,
+                                exerciseName: e.name,
+                              ),
                             Text(
                               'Target: ${e.targetLabel}'
                               '${currentLoadDisplay == null ? '' : ' @ $currentLoadDisplay'}',
                               style: Theme.of(context).textTheme.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
+                            if (lastPerformance != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                lastPerformance,
+                                style: Theme.of(context).textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                             // Interactive controls sit directly under the target
                             // so the timer and pain button are visible without
                             // scrolling; reference copy (instruction, progression

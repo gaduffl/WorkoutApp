@@ -205,6 +205,58 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('logger renders only an explicitly assigned exercise visual',
+      (tester) async {
+    const visualPlan = SessionPlan(
+      sessionId: SessionTypeId.s2,
+      sessionName: 'Pull',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'pullVertical',
+          pattern: MovementPattern.pullVertical,
+          name: 'Pull-up',
+          visualId: 'pullUp',
+          sets: 1,
+          targetRange: (5, 8),
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: LoggerScreen(plan: visualPlan)),
+    );
+
+    expect(find.byKey(const ValueKey('exercise-visual-pullUp')), findsOneWidget);
+    expect(find.text('Exercise 1/1 · sets 0/1'), findsOneWidget);
+  });
+
+  testWidgets('similar exercise name does not trigger a guessed visual',
+      (tester) async {
+    const noVisualPlan = SessionPlan(
+      sessionId: SessionTypeId.s2,
+      sessionName: 'Pull',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'custom',
+          pattern: MovementPattern.pullVertical,
+          name: 'Pull-up-like custom movement',
+          sets: 1,
+          targetRange: (5, 8),
+          rirTarget: Rir.rir2,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: LoggerScreen(plan: noVisualPlan)),
+    );
+
+    expect(find.byKey(const ValueKey('exercise-visual-pullUp')), findsNothing);
+  });
+
   testWidgets(
       'single-arm accessories label the stepper "Dumbbell load (single-arm, alternate arms)"',
       (tester) async {

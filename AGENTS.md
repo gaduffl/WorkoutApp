@@ -13,6 +13,17 @@ safety rules, validation, or delivery workflow changes.
   deviations. Update both when behavior changes materially.
 - Persisted JSON and database models must remain backward compatible. New fields need
   safe defaults for existing installations and backups.
+- History defaults to the fixed-scale 53-week activity heatmap. The persisted
+  `Classic heatmap` setting restores the compact 12-week strength/cardio category
+  view; this preference is display-only and must never alter history aggregation or
+  recommendation inputs.
+- Muscle-map views render the existing stimulus ledger and current plan. Label
+  recency as recency, never fatigue, recovery, or injury readiness; the visual must
+  not create a second stimulus-accounting path.
+- Exercise guides are original local vectors selected only through an explicit
+  `PlannedExercise.visualId`. Never guess by name, let a substitution inherit an
+  approximate visual, or copy exercise media whose redistribution license has not
+  been verified.
 - Prefer existing models, repositories, and engines over parallel state or duplicate
   rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
 
@@ -54,6 +65,9 @@ safety rules, validation, or delivery workflow changes.
   local runtime lacks Flutter, GitHub Actions is the authoritative validation and every
   failure must be fixed before merge.
 - Inspect `git diff --check`, the complete diff, and repository status before staging.
+- The logger may keep the Android display awake only while its route is active and
+  the app is resumed. Clear the platform flag on pause, detach, and dispose; a
+  missing platform bridge must never block logging.
 
 ## GitHub delivery
 

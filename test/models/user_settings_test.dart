@@ -36,4 +36,12 @@ void main() {
     expect(cleared.hrMax, 208 - 0.7 * 50);
     expect(cleared.anthropicApiKey, isNull);
   });
+
+  test('classic heatmap defaults off and copyWith preserves or changes it', () {
+    const settings = UserSettings();
+
+    expect(settings.classicHeatmap, isFalse);
+    expect(settings.copyWith().classicHeatmap, isFalse);
+    expect(settings.copyWith(classicHeatmap: true).classicHeatmap, isTrue);
+  });
 }

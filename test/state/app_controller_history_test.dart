@@ -62,7 +62,7 @@ void main() {
 
     final data = await controller.loadHistoryData(asOf: asOf);
 
-    expect(repo.sessionSince, DateTime(2026, 4, 22));
+    expect(repo.sessionSince, DateTime(2025, 7, 9));
     expect(repo.recoverySince, DateTime(2026, 6, 17));
     expect(
       asOf.difference(repo.sessionSince!).inDays,

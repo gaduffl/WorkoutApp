@@ -98,6 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       clearAnthropicApiKey: apiKeyText.isEmpty,
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
       travelMode: _settings.travelMode,
+      classicHeatmap: _settings.classicHeatmap,
       notificationsEnabled: _settings.notificationsEnabled,
       secondRehitNudgeEnabled: _settings.secondRehitNudgeEnabled,
       restDayRehitNudgeEnabled: _settings.restDayRehitNudgeEnabled,
@@ -329,6 +330,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _settings.travelMode,
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(travelMode: v);
+              }),
+            ),
+            const Divider(height: 32),
+            Text('History', style: Theme.of(context).textTheme.titleMedium),
+            SwitchListTile(
+              key: const Key('settings-classic-heatmap'),
+              secondary: const Icon(Icons.calendar_view_month_outlined),
+              title: const Text('Classic heatmap'),
+              subtitle: const Text(
+                'Use the compact 12-week strength and cardio category view',
+              ),
+              value: _settings.classicHeatmap,
+              onChanged: (value) => setState(() {
+                _settings = _settings.copyWith(classicHeatmap: value);
               }),
             ),
             const Divider(height: 32),

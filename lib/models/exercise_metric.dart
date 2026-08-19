@@ -22,4 +22,6 @@ extension ExerciseMetricX on ExerciseMetric {
     final value = low == high ? '$low' : '$low-$high';
     return '$value ${unitLabel(low == high ? low : high)}';
   }
+
+  String formatValue(int value) => '$value ${unitLabel(value)}';
 }

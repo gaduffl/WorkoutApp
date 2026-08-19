@@ -35,6 +35,11 @@ class UserSettings {
   /// §12 travel / no-equipment mode: ladders resolve to bodyweight steps.
   final bool travelMode;
 
+  /// History presentation preference only. When false, History uses the
+  /// fixed-scale 12-month activity view; true restores the compact 12-week
+  /// strength/cardio category heatmap.
+  final bool classicHeatmap;
+
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
 
@@ -87,6 +92,7 @@ class UserSettings {
     this.wakeWindow = '07:00',
     this.checkInCutoffHour = 10,
     this.travelMode = false,
+    this.classicHeatmap = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeEnabled = false,
     this.secondRehitNudgeScheduledDay,
@@ -122,6 +128,7 @@ class UserSettings {
     String? wakeWindow,
     int? checkInCutoffHour,
     bool? travelMode,
+    bool? classicHeatmap,
     bool? notificationsEnabled,
     bool? secondRehitNudgeEnabled,
     String? secondRehitNudgeScheduledDay,
@@ -156,6 +163,7 @@ class UserSettings {
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
+      classicHeatmap: classicHeatmap ?? this.classicHeatmap,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       secondRehitNudgeEnabled:
           secondRehitNudgeEnabled ?? this.secondRehitNudgeEnabled,

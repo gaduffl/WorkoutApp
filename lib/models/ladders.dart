@@ -7,6 +7,7 @@ import 'movement_pattern.dart';
 /// achievable set = single-DB union, backpack contents are free entry.
 class LadderStep {
   final String name;
+  final String? visualId;
   final int dumbbells;
   final bool backpackLoaded;
 
@@ -22,6 +23,7 @@ class LadderStep {
 
   const LadderStep({
     required this.name,
+    this.visualId,
     this.dumbbells = 0,
     this.backpackLoaded = false,
     this.unilateral = false,
@@ -41,10 +43,10 @@ final Map<MovementPattern, MovementLadder> ladders = {
   MovementPattern.squat: const MovementLadder(
     pattern: MovementPattern.squat,
     steps: [
-      LadderStep(name: 'Goblet squat', dumbbells: 1),
+      LadderStep(name: 'Goblet squat', dumbbells: 1, visualId: 'gobletSquat'),
       LadderStep(name: 'DB squat', dumbbells: 2),
       LadderStep(name: 'Rear-foot-elevated split squat', dumbbells: 2, unilateral: true),
-      LadderStep(name: 'ATG split squat', dumbbells: 2, unilateral: true),
+      LadderStep(name: 'ATG split squat', dumbbells: 2, unilateral: true, visualId: 'splitSquat'),
       LadderStep(name: 'ATG split squat, front foot elevated', dumbbells: 2, unilateral: true),
       LadderStep(name: 'ATG split squat, front foot elevated +tempo/pause', dumbbells: 2, unilateral: true),
     ],
@@ -63,7 +65,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
   MovementPattern.pushHorizontal: const MovementLadder(
     pattern: MovementPattern.pushHorizontal,
     steps: [
-      LadderStep(name: 'Push-up'),
+      LadderStep(name: 'Push-up', visualId: 'pushUp'),
       LadderStep(name: 'DB bench on bolster', dumbbells: 2),
       LadderStep(name: 'One-arm DB bench', dumbbells: 1, unilateral: true),
       LadderStep(name: 'One-arm DB bench +3s eccentric', dumbbells: 1, unilateral: true),
@@ -73,7 +75,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
   MovementPattern.pushVertical: const MovementLadder(
     pattern: MovementPattern.pushVertical,
     steps: [
-      LadderStep(name: 'Seated DB press', dumbbells: 2),
+      LadderStep(name: 'Seated DB press', dumbbells: 2, visualId: 'seatedPress'),
       LadderStep(name: 'Standing DB press', dumbbells: 2),
       LadderStep(name: 'Single-arm standing press', dumbbells: 1, unilateral: true),
       LadderStep(name: 'Single-arm standing press +pause/tempo', dumbbells: 1, unilateral: true),
@@ -82,8 +84,8 @@ final Map<MovementPattern, MovementLadder> ladders = {
   MovementPattern.pullVertical: const MovementLadder(
     pattern: MovementPattern.pullVertical,
     steps: [
-      LadderStep(name: 'Assisted pull-up'),
-      LadderStep(name: 'Pull-up'),
+      LadderStep(name: 'Assisted pull-up', visualId: 'pullUp'),
+      LadderStep(name: 'Pull-up', visualId: 'pullUp'),
       LadderStep(name: 'Weighted pull-up (backpack/DB)', backpackLoaded: true),
       LadderStep(name: 'Weighted pull-up +pause at top', backpackLoaded: true),
     ],
@@ -92,7 +94,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
     pattern: MovementPattern.pullHorizontal,
     steps: [
       LadderStep(name: 'DB row', dumbbells: 2),
-      LadderStep(name: 'Chest-supported row (bolster)', dumbbells: 2),
+      LadderStep(name: 'Chest-supported row (bolster)', dumbbells: 2, visualId: 'chestSupportedRow'),
       LadderStep(name: 'Single-arm row +pause', dumbbells: 1, unilateral: true),
     ],
   ),
@@ -100,8 +102,8 @@ final Map<MovementPattern, MovementLadder> ladders = {
     pattern: MovementPattern.kneeHealth,
     steps: [
       LadderStep(name: 'Backward treadmill'),
-      LadderStep(name: 'Tibialis raise'),
-      LadderStep(name: 'Calf raises (slant board)'),
+      LadderStep(name: 'Tibialis raise', visualId: 'tibialisRaise'),
+      LadderStep(name: 'Calf raises (slant board)', visualId: 'calfRaise'),
       LadderStep(name: 'Reverse step-up'),
     ],
   ),
@@ -110,6 +112,7 @@ final Map<MovementPattern, MovementLadder> ladders = {
     steps: [
       LadderStep(
         name: 'Plank',
+        visualId: 'plank',
         metric: ExerciseMetric.seconds,
         targetRange: (20, 60),
       ),
@@ -141,6 +144,7 @@ class SubstituteExercise {
   final String name;
   final MovementPattern pattern;
   final int dumbbells;
+  final String? visualId;
 
   /// Bodyweight movement loaded by a backpack/belt (§2.6 rule 5) — e.g. dips.
   /// Progresses on reps at bodyweight, then in free-entered added weight.
@@ -151,19 +155,26 @@ class SubstituteExercise {
     required this.name,
     required this.pattern,
     this.dumbbells = 0,
+    this.visualId,
     this.backpackLoaded = false,
   });
 
   String get trackKey => 'sub:${pattern.name}:$slug';
 
   /// The ladder step this named exercise resolves to.
-  LadderStep get ladderStep => LadderStep(name: name, dumbbells: dumbbells, backpackLoaded: backpackLoaded);
+  LadderStep get ladderStep => LadderStep(
+        name: name,
+        visualId: visualId,
+        dumbbells: dumbbells,
+        backpackLoaded: backpackLoaded,
+      );
 }
 
 const bridgeHamstringCurl = SubstituteExercise(
   slug: 'bridge_hamstring_curl',
   name: 'Bridge hamstring curl',
   pattern: MovementPattern.hinge,
+  visualId: 'bridgeCurl',
 );
 
 const lightSingleLegRdl = SubstituteExercise(
@@ -178,6 +189,7 @@ const floorPress = SubstituteExercise(
   name: 'Floor press',
   pattern: MovementPattern.pushHorizontal,
   dumbbells: 2,
+  visualId: 'floorPress',
 );
 
 /// Dedicated low-lumbar-load variants used only while the lower-back
@@ -187,6 +199,7 @@ const lowerBackRecoveryPullUp = SubstituteExercise(
   slug: 'lower_back_pull_up',
   name: 'Pull-up (bodyweight; assisted as needed)',
   pattern: MovementPattern.pullVertical,
+  visualId: 'pullUp',
 );
 
 const lowerBackRecoveryChestSupportedRow = SubstituteExercise(
@@ -194,26 +207,29 @@ const lowerBackRecoveryChestSupportedRow = SubstituteExercise(
   name: 'Chest-supported DB row (bolster)',
   pattern: MovementPattern.pullHorizontal,
   dumbbells: 2,
+  visualId: 'chestSupportedRow',
 );
 
 const lowerBackRecoveryDip = SubstituteExercise(
   slug: 'lower_back_bodyweight_dip',
   name: 'Dip (bodyweight)',
   pattern: MovementPattern.pushVertical,
+  visualId: 'dip',
 );
 
 /// §12 travel / no-equipment mode: each pattern's bodyweight resolution.
 /// Progression is by reps, hold duration, or ROM only — engine state is not advanced while
 /// travelling, but lastTrained still updates so §6.6 doesn't misfire later.
 const Map<MovementPattern, LadderStep> travelSteps = {
-  MovementPattern.squat: LadderStep(name: 'Split squat (bodyweight)'),
+  MovementPattern.squat: LadderStep(name: 'Split squat (bodyweight)', visualId: 'splitSquat'),
   MovementPattern.hinge: LadderStep(name: 'Single-leg RDL (bodyweight)'),
-  MovementPattern.pushHorizontal: LadderStep(name: 'Push-up'),
+  MovementPattern.pushHorizontal: LadderStep(name: 'Push-up', visualId: 'pushUp'),
   MovementPattern.pushVertical: LadderStep(name: 'Pike push-up'),
   MovementPattern.pullVertical: LadderStep(name: 'Prone lat pull-down'),
   MovementPattern.pullHorizontal: LadderStep(name: 'Prone W-row'),
   MovementPattern.coreGrip: LadderStep(
     name: 'Plank / hollow hold',
+    visualId: 'plank',
     metric: ExerciseMetric.seconds,
     targetRange: (20, 45),
   ),
@@ -229,6 +245,7 @@ const dbCurl = SubstituteExercise(
   name: 'Alternating DB curl',
   pattern: MovementPattern.coreGrip,
   dumbbells: 1,
+  visualId: 'curl',
 );
 
 const lateralRaise = SubstituteExercise(
@@ -236,6 +253,7 @@ const lateralRaise = SubstituteExercise(
   name: 'Alternating lateral raise',
   pattern: MovementPattern.pushVertical,
   dumbbells: 1,
+  visualId: 'lateralRaise',
 );
 
 const overheadTriceps = SubstituteExercise(
@@ -256,6 +274,7 @@ const dip = SubstituteExercise(
   name: 'Weighted dip (DB between feet)',
   pattern: MovementPattern.pushVertical,
   dumbbells: 1,
+  visualId: 'dip',
 );
 
 /// Named progression tracks that are part of a normal (non-pain) plan.
@@ -271,16 +290,16 @@ const s5NamedAccessories = <SubstituteExercise>[
 /// their normal track keys means the session still records recency for the
 /// intended slot while load-based progression remains frozen in travel mode.
 const Map<String, LadderStep> travelNamedSteps = {
-  'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
+  'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl', visualId: 'bridgeCurl'),
   'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
   'sub:pushHorizontal:floor_press': LadderStep(name: 'Wall push-up (pain-free range)'),
   'sub:pullVertical:lower_back_pull_up': LadderStep(name: 'Prone lat pull-down'),
   'sub:pullHorizontal:lower_back_chest_supported_row': LadderStep(name: 'Prone W-row'),
-  'sub:pushVertical:lower_back_bodyweight_dip': LadderStep(name: 'Bench / chair dip (bodyweight)'),
-  'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
-  'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
+  'sub:pushVertical:lower_back_bodyweight_dip': LadderStep(name: 'Bench / chair dip (bodyweight)', visualId: 'dip'),
+  'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl', visualId: 'curl'),
+  'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise', visualId: 'lateralRaise'),
   'sub:pushVertical:overhead_triceps': LadderStep(name: 'Diamond push-up'),
-  'sub:pushVertical:dip': LadderStep(name: 'Bench / chair dip (bodyweight)'),
+  'sub:pushVertical:dip': LadderStep(name: 'Bench / chair dip (bodyweight)', visualId: 'dip'),
 };
 
 /// Keyed by [SubstituteExercise.trackKey] so plan assembly can resolve a
