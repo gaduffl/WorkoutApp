@@ -309,4 +309,34 @@ void main() {
     expect(restored.hrMax, 208 - 0.7 * 45);
     expect(restored.anthropicApiKey, isNull);
   });
+
+  test('classic heatmap preference round-trips and is legacy-safe', () {
+    final restored = userSettingsFromJson(
+      userSettingsToJson(const UserSettings(classicHeatmap: true)),
+    );
+    expect(restored.classicHeatmap, isTrue);
+
+    final legacy = userSettingsToJson(const UserSettings())
+      ..remove('classicHeatmap');
+    expect(userSettingsFromJson(legacy).classicHeatmap, isFalse);
+  });
+
+  test('planned exercise visual ID round-trips and is legacy-safe', () {
+    const exercise = PlannedExercise(
+      trackKey: 'pullVertical',
+      pattern: MovementPattern.pullVertical,
+      name: 'Pull-up',
+      visualId: 'pullUp',
+      sets: 3,
+      targetRange: (6, 10),
+      rirTarget: Rir.rir2,
+    );
+    expect(
+      plannedExerciseFromJson(plannedExerciseToJson(exercise)).visualId,
+      'pullUp',
+    );
+
+    final legacy = plannedExerciseToJson(exercise)..remove('visualId');
+    expect(plannedExerciseFromJson(legacy).visualId, isNull);
+  });
 }

@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../engine/stimulus_ledger_engine.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/history_data.dart';
 import '../../models/movement_pattern.dart';
+import '../../models/plan.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../models/session_log.dart';
 import '../../models/session_type.dart';
+import '../../models/set_log.dart';
+import '../../models/stimulus_ledger.dart';
 import '../../models/training_status.dart';
+import '../../models/training_targets.dart';
 import '../../state/app_controller.dart';
 import '../view_models/history_feedback_view_model.dart';
 
@@ -104,15 +109,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ledger: data.ledger,
             status: data.trainingStatus,
           );
+          final controller = context.read<AppController>();
+          final trace = controller.todayTrace;
+          final todayPlan = trace != null && _sameDay(trace.date, today)
+              ? trace.plan
+              : null;
+          final progressionSince = today.subtract(const Duration(days: 84));
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               TrainingTargetDashboard(viewModel: feedback),
               const SizedBox(height: 12),
-              _CalendarHeatCard(logs: logs, today: today),
+              MuscleMapCard(
+                ledger: data.ledger,
+                status: data.trainingStatus,
+                todayExercises: todayPlan?.exercises ?? const [],
+              ),
               const SizedBox(height: 12),
-              _ProgressionCard(logs: logs),
+              if (controller.settings.classicHeatmap)
+                _ClassicCalendarHeatCard(logs: logs, today: today)
+              else
+                _YearActivityHeatCard(logs: logs, today: today),
+              const SizedBox(height: 12),
+              _ProgressionCard(
+                logs: logs
+                    .where((log) => !log.date.isBefore(progressionSince))
+                    .toList(),
+              ),
               const SizedBox(height: 12),
               _HrvCard(snaps: snaps, today: today),
               const SizedBox(height: 12),
@@ -571,11 +595,568 @@ String _heatDuration(int seconds) {
       : '$minutes:${remainder.toString().padLeft(2, '0')}';
 }
 
-class _CalendarHeatCard extends StatelessWidget {
+// ---------- annual activity heat (53 weeks, stable time scale) ----------
+
+/// A day in the default activity heatmap. Levels are fixed rather than
+/// recalculated from the user's own quartiles, so a 20-minute workout keeps
+/// the same meaning as more history is added.
+class HistoryActivityDay {
+  final int elapsedSeconds;
+  final List<SessionLog> logs;
+
+  HistoryActivityDay({
+    required this.elapsedSeconds,
+    required List<SessionLog> logs,
+  }) : logs = List<SessionLog>.unmodifiable(logs);
+
+  static final empty = HistoryActivityDay(elapsedSeconds: 0, logs: const []);
+
+  int get level {
+    if (elapsedSeconds <= 0) return 0;
+    if (elapsedSeconds < 10 * 60) return 1;
+    if (elapsedSeconds < 20 * 60) return 2;
+    if (elapsedSeconds < 35 * 60) return 3;
+    return 4;
+  }
+
+  String tooltip(DateTime date) =>
+      '${_d(date)}: ${logs.isEmpty ? 'No logged training' : '${_heatDuration(elapsedSeconds)} trained · ${logs.length} ${logs.length == 1 ? 'session' : 'sessions'}'}';
+
+  static Map<String, HistoryActivityDay> project(List<SessionLog> logs) {
+    final grouped = <String, List<SessionLog>>{};
+    for (final log in logs) {
+      final key = '${log.date.year}-${log.date.month}-${log.date.day}';
+      grouped.putIfAbsent(key, () => []).add(log);
+    }
+    return {
+      for (final entry in grouped.entries)
+        entry.key: HistoryActivityDay(
+          elapsedSeconds: entry.value.fold(
+            0,
+            (sum, log) => sum + log.elapsedSecondsOrEstimate,
+          ),
+          logs: entry.value,
+        ),
+    };
+  }
+}
+
+class _YearActivityHeatCard extends StatefulWidget {
   final List<SessionLog> logs;
   final DateTime today;
 
-  const _CalendarHeatCard({required this.logs, required this.today});
+  const _YearActivityHeatCard({required this.logs, required this.today});
+
+  @override
+  State<_YearActivityHeatCard> createState() => _YearActivityHeatCardState();
+}
+
+class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
+  static const _cell = 12.0;
+  static const _gap = 3.0;
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToLatest());
+  }
+
+  @override
+  void didUpdateWidget(covariant _YearActivityHeatCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.today != widget.today) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToLatest());
+    }
+  }
+
+  void _scrollToLatest() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final today = DateTime(widget.today.year, widget.today.month, widget.today.day);
+    final gridEnd = today.add(Duration(days: 7 - today.weekday));
+    final gridStart = gridEnd.subtract(const Duration(days: 370));
+    final days = HistoryActivityDay.project(widget.logs);
+    final trainedDays = days.values.where((day) => day.elapsedSeconds > 0).length;
+    final activeWeeks = <String>{
+      for (final log in widget.logs)
+        '${log.date.subtract(Duration(days: log.date.weekday - 1)).year}-${log.date.subtract(Duration(days: log.date.weekday - 1)).month}-${log.date.subtract(Duration(days: log.date.weekday - 1)).day}',
+    }.length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Activity · last 12 months',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$trainedDays training days · $activeWeeks active weeks · by time trained',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Column(
+                    children: const [
+                      SizedBox(height: _cell, child: Text('M')),
+                      SizedBox(height: _gap + _cell),
+                      SizedBox(height: _cell, child: Text('W')),
+                      SizedBox(height: _gap + _cell),
+                      SizedBox(height: _cell, child: Text('F')),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    key: const Key('year-activity-heat-scroll'),
+                    controller: _scrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 18,
+                          width: 53 * (_cell + _gap),
+                          child: Stack(
+                            children: _monthLabels(gridStart),
+                          ),
+                        ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: List.generate(53, (week) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: _gap),
+                              child: Column(
+                                children: List.generate(7, (weekday) {
+                                  final date = gridStart.add(
+                                    Duration(days: week * 7 + weekday),
+                                  );
+                                  final future = date.isAfter(today);
+                                  final evidence = days[
+                                        '${date.year}-${date.month}-${date.day}'
+                                      ] ??
+                                      HistoryActivityDay.empty;
+                                  final cell = Container(
+                                    key: ValueKey('activity-day-${_d(date)}'),
+                                    width: _cell,
+                                    height: _cell,
+                                    decoration: BoxDecoration(
+                                      color: future
+                                          ? Colors.transparent
+                                          : _activityColor(
+                                              evidence.level,
+                                              scheme,
+                                            ),
+                                      borderRadius: BorderRadius.circular(3),
+                                      border: _sameDay(date, today)
+                                          ? Border.all(
+                                              color: scheme.onSurface,
+                                              width: 1,
+                                            )
+                                          : null,
+                                    ),
+                                  );
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: _gap),
+                                    child: Semantics(
+                                      label: evidence.tooltip(date),
+                                      button: evidence.logs.isNotEmpty,
+                                      child: Tooltip(
+                                        message: evidence.tooltip(date),
+                                        child: GestureDetector(
+                                          onTap: evidence.logs.isEmpty
+                                              ? null
+                                              : () => _showDay(
+                                                    context,
+                                                    date,
+                                                    evidence,
+                                                  ),
+                                          child: cell,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text('Less time', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(width: 6),
+                for (var level = 0; level <= 4; level++) ...[
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: _activityColor(level, scheme),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                Text('More time', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Fixed scale: <10 · 10–19 · 20–34 · 35+ minutes. Tap a trained day for details.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _monthLabels(DateTime gridStart) {
+    final labels = <Widget>[];
+    var previousMonth = 0;
+    for (var week = 0; week < 53; week++) {
+      final date = gridStart.add(Duration(days: week * 7));
+      if (date.month == previousMonth) continue;
+      previousMonth = date.month;
+      labels.add(Positioned(
+        left: week * (_cell + _gap),
+        child: Text(
+          const [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+          ][date.month - 1],
+          style: const TextStyle(fontSize: 10),
+        ),
+      ));
+    }
+    return labels;
+  }
+
+  Color _activityColor(int level, ColorScheme scheme) {
+    if (level == 0) return scheme.surfaceContainerHighest;
+    return Color.lerp(
+      scheme.primaryContainer,
+      scheme.primary,
+      const [0.0, 0.12, 0.4, 0.7, 1.0][level],
+    )!;
+  }
+
+  void _showDay(
+    BuildContext context,
+    DateTime date,
+    HistoryActivityDay day,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_d(date), style: Theme.of(context).textTheme.titleLarge),
+              Text('${_heatDuration(day.elapsedSeconds)} total training'),
+              const SizedBox(height: 8),
+              for (final log in day.logs)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.check_circle_outline),
+                  title: Text(log.templateId.name.toUpperCase()),
+                  subtitle: Text(historySessionDoseSummary(log)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------- muscle map (rendering of existing ledger only) ----------
+
+enum _MuscleMapMode { dose, recency, today }
+
+class MuscleMapCard extends StatefulWidget {
+  final StimulusLedgerSnapshot ledger;
+  final TrainingStatus status;
+  final List<PlannedExercise> todayExercises;
+
+  const MuscleMapCard({
+    super.key,
+    required this.ledger,
+    required this.status,
+    this.todayExercises = const [],
+  });
+
+  @override
+  State<MuscleMapCard> createState() => _MuscleMapCardState();
+}
+
+class _MuscleMapCardState extends State<MuscleMapCard> {
+  _MuscleMapMode _mode = _MuscleMapMode.dose;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = _values();
+    final title = switch (_mode) {
+      _MuscleMapMode.dose => 'Completed effective sets in the trailing 28 days',
+      _MuscleMapMode.recency => 'Days since last qualifying stimulus — not a fatigue score',
+      _MuscleMapMode.today => 'Expected qualifying set contribution in today’s plan',
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Muscle map', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<_MuscleMapMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: _MuscleMapMode.dose,
+                    label: Text('28-day dose'),
+                  ),
+                  ButtonSegment(
+                    value: _MuscleMapMode.recency,
+                    label: Text('Recency'),
+                  ),
+                  ButtonSegment(
+                    value: _MuscleMapMode.today,
+                    label: Text('Today'),
+                  ),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (value) => setState(() {
+                  _mode = value.single;
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Front and back muscle map',
+              child: SizedBox(
+                height: 230,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _MuscleBodyPainter(
+                    values: values,
+                    colorScheme: Theme.of(context).colorScheme,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: MajorMuscleGroup.values.map((muscle) {
+                final value = values[muscle] ?? 0;
+                return Text(
+                  '${_muscleLabel(muscle)} ${_muscleValue(muscle, value)}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<MajorMuscleGroup, double> _values() {
+    if (_mode == _MuscleMapMode.dose) {
+      return {
+        for (final row in widget.status.muscle)
+          row.muscleGroup: row.maximumTargetEffectiveSets <= 0
+              ? 0
+              : (row.completedEffectiveSets /
+                      row.maximumTargetEffectiveSets)
+                  .clamp(0.0, 1.0),
+      };
+    }
+    if (_mode == _MuscleMapMode.recency) {
+      return {
+        for (final muscle in MajorMuscleGroup.values)
+          muscle: _recencyLevel(
+            widget.ledger.muscle(muscle).daysSinceLastStimulus,
+          ),
+      };
+    }
+    final totals = {for (final muscle in MajorMuscleGroup.values) muscle: 0.0};
+    const map = ExerciseMuscleMap();
+    for (final exercise in widget.todayExercises) {
+      if (exercise.isWarmup || exercise.rirTarget == Rir.rir4plus) continue;
+      final contribution = map.contributionForExercise(
+        trackKey: exercise.trackKey,
+        pattern: exercise.pattern,
+        exerciseName: exercise.name,
+      );
+      for (final entry in contribution.entries) {
+        totals[entry.key] = totals[entry.key]! + entry.value * exercise.sets;
+      }
+    }
+    final max = totals.values.fold<double>(0, (a, b) => a > b ? a : b);
+    if (max == 0) return totals;
+    return totals.map((key, value) => MapEntry(key, value / max));
+  }
+
+  double _recencyLevel(int? days) {
+    if (days == null) return 0;
+    if (days <= 1) return 1;
+    if (days == 2) return 0.75;
+    if (days <= 4) return 0.45;
+    return 0.18;
+  }
+
+  String _muscleValue(MajorMuscleGroup muscle, double normalized) {
+    if (_mode == _MuscleMapMode.dose) {
+      return _sets(widget.ledger.muscle(muscle).effectiveSets28d);
+    }
+    if (_mode == _MuscleMapMode.recency) {
+      final days = widget.ledger.muscle(muscle).daysSinceLastStimulus;
+      return days == null ? 'never' : '${days}d';
+    }
+    return normalized <= 0 ? '—' : 'planned';
+  }
+}
+
+String _muscleLabel(MajorMuscleGroup muscle) => switch (muscle) {
+      MajorMuscleGroup.quads => 'Quads',
+      MajorMuscleGroup.glutes => 'Glutes',
+      MajorMuscleGroup.hamstrings => 'Hamstrings',
+      MajorMuscleGroup.chest => 'Chest',
+      MajorMuscleGroup.back => 'Back',
+      MajorMuscleGroup.delts => 'Delts',
+      MajorMuscleGroup.biceps => 'Biceps',
+      MajorMuscleGroup.triceps => 'Triceps',
+      MajorMuscleGroup.coreGrip => 'Core/grip',
+    };
+
+class _MuscleBodyPainter extends CustomPainter {
+  final Map<MajorMuscleGroup, double> values;
+  final ColorScheme colorScheme;
+
+  const _MuscleBodyPainter({required this.values, required this.colorScheme});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frontCenter = Offset(size.width * 0.28, 25);
+    final backCenter = Offset(size.width * 0.72, 25);
+    _drawBody(canvas, frontCenter, front: true);
+    _drawBody(canvas, backCenter, front: false);
+    final label = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    for (final entry in [(frontCenter.dx, 'Front'), (backCenter.dx, 'Back')]) {
+      label.text = TextSpan(
+        text: entry.$2,
+        style: TextStyle(color: colorScheme.onSurface, fontSize: 11),
+      );
+      label.layout();
+      label.paint(canvas, Offset(entry.$1 - label.width / 2, 0));
+    }
+  }
+
+  void _drawBody(Canvas canvas, Offset c, {required bool front}) {
+    final base = Paint()..color = colorScheme.surfaceContainerHighest;
+    final outline = Paint()
+      ..color = colorScheme.outlineVariant
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    void shape(RRect rect, [MajorMuscleGroup? muscle]) {
+      final paint = muscle == null ? base : _paint(muscle);
+      canvas.drawRRect(rect, paint);
+      canvas.drawRRect(rect, outline);
+    }
+
+    canvas.drawCircle(Offset(c.dx, c.dy + 20), 14, base);
+    canvas.drawCircle(Offset(c.dx, c.dy + 20), 14, outline);
+    shape(RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(c.dx, c.dy + 70), width: 54, height: 70),
+      const Radius.circular(18),
+    ), front ? MajorMuscleGroup.chest : MajorMuscleGroup.back);
+    shape(RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(c.dx, c.dy + 100), width: 34, height: 36),
+      const Radius.circular(10),
+    ), front ? MajorMuscleGroup.coreGrip : MajorMuscleGroup.glutes);
+
+    for (final side in [-1.0, 1.0]) {
+      shape(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(c.dx + side * 36, c.dy + 54), width: 20, height: 25),
+        const Radius.circular(10),
+      ), MajorMuscleGroup.delts);
+      shape(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(c.dx + side * 43, c.dy + 88), width: 15, height: 48),
+        const Radius.circular(8),
+      ), front ? MajorMuscleGroup.biceps : MajorMuscleGroup.triceps);
+      shape(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(c.dx + side * 17, c.dy + 145), width: 25, height: 70),
+        const Radius.circular(12),
+      ), front ? MajorMuscleGroup.quads : MajorMuscleGroup.hamstrings);
+      shape(RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(c.dx + side * 18, c.dy + 198), width: 18, height: 38),
+        const Radius.circular(9),
+      ));
+    }
+  }
+
+  Paint _paint(MajorMuscleGroup muscle) {
+    final strength = (values[muscle] ?? 0).clamp(0.0, 1.0);
+    return Paint()
+      ..color = Color.lerp(
+        colorScheme.primaryContainer.withValues(alpha: 0.32),
+        colorScheme.primary,
+        strength,
+      )!;
+  }
+
+  @override
+  bool shouldRepaint(covariant _MuscleBodyPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.colorScheme != colorScheme;
+}
+
+class _ClassicCalendarHeatCard extends StatelessWidget {
+  final List<SessionLog> logs;
+  final DateTime today;
+
+  const _ClassicCalendarHeatCard({required this.logs, required this.today});
 
   @override
   Widget build(BuildContext context) {

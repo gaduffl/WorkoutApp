@@ -500,3 +500,32 @@ treat filename as canonical version).
     launches a second post-merge workflow. The `main` push is the sole automatic
     publisher (with manual dispatch retained for recovery), preventing two CI run
     numbers and two APK filenames from sharing one commit-tagged release.
+
+## Session 2026-08-19 (history and in-workout visual context)
+
+61. **Annual activity heat uses stable minute bins, not personal quartiles.**
+    History loads 371 days to render 53 complete Monday-first week columns and
+    assigns `<10`, `10–19`, `20–34`, and `35+` minute levels from the best
+    available elapsed seconds. A later workout cannot recolor an older day by
+    shifting a percentile boundary. Tapping a trained day shows its actual
+    sessions and dose. The former 12-week strength / Zone 2 / VO₂-REHIT grid
+    remains intact behind the persisted, legacy-safe `Classic heatmap` toggle.
+62. **The muscle picture is a projection, never a new training model.** Its
+    28-day view normalizes the existing `TrainingStatus` dose against each
+    target maximum; Recency reads `daysSinceLastStimulus` and explicitly says
+    it is not a fatigue score; Today applies the same `ExerciseMuscleMap` to
+    qualifying planned sets. The original MorningCoach painter uses the nine
+    existing major-muscle groups and adds no diagnostic or recovery claim.
+63. **Exercise visuals require an explicit resolved-plan identifier.** A
+    curated set of original Dart vector start/finish guides is attached at the
+    ladder, named-substitute, travel-resolution, or dedicated recovery source.
+    `PlannedExercise.visualId` is persisted with a null legacy default. Logger
+    never performs fuzzy name lookup, so advanced variants and unknown imports
+    display no misleading graphic. The stool/blocks back-extension hold and
+    dynamic movement have dedicated guides.
+64. **Logger context remains observational.** It shows global exercise/set
+    progress and a concise last exposure from the controller's separate
+    schedule-history cache; neither value affects progression. A small native
+    Android channel sets `FLAG_KEEP_SCREEN_ON` while Logger is active/resumed
+    and clears it on pause, detach, or route disposal. Missing platform support
+    fails open to normal screen behavior rather than blocking a workout.

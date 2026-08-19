@@ -74,6 +74,7 @@ class LowerBackRecoveryEngine {
           trackKey: lowerBackRecoveryTrackKey,
           pattern: MovementPattern.hinge,
           name: 'Static back-extension hold',
+          visualId: 'backExtensionHold',
           sets: 3,
           metric: ExerciseMetric.seconds,
           targetRange: (
@@ -92,6 +93,7 @@ class LowerBackRecoveryEngine {
           trackKey: lowerBackRecoveryTrackKey,
           pattern: MovementPattern.hinge,
           name: 'Controlled back extension (unweighted)',
+          visualId: 'backExtensionDynamic',
           sets: 2,
           metric: ExerciseMetric.reps,
           targetRange: (
@@ -126,6 +128,7 @@ class LowerBackRecoveryEngine {
           trackKey: lowerBackRecoveryTrackKey,
           pattern: MovementPattern.hinge,
           name: 'Elevated-start DB deadlift re-entry',
+          visualId: 'elevatedDeadlift',
           sets: 1,
           metric: ExerciseMetric.reps,
           targetRange: const (8, 8),

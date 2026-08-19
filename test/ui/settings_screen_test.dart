@@ -138,6 +138,16 @@ void main() {
     expect(field.controller!.text, '188.5');
   });
 
+  testWidgets('classic heatmap toggle is saved', (tester) async {
+    final controller = await pumpSettings(tester);
+    final toggle = find.byKey(const Key('settings-classic-heatmap'));
+    await tester.scrollUntilVisible(toggle, 400);
+    await tester.tap(toggle);
+    await tapSave(tester);
+
+    expect(controller.settings.classicHeatmap, isTrue);
+  });
+
   for (final invalidAge in ['0', '121', '1000', '42.5', 'not an age']) {
     testWidgets('invalid age "$invalidAge" is rejected before save',
         (tester) async {

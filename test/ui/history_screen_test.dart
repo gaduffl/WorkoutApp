@@ -15,6 +15,7 @@ import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/models/training_targets.dart';
+import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/history_screen.dart';
 import 'package:provider/provider.dart';
@@ -42,8 +43,12 @@ void main() {
     );
   }
 
-  Widget app({required HistoryDataLoader loader}) {
-    final controller = AppController(Repository(AppDatabase()));
+  Widget app({
+    required HistoryDataLoader loader,
+    bool classicHeatmap = false,
+  }) {
+    final controller = AppController(Repository(AppDatabase()))
+      ..settings = UserSettings(classicHeatmap: classicHeatmap);
     return ChangeNotifierProvider<AppController>.value(
       value: controller,
       child: MaterialApp(home: HistoryScreen(loadData: loader)),
@@ -73,6 +78,53 @@ void main() {
         cardioCompletion: cardioCompletion,
         rehitFinisherCompleted: rehitFinisherCompleted,
       );
+
+  test('activity projection uses stable elapsed-time levels', () {
+    final projected = HistoryActivityDay.project([
+      heatLog(
+        id: 'short',
+        date: DateTime(2026, 7, 10),
+        durationMinutes: 9,
+      ),
+      heatLog(
+        id: 'medium',
+        date: DateTime(2026, 7, 11),
+        durationMinutes: 10,
+      ),
+      heatLog(
+        id: 'long',
+        date: DateTime(2026, 7, 12),
+        durationMinutes: 20,
+      ),
+      heatLog(
+        id: 'longest',
+        date: DateTime(2026, 7, 13),
+        durationMinutes: 35,
+      ),
+    ]);
+
+    expect(projected['2026-7-10']!.level, 1);
+    expect(projected['2026-7-11']!.level, 2);
+    expect(projected['2026-7-12']!.level, 3);
+    expect(projected['2026-7-13']!.level, 4);
+  });
+
+  testWidgets('year activity heatmap is the default history view',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(app(loader: (_) async => dataWith()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Activity · last 12 months'), findsOneWidget);
+    expect(find.text('Last 12 weeks'), findsNothing);
+    expect(find.text('28-day dose'), findsOneWidget);
+    expect(find.text('Recency'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+  });
 
   test('heatmap projection keeps cardio attempts visible with VO₂ priority', () {
     final zone2 = heatLog(
@@ -156,7 +208,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(app(loader: (_) async => dataWith()));
+    await tester.pumpWidget(
+      app(loader: (_) async => dataWith(), classicHeatmap: true),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Strength'), findsOneWidget);
@@ -197,7 +251,10 @@ void main() {
       strengthSets: 4,
     );
     await tester.pumpWidget(
-      app(loader: (_) async => dataWith(logs: [strengthLog])),
+      app(
+        loader: (_) async => dataWith(logs: [strengthLog]),
+        classicHeatmap: true,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -269,7 +326,7 @@ void main() {
     // The obsolete weekly-floor card is replaced; the useful history views
     // remain below the evidence-target dashboard.
     expect(find.text('Rolling 7-day floor'), findsNothing);
-    expect(find.text('Last 12 weeks'), findsOneWidget);
+    expect(find.text('Activity · last 12 months'), findsOneWidget);
     expect(find.text('Progression (top set, 12 weeks)'), findsOneWidget);
     expect(find.text('HRV, last 28 days'), findsOneWidget);
     expect(find.text('No sessions logged yet.'), findsOneWidget);

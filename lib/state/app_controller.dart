@@ -149,6 +149,34 @@ class AppController extends ChangeNotifier {
   List<SessionLog> get _todaysLogs =>
       _recentLogs.where((l) => _isSameDate(l.date, today())).toList();
 
+  /// Concise, read-only logger context from the most recent cached exposure.
+  /// It never feeds recommendation or progression logic.
+  String? lastPerformanceSummaryFor(String trackKey, {DateTime? before}) {
+    final cutoff = before ?? DateTime.now();
+    final matching = _scheduleLogs
+        .where((log) => log.completedAt.isBefore(cutoff))
+        .where((log) => log.setLogs.any(
+              (set) => !set.isWarmup && set.trackKey == trackKey,
+            ))
+        .toList()
+      ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
+    if (matching.isEmpty) return null;
+    final sets = matching.first.setLogs
+        .where((set) => !set.isWarmup && set.trackKey == trackKey)
+        .toList();
+    if (sets.isEmpty) return null;
+    final first = sets.first;
+    final sameValue = sets.every(
+      (set) => set.metric == first.metric && set.value == first.value,
+    );
+    final dose = sameValue
+        ? '${sets.length} × ${first.metric.formatValue(first.value)}'
+        : '${sets.length} sets · best ${first.metric.formatValue(sets.map((set) => set.value).reduce((a, b) => a > b ? a : b))}';
+    final topLoad = sets.map((set) => set.weight).reduce((a, b) => a > b ? a : b);
+    final load = topLoad > 0 ? ' @ ${topLoad.toStringAsFixed(topLoad == topLoad.roundToDouble() ? 0 : 1)} lb' : '';
+    return 'Last time: $dose$load';
+  }
+
   /// Whether today's prescription was completed (Home/Today "done" state).
   /// Stimulus/category credit is tracked separately: a fully completed
   /// 20-minute S6 recovery prescription is done without becoming base work.
@@ -785,9 +813,9 @@ class AppController extends ChangeNotifier {
   }
 
   /// Loads the complete History surface and calculates its read-only dose
-  /// feedback from the same persisted records. Eighty-four days preserves the
-  /// existing 12-week heatmap and comfortably covers the inclusive trailing
-  /// 28-day stimulus window (29 calendar dates including today).
+  /// feedback from the same persisted records. A 371-day window provides 53
+  /// complete Mon-first week columns for the default annual activity view;
+  /// the classic 12-week view and 28-day stimulus windows use the same data.
   Future<HistoryData> loadHistoryData({DateTime? asOf}) async {
     final effectiveAsOf = asOf ?? DateTime.now();
     final historyDay = DateTime(
@@ -796,7 +824,7 @@ class AppController extends ChangeNotifier {
       effectiveAsOf.day,
     );
     final logs = await repo.loadSessionLogsSince(
-      historyDay.subtract(const Duration(days: 84)),
+      historyDay.subtract(const Duration(days: 371)),
     );
     final recoverySnapshots = await repo.loadRecoverySnapshotsSince(
       historyDay.subtract(const Duration(days: 28)),

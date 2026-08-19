@@ -1135,6 +1135,7 @@ class DecisionEngine {
               trackKey: planned.trackKey,
               pattern: pattern,
               name: travel.name,
+              visualId: travel.visualId,
               sets: planned.sets,
               metric: travel.metric,
               targetRange: painReentryPrescription
@@ -2233,6 +2234,7 @@ class DecisionEngine {
       trackKey: work.trackKey,
       pattern: work.pattern,
       name: '${work.name} - warm-up ${(pct * 100).round()}%',
+      visualId: work.visualId,
       sets: 1,
       targetRange: (reps, reps),
       metric: ExerciseMetric.reps,
@@ -2351,6 +2353,7 @@ class DecisionEngine {
       trackKey: state.trackKey,
       pattern: state.pattern,
       name: step.name,
+      visualId: step.visualId,
       sets: sets,
       metric: metric,
       targetRange: targetRange,
