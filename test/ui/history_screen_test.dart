@@ -55,6 +55,30 @@ void main() {
     );
   }
 
+  SessionLog heatLog({
+    required String id,
+    required DateTime date,
+    SessionTypeId type = SessionTypeId.s1,
+    int strengthSets = 0,
+    int durationMinutes = 20,
+    CardioCompletion? cardioCompletion,
+    bool rehitFinisherCompleted = false,
+  }) =>
+      SessionLog(
+        id: id,
+        templateId: type,
+        tier: SessionTier.full,
+        date: date,
+        completedAt: date.add(const Duration(hours: 8)),
+        setLogs: const [],
+        plannedWorkSets: strengthSets,
+        completedWorkSets: strengthSets,
+        durationMinutes: durationMinutes,
+        countsAs: const {},
+        cardioCompletion: cardioCompletion,
+        rehitFinisherCompleted: rehitFinisherCompleted,
+      );
+
   test('activity projection uses stable elapsed-time levels', () {
     final projected = HistoryActivityDay.project([
       heatLog(
@@ -101,30 +125,6 @@ void main() {
     expect(find.text('Recency'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
   });
-
-  SessionLog heatLog({
-    required String id,
-    required DateTime date,
-    SessionTypeId type = SessionTypeId.s1,
-    int strengthSets = 0,
-    int durationMinutes = 20,
-    CardioCompletion? cardioCompletion,
-    bool rehitFinisherCompleted = false,
-  }) =>
-      SessionLog(
-        id: id,
-        templateId: type,
-        tier: SessionTier.full,
-        date: date,
-        completedAt: date.add(const Duration(hours: 8)),
-        setLogs: const [],
-        plannedWorkSets: strengthSets,
-        completedWorkSets: strengthSets,
-        durationMinutes: durationMinutes,
-        countsAs: const {},
-        cardioCompletion: cardioCompletion,
-        rehitFinisherCompleted: rehitFinisherCompleted,
-      );
 
   test('heatmap projection keeps cardio attempts visible with VO₂ priority', () {
     final zone2 = heatLog(
