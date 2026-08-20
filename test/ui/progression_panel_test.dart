@@ -43,4 +43,35 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Prescription changed since last time'), findsOneWidget);
   });
+
+  testWidgets('comeback prescription explains the reduced current load',
+      (tester) async {
+    const exercise = PlannedExercise(
+      trackKey: 'hinge',
+      pattern: MovementPattern.hinge,
+      name: 'DB deadlift, floor',
+      sets: 3,
+      targetRange: (6, 10),
+      loadTotal: 75,
+      rirTarget: Rir.rir2,
+      progressionFraction: 0.7,
+      progressionLabel: '75 lb DB deadlift, floor · Difficulty 2 of 6',
+      nextProgressionLabel:
+          'Next: complete every set at the top of the range with RIR 2+',
+      prescriptionChange: 'Comeback load: planned 85 → current 75 lb',
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ProgressionPanel(exercise: exercise)),
+      ),
+    );
+
+    expect(find.text('Reduced after training pause'), findsOneWidget);
+    expect(
+      find.text('Comeback load: planned 85 → current 75 lb'),
+      findsOneWidget,
+    );
+    expect(find.text('Progressed since last time'), findsNothing);
+  });
 }

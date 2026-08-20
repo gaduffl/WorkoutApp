@@ -24,6 +24,7 @@ class ProgressionPanel extends StatelessWidget {
     if (fraction == null || label == null) return const SizedBox.shrink();
 
     final change = exercise.prescriptionChange;
+    final comeback = change?.startsWith('Comeback ') ?? false;
     final progressed = change != null &&
         (change.startsWith('Target increased') ||
             change.startsWith('Load increased') ||
@@ -45,16 +46,22 @@ class ProgressionPanel extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  progressed ? Icons.trending_up : Icons.swap_horiz,
+                  comeback
+                      ? Icons.settings_backup_restore
+                      : progressed
+                          ? Icons.trending_up
+                          : Icons.swap_horiz,
                   size: 18,
                   color: colors.primary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    progressed
-                        ? 'Progressed since last time'
-                        : 'Prescription changed since last time',
+                    comeback
+                        ? 'Reduced after training pause'
+                        : progressed
+                            ? 'Progressed since last time'
+                            : 'Prescription changed since last time',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: colors.primary,
                           fontWeight: FontWeight.w700,

@@ -900,6 +900,29 @@ void main() {
       expect(resolution.state.currentLoad, 90);
     });
 
+    test('training-pause reduction replaces a stale progression milestone', () {
+      final state = ExerciseState(
+        trackKey: 'hinge',
+        pattern: MovementPattern.hinge,
+        currentLoad: 85,
+        lastTrainedDate: today.subtract(const Duration(days: 15)),
+        lastPrescriptionChange: 'Load increased: 80 → 85 lb',
+      );
+
+      final resolution = engine.resolveTodaysPrescription(
+        state,
+        today,
+        const EquipmentConfig(unevenPairModeEnabled: true),
+      );
+
+      expect(resolution.state.currentLoad, 75);
+      expect(
+        resolution.state.lastPrescriptionChange,
+        'Comeback load: planned 85 → current 75 lb',
+      );
+      expect(state.lastPrescriptionChange, 'Load increased: 80 → 85 lb');
+    });
+
     test('>21 days untrained resumes at 80% and one ladder step easier', () {
       final state = ExerciseState(
         trackKey: 'hinge',
