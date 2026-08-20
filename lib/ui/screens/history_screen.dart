@@ -16,6 +16,7 @@ import '../../models/training_status.dart';
 import '../../models/training_targets.dart';
 import '../../state/app_controller.dart';
 import '../view_models/history_feedback_view_model.dart';
+import '../widgets/anatomical_muscle_map.dart';
 
 /// §11.4 History: personal dose targets, calendar heat, per-pattern
 /// progression sparklines, HRV overlay, and session list.
@@ -973,12 +974,7 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
               child: SizedBox(
                 height: 230,
                 width: double.infinity,
-                child: CustomPaint(
-                  painter: _MuscleBodyPainter(
-                    values: values,
-                    colorScheme: Theme.of(context).colorScheme,
-                  ),
-                ),
+                child: AnatomicalMuscleMap(values: values),
               ),
             ),
             const SizedBox(height: 10),
@@ -1067,90 +1063,6 @@ String _muscleLabel(MajorMuscleGroup muscle) => switch (muscle) {
       MajorMuscleGroup.triceps => 'Triceps',
       MajorMuscleGroup.coreGrip => 'Core/grip',
     };
-
-class _MuscleBodyPainter extends CustomPainter {
-  final Map<MajorMuscleGroup, double> values;
-  final ColorScheme colorScheme;
-
-  const _MuscleBodyPainter({required this.values, required this.colorScheme});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final frontCenter = Offset(size.width * 0.28, 25);
-    final backCenter = Offset(size.width * 0.72, 25);
-    _drawBody(canvas, frontCenter, front: true);
-    _drawBody(canvas, backCenter, front: false);
-    final label = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
-    for (final entry in [(frontCenter.dx, 'Front'), (backCenter.dx, 'Back')]) {
-      label.text = TextSpan(
-        text: entry.$2,
-        style: TextStyle(color: colorScheme.onSurface, fontSize: 11),
-      );
-      label.layout();
-      label.paint(canvas, Offset(entry.$1 - label.width / 2, 0));
-    }
-  }
-
-  void _drawBody(Canvas canvas, Offset c, {required bool front}) {
-    final base = Paint()..color = colorScheme.surfaceContainerHighest;
-    final outline = Paint()
-      ..color = colorScheme.outlineVariant
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    void shape(RRect rect, [MajorMuscleGroup? muscle]) {
-      final paint = muscle == null ? base : _paint(muscle);
-      canvas.drawRRect(rect, paint);
-      canvas.drawRRect(rect, outline);
-    }
-
-    canvas.drawCircle(Offset(c.dx, c.dy + 20), 14, base);
-    canvas.drawCircle(Offset(c.dx, c.dy + 20), 14, outline);
-    shape(RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(c.dx, c.dy + 70), width: 54, height: 70),
-      const Radius.circular(18),
-    ), front ? MajorMuscleGroup.chest : MajorMuscleGroup.back);
-    shape(RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(c.dx, c.dy + 100), width: 34, height: 36),
-      const Radius.circular(10),
-    ), front ? MajorMuscleGroup.coreGrip : MajorMuscleGroup.glutes);
-
-    for (final side in [-1.0, 1.0]) {
-      shape(RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(c.dx + side * 36, c.dy + 54), width: 20, height: 25),
-        const Radius.circular(10),
-      ), MajorMuscleGroup.delts);
-      shape(RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(c.dx + side * 43, c.dy + 88), width: 15, height: 48),
-        const Radius.circular(8),
-      ), front ? MajorMuscleGroup.biceps : MajorMuscleGroup.triceps);
-      shape(RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(c.dx + side * 17, c.dy + 145), width: 25, height: 70),
-        const Radius.circular(12),
-      ), front ? MajorMuscleGroup.quads : MajorMuscleGroup.hamstrings);
-      shape(RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(c.dx + side * 18, c.dy + 198), width: 18, height: 38),
-        const Radius.circular(9),
-      ));
-    }
-  }
-
-  Paint _paint(MajorMuscleGroup muscle) {
-    final strength = (values[muscle] ?? 0).clamp(0.0, 1.0);
-    return Paint()
-      ..color = Color.lerp(
-        colorScheme.primaryContainer.withValues(alpha: 0.32),
-        colorScheme.primary,
-        strength,
-      )!;
-  }
-
-  @override
-  bool shouldRepaint(covariant _MuscleBodyPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.colorScheme != colorScheme;
-}
 
 class _ClassicCalendarHeatCard extends StatelessWidget {
   final List<SessionLog> logs;

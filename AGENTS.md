@@ -20,6 +20,11 @@ safety rules, validation, or delivery workflow changes.
 - Muscle-map views render the existing stimulus ledger and current plan. Label
   recency as recency, never fatigue, recovery, or injury readiness; the visual must
   not create a second stimulus-accounting path.
+- The anatomical muscle-map geometry is pinned to the MIT-licensed upstream
+  MuscleMap revision recorded in `THIRD_PARTY_NOTICES.md`. Regenerate only from
+  that original source (not openGym's AGPL-converted JavaScript), preserve the
+  notice, and keep untracked regions such as the lumbar area visually neutral
+  rather than inventing stimulus credit.
 - Exercise guides are original local vectors selected only through an explicit
   `PlannedExercise.visualId`. Never guess by name, let a substitution inherit an
   approximate visual, or copy exercise media whose redistribution license has not
