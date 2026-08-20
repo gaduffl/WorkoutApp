@@ -909,7 +909,11 @@ void main() {
         lastPrescriptionChange: 'Load increased: 80 → 85 lb',
       );
 
-      final resolution = engine.resolveTodaysPrescription(state, today, cfg);
+      final resolution = engine.resolveTodaysPrescription(
+        state,
+        today,
+        const EquipmentConfig(unevenPairModeEnabled: true),
+      );
 
       expect(resolution.state.currentLoad, 75);
       expect(
