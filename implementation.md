@@ -529,3 +529,10 @@ treat filename as canonical version).
     Android channel sets `FLAG_KEEP_SCREEN_ON` while Logger is active/resumed
     and clears it on pause, detach, or route disposal. Missing platform support
     fails open to normal screen behavior rather than blocking a workout.
+65. **The muscle picture uses licensed anatomical geometry, not approximate
+    body primitives.** Front/back paths are mechanically transcribed from the
+    pinned MIT-licensed MuscleMap source and parsed by a dependency-free SVG
+    path renderer. Color still comes exclusively from the existing nine-group
+    ledger projection. Regions MorningCoach does not track independently
+    remain neutral; notably, generic upper-back work does not imply a measured
+    lower-back recovery dose. The Classic heatmap preference is unaffected.
