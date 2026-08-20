@@ -1382,6 +1382,7 @@ void main() {
       pattern: MovementPattern.hinge,
       currentLoad: 100,
       lastTrainedDate: today.subtract(const Duration(days: 15)), // 10-20 days -> 90%
+      lastPrescriptionChange: 'Load increased: 90 → 100 lb',
     );
     final input = buildInput(
       time: 35,
@@ -1398,6 +1399,10 @@ void main() {
     final hinge = output.trace.plan!.exercises.firstWhere((e) => e.pattern == MovementPattern.hinge && !e.isWarmup);
     expect(hinge.loadTotal, 90); // 100 x 0.9 = 90, exact match (§2.6.4)
     expect(hinge.persistLoadOnCompletion, isTrue);
+    expect(
+      hinge.prescriptionChange,
+      'Comeback load: planned 100 → current 90 lb',
+    );
   });
 
   test('YELLOW and RED detraining plans retain their emitted safe baseline marker', () {

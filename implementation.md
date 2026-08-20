@@ -536,3 +536,10 @@ treat filename as canonical version).
     ledger projection. Regions MorningCoach does not track independently
     remain neutral; notably, generic upper-back work does not imply a measured
     lower-back recovery dose. The Classic heatmap preference is unaffected.
+66. **Training-pause adjustments replace stale advancement narration.** The
+    detraining resolver compares the pre-pause planned state with the actual
+    comeback prescription and snapshots that change into the plan. Logger and
+    Today therefore say `Reduced after training pause` and show planned versus
+    current load/target/difficulty; an earlier `Load increased` message cannot
+    survive beside a lower emitted load. The load calculation itself is
+    unchanged.

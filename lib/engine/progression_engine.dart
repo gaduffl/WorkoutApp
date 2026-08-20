@@ -605,6 +605,7 @@ class ProgressionEngine {
     final days = state.daysUntrained(today);
     if (days < 10) return PrescriptionResolution(state);
 
+    final before = _snapshotFor(state);
     final next = state.clone();
     if (days > 21 && !substituteRegistry.containsKey(next.trackKey)) {
       next.ladderStepIndex = math.max(0, next.ladderStepIndex - 1);
@@ -622,6 +623,10 @@ class ProgressionEngine {
       );
     }
     next.status = ExerciseStatus.progress;
+    next.lastPrescriptionChange = _comebackChange(
+      before,
+      _snapshotFor(next),
+    );
     return PrescriptionResolution(next, detrainFired: true);
   }
 
@@ -723,6 +728,26 @@ class ProgressionEngine {
           '$verb: ${_microStageName(after.microStepStage, after.metric)}';
     }
     return state;
+  }
+
+  String? _comebackChange(
+    _PrescriptionSnapshot before,
+    _PrescriptionSnapshot after,
+  ) {
+    if (before.exerciseName != after.exerciseName) {
+      return 'Comeback difficulty: planned ${before.exerciseName} → current ${after.exerciseName}';
+    }
+    if (before.metric == ExerciseMetric.seconds &&
+        before.targetValue != after.targetValue) {
+      return 'Comeback target: planned ${before.targetValue} → current ${after.targetValue} seconds';
+    }
+    if ((before.load - after.load).abs() > 0.001) {
+      return 'Comeback load: planned ${_formatLoad(before.load)} → current ${_formatLoad(after.load)} lb';
+    }
+    // A pause can fire for bodyweight work without changing its prescription.
+    // Clear any stale advancement copy instead of narrating a change that did
+    // not happen.
+    return null;
   }
 
   String _microStageName(int stage, ExerciseMetric metric) {

@@ -53,6 +53,9 @@ safety rules, validation, or delivery workflow changes.
   symptom tolerance. New/increasing radiating pain, numbness, tingling, weakness,
   saddle/genital sensory change, or bladder/bowel dysfunction blocks training and
   displays the fixed medical escalation guidance.
+- A comeback prescription after a training pause must describe the currently
+  emitted reduced load/target or easier difficulty. Never carry a stale
+  `Load increased` milestone into a detraining-adjusted plan.
 - Recovery exercises use conservative, pain-tolerated prescriptions and never train
   to failure. Do not represent a self-built apparatus as inspected or certified.
 - Keep the existing pain-freeze, substitution, and escalation behavior working for
