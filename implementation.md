@@ -543,3 +543,12 @@ treat filename as canonical version).
     current load/target/difficulty; an earlier `Load increased` message cannot
     survive beside a lower emitted load. The load calculation itself is
     unchanged.
+67. **Exercise demos come from the official hosted source, not openGym's media
+    checkout.** openGym's exercise GIFs are fetched from a separately licensed
+    dataset and are not covered by openGym's AGPL. MorningCoach therefore commits
+    no exercise media. Logger streams a curated set of the same ExerciseDB V1 media
+    IDs from AscendAPI's public CDN, shows ExerciseDB/AscendAPI and Gym visual
+    attribution in the card, and falls back to a clear offline message. Each demo
+    is attached by an explicit `visualId`; assisted, elevated, ATG, slant-board,
+    self-resisted, and other unmatched variants get no approximate graphic. The
+    former schematic Dart pose painter has been removed.

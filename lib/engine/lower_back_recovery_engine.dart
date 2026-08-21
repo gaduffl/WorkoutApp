@@ -128,7 +128,6 @@ class LowerBackRecoveryEngine {
           trackKey: lowerBackRecoveryTrackKey,
           pattern: MovementPattern.hinge,
           name: 'Elevated-start DB deadlift re-entry',
-          visualId: 'elevatedDeadlift',
           sets: 1,
           metric: ExerciseMetric.reps,
           targetRange: const (8, 8),
