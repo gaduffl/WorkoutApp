@@ -1,5 +1,19 @@
 # Third-party notices
 
+## Runtime exercise demonstrations
+
+Selected exercise animations are requested at runtime from the official free
+[ExerciseDB V1 API/CDN](https://docs.ascendapi.com/products/edb-v1/overview) by
+AscendAPI. The app uses explicit ExerciseDB media IDs and displays the provider and
+copyright attribution next to every animation.
+
+The exercise media is not part of openGym's AGPL license. The dataset used by
+openGym identifies the underlying media as `© Gym visual — https://gymvisual.com/`
+and states that cloning its repository does not transfer a media license. For that
+reason MorningCoach does not copy those GIFs from openGym or the dataset, and no raw
+exercise media is committed to this repository or bundled into the APK. The app
+requests the official hosted URLs only for the specifically mapped movement demos.
+
 ## MuscleMap anatomical path geometry
 
 The front/back anatomical SVG path geometry in

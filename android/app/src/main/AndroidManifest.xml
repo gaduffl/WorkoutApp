@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Exercise demonstrations are streamed from the official ExerciseDB CDN. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- §3.1 morning notification + §12 cutoff nudge -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>

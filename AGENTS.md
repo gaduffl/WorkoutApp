@@ -25,10 +25,12 @@ safety rules, validation, or delivery workflow changes.
   that original source (not openGym's AGPL-converted JavaScript), preserve the
   notice, and keep untracked regions such as the lumbar area visually neutral
   rather than inventing stimulus credit.
-- Exercise guides are original local vectors selected only through an explicit
-  `PlannedExercise.visualId`. Never guess by name, let a substitution inherit an
-  approximate visual, or copy exercise media whose redistribution license has not
-  been verified.
+- Exercise guides stream only explicitly mapped ExerciseDB V1 animations from the
+  official `static.exercisedb.dev` CDN. Keep raw exercise media out of the repository
+  and APK, retain the in-card ExerciseDB/AscendAPI and Gym visual attribution, and
+  preserve the release Android `INTERNET` permission. Never guess by name or let a
+  substitution inherit a demo for different equipment or motion; unsupported variants
+  display no graphic.
 - Prefer existing models, repositories, and engines over parallel state or duplicate
   rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
 
