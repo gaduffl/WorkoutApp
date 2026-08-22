@@ -20,6 +20,9 @@ safety rules, validation, or delivery workflow changes.
 - Muscle-map views render the existing stimulus ledger and current plan. Label
   recency as recency, never fatigue, recovery, or injury readiness; the visual must
   not create a second stimulus-accounting path.
+- The time-allocation chart uses a fixed colorblind-safe categorical palette and
+  matching label swatches. Keep segment widths proportional to elapsed time; do not
+  replace the category colors with adjacent theme roles or describe it as progress.
 - The anatomical muscle-map geometry is pinned to the MIT-licensed upstream
   MuscleMap revision recorded in `THIRD_PARTY_NOTICES.md`. Regenerate only from
   that original source (not openGym's AGPL-converted JavaScript), preserve the
@@ -62,6 +65,9 @@ safety rules, validation, or delivery workflow changes.
   to failure. Do not represent a self-built apparatus as inspected or certified.
 - Keep the existing pain-freeze, substitution, and escalation behavior working for
   users who do not activate the dedicated recovery mode.
+- A continuous Zone 2 completion may exceed its prescribed duration and must retain
+  the full actual dose, subject to the existing 24-hour input bound. Interval cardio
+  protocols remain capped at their prescribed work dose.
 
 ## Implementation and validation
 

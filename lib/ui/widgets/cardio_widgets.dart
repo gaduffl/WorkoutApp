@@ -409,6 +409,9 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
                 labelText: _isCarolPreset
                     ? 'Duration shown by CAROL (M:SS)'
                     : 'Duration (min)',
+                helperText: _isContinuous
+                    ? 'Actual ride time; may exceed the plan'
+                    : null,
               ),
             ),
             spacing,
