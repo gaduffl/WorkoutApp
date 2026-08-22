@@ -376,6 +376,33 @@ void main() {
     );
   });
 
+  testWidgets('Zone 2 completion accepts more than 60 minutes',
+      (tester) async {
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s6,
+      durationMinutes: 60,
+      heartRateMaxBpm: 200,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: _CompletionDialogHost(prescription: prescription)),
+    );
+
+    await tester.tap(find.text('Open completion form'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Actual ride time; may exceed the plan'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Duration (min)'),
+      '90',
+    );
+    await tester.tap(find.text('Save attempt'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Accepted: 90:00'), findsOneWidget);
+  });
+
   testWidgets('CAROL completion form defaults to bike preset duration',
       (tester) async {
     final prescription = cardio.prescriptionFor(

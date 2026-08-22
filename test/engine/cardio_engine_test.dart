@@ -183,21 +183,45 @@ void main() {
       expect(fullPlan.completesPrescription(prescription), isTrue);
     });
 
-    test('continuous Zone 2 validation remains unchanged', () {
+    test('continuous Zone 2 may exceed the prescribed duration', () {
       final prescription = engine.prescriptionFor(
         sessionId: SessionTypeId.s6,
-        durationMinutes: 20,
+        durationMinutes: 60,
         heartRateMaxBpm: 180,
       );
+      final completion = engine.completionFromEntry(
+        prescription: prescription,
+        completedWorkIntervals: 1,
+        completedDurationMinutes: 90,
+      );
+
+      expect(completion.completedWorkSeconds, 90 * 60);
+      expect(completion.completedDurationSeconds, 90 * 60);
+      expect(completion.meetsCreditableDose, isTrue);
+      expect(completion.completesPrescription(prescription), isTrue);
+    });
+
+    test('interval work remains capped at the prescribed dose', () {
+      final prescription = engine.prescriptionFor(
+        sessionId: SessionTypeId.s7,
+        durationMinutes: 5,
+        heartRateMaxBpm: 180,
+      );
+      final overfilled = CardioCompletion(
+        protocol: prescription.protocol,
+        completedWorkIntervals: prescription.plannedWorkIntervals,
+        completedWorkSeconds: prescription.plannedWorkSeconds + 1,
+        completedRecoveryIntervals: prescription.plannedRecoveryIntervals,
+        completedRecoverySeconds: prescription.plannedRecoverySeconds,
+        completedDurationSeconds: prescription.plannedDurationSeconds + 1,
+      );
+
       expect(
-        engine
-            .completionFromEntry(
-              prescription: prescription,
-              completedWorkIntervals: 1,
-              completedDurationMinutes: 20,
-            )
-            .completesPrescription(prescription),
-        isTrue,
+        () => engine.validateCompletion(
+          prescription: prescription,
+          completion: overfilled,
+        ),
+        throwsArgumentError,
       );
     });
   });

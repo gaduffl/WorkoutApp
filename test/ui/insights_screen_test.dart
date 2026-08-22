@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/engine/analytics_engine.dart';
 import 'package:morningcoach/engine/schedule_fit_engine.dart';
 import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_timing.dart';
 import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/ui/screens/insights_screen.dart';
 
 void main() {
@@ -14,6 +16,7 @@ void main() {
     int elapsedSeconds = 2400,
     int plannedDurationMinutes = 30,
     SessionTypeId templateId = SessionTypeId.s1,
+    List<SetLog> setLogs = const [],
   }) =>
       SessionLog(
         id: 'log-${startedAt.toIso8601String()}',
@@ -21,7 +24,7 @@ void main() {
         tier: SessionTier.full,
         date: DateTime(startedAt.year, startedAt.month, startedAt.day),
         completedAt: startedAt.add(Duration(seconds: elapsedSeconds)),
-        setLogs: const [],
+        setLogs: setLogs,
         plannedWorkSets: 6,
         completedWorkSets: 6,
         durationMinutes: elapsedSeconds ~/ 60,
@@ -106,6 +109,71 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('17:30'), findsWidgets);
+  });
+
+  testWidgets('time categories use distinct fixed colors in bar and legend',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final start = DateTime(2026, 8, 3, 7);
+    final setLogs = [
+      SetLog(
+        trackKey: 'warmup',
+        pattern: MovementPattern.squat,
+        exerciseName: 'Warm-up',
+        weight: 0,
+        value: 10,
+        rir: Rir.rir4plus,
+        isWarmup: true,
+        startedAt: start,
+        plannedRestSecondsBefore: 0,
+        timestamp: start.add(const Duration(seconds: 120)),
+      ),
+      SetLog(
+        trackKey: 'work',
+        pattern: MovementPattern.squat,
+        exerciseName: 'Work set',
+        weight: 40,
+        value: 8,
+        rir: Rir.rir2,
+        startedAt: start.add(const Duration(seconds: 120)),
+        plannedRestSecondsBefore: 90,
+        timestamp: start.add(const Duration(seconds: 300)),
+      ),
+    ];
+    await tester.pumpWidget(
+      screen(
+        insightsFrom([
+          session(
+            startedAt: start,
+            elapsedSeconds: 600,
+            setLogs: setLogs,
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const colors = <String, Color>{
+      'warmup': timeAllocationWarmupColor,
+      'working': timeAllocationWorkingColor,
+      'rest': timeAllocationRestColor,
+      'unaccounted': timeAllocationUnaccountedColor,
+    };
+    expect(colors.values.toSet(), hasLength(colors.length));
+    for (final entry in colors.entries) {
+      final segment = tester.widget<Container>(
+        find.byKey(ValueKey('time-allocation-segment-${entry.key}')),
+      );
+      final swatch = tester.widget<Container>(
+        find.byKey(ValueKey('time-allocation-swatch-${entry.key}')),
+      );
+      expect(segment.color, entry.value);
+      expect((swatch.decoration! as BoxDecoration).color, entry.value);
+    }
   });
 
   testWidgets('a load failure offers a retry rather than a blank screen',

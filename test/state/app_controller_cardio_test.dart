@@ -865,6 +865,31 @@ void main() {
     await controller.syncNotifications();
   });
 
+  test('Zone 2 longer than the 60-minute plan persists its full dose',
+      () async {
+    final db = _MemoryDatabase();
+    final repo = Repository(db);
+    final controller = AppController(repo);
+    final plan = cardioPlan(SessionTypeId.s6, 60);
+    final completion = cardio.completionFromEntry(
+      prescription: plan.cardioPrescription!,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 90,
+    );
+
+    await controller.logCardioSession(
+      SessionTypeId.s6,
+      completion: completion,
+      plan: plan,
+    );
+
+    final log = (await repo.loadSessionLogsSince(DateTime(2000))).single;
+    expect(log.durationMinutes, 90);
+    expect(log.cardioCompletion!.completedWorkSeconds, 90 * 60);
+    expect(log.cardioCompletedAsPrescribed, isTrue);
+    await controller.syncNotifications();
+  });
+
   test('zero-value work is persisted for pain context but earns no completion or queue credit', () async {
     final db = _MemoryDatabase();
     final repo = Repository(db);

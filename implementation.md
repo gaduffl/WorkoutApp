@@ -552,3 +552,16 @@ treat filename as canonical version).
     is attached by an explicit `visualId`; assisted, elevated, ATG, slant-board,
     self-resisted, and other unmatched variants get no approximate graphic. The
     former schematic Dart pose painter has been removed.
+
+## Session 2026-08-22 (clear time allocation and extended Zone 2 logging)
+
+68. **Time allocation is a composition chart, not a progress meter.** Warm-up,
+    working, prescribed rest, and unaccounted time keep their existing definitions
+    and proportional segment widths. A fixed colorblind-safe categorical palette
+    plus matching label swatches now makes the four categories independently
+    identifiable in both light and dark themes.
+69. **Continuous Zone 2 records the performed duration, even beyond the plan.** A
+    rider may save more than the prescribed 60 minutes, and the complete duration
+    and work dose persist and receive normal completion credit. The existing 24-hour
+    validation ceiling remains; 4 x 4 and REHIT/CAROL interval work still cannot
+    exceed its prescribed work dose.

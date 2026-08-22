@@ -241,12 +241,18 @@ class CardioEngine {
         'Must be within the prescribed interval count',
       );
     }
+    final continuousZone2 =
+        prescription.protocol.type == CardioProtocolType.zone2Base;
     if (completion.completedWorkSeconds <= 0 ||
-        completion.completedWorkSeconds > prescription.plannedWorkSeconds) {
+        (!continuousZone2 &&
+            completion.completedWorkSeconds >
+                prescription.plannedWorkSeconds)) {
       throw ArgumentError.value(
         completion.completedWorkSeconds,
         'completedWorkSeconds',
-        'Must be within the prescribed work dose',
+        continuousZone2
+            ? 'Must be positive'
+            : 'Must be within the prescribed work dose',
       );
     }
     if (completion.completedRecoveryIntervals < 0 ||

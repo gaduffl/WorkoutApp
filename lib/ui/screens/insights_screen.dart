@@ -6,6 +6,14 @@ import '../../engine/schedule_fit_engine.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 
+// Okabe-Ito-inspired categorical colors stay fixed across light/dark themes.
+// These categories need to remain distinguishable from one another rather
+// than inherit several adjacent Material scheme colors.
+const timeAllocationWarmupColor = Color(0xFF56B4E9);
+const timeAllocationWorkingColor = Color(0xFFE69F00);
+const timeAllocationRestColor = Color(0xFF009E73);
+const timeAllocationUnaccountedColor = Color(0xFFB8B8B8);
+
 /// Formats a duration for reading, not for precision: minutes above an hour,
 /// mm:ss below it, seconds below a minute.
 String formatDurationSeconds(num seconds) {
@@ -237,8 +245,16 @@ class _MetricRow extends StatelessWidget {
   final String label;
   final String value;
   final String? note;
+  final Color? leadingColor;
+  final Key? leadingKey;
 
-  const _MetricRow({required this.label, required this.value, this.note});
+  const _MetricRow({
+    required this.label,
+    required this.value,
+    this.note,
+    this.leadingColor,
+    this.leadingKey,
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -246,6 +262,19 @@ class _MetricRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (leadingColor != null) ...[
+              Container(
+                key: leadingKey,
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.only(top: 5),
+                decoration: BoxDecoration(
+                  color: leadingColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,12 +338,31 @@ class _AllocationCard extends StatelessWidget {
         ],
       );
     }
-    final scheme = Theme.of(context).colorScheme;
-    final segments = <(String, int, Color)>[
-      ('Warm-up', allocation.warmupSeconds, scheme.tertiary),
-      ('Working', allocation.activeSeconds, scheme.primary),
-      ('Rest', allocation.restSeconds, scheme.secondary),
-      ('Unaccounted', allocation.unattributedSeconds, scheme.outlineVariant),
+    final segments = <({String id, String label, int seconds, Color color})>[
+      (
+        id: 'warmup',
+        label: 'Warm-up',
+        seconds: allocation.warmupSeconds,
+        color: timeAllocationWarmupColor,
+      ),
+      (
+        id: 'working',
+        label: 'Working',
+        seconds: allocation.activeSeconds,
+        color: timeAllocationWorkingColor,
+      ),
+      (
+        id: 'rest',
+        label: 'Rest',
+        seconds: allocation.restSeconds,
+        color: timeAllocationRestColor,
+      ),
+      (
+        id: 'unaccounted',
+        label: 'Unaccounted',
+        seconds: allocation.unattributedSeconds,
+        color: timeAllocationUnaccountedColor,
+      ),
     ];
     return _InsightCard(
       title: 'Where the time goes',
@@ -329,10 +377,16 @@ class _AllocationCard extends StatelessWidget {
           child: Row(
             children: [
               for (final segment in segments)
-                if (segment.$2 > 0)
+                if (segment.seconds > 0)
                   Expanded(
-                    flex: segment.$2,
-                    child: Container(height: 14, color: segment.$3),
+                    flex: segment.seconds,
+                    child: Container(
+                      key: ValueKey(
+                        'time-allocation-segment-${segment.id}',
+                      ),
+                      height: 16,
+                      color: segment.color,
+                    ),
                   ),
             ],
           ),
@@ -340,9 +394,12 @@ class _AllocationCard extends StatelessWidget {
         const SizedBox(height: 12),
         for (final segment in segments)
           _MetricRow(
-            label: segment.$1,
-            note: '${(allocation.fractionOf(segment.$2) * 100).round()}%',
-            value: formatDurationSeconds(segment.$2),
+            label: segment.label,
+            note:
+                '${(allocation.fractionOf(segment.seconds) * 100).round()}%',
+            value: formatDurationSeconds(segment.seconds),
+            leadingColor: segment.color,
+            leadingKey: ValueKey('time-allocation-swatch-${segment.id}'),
           ),
       ],
     );
