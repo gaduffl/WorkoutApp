@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
@@ -708,5 +709,59 @@ void main() {
 
     expect(result.muscle(MajorMuscleGroup.quads).effectiveSets7d, 2);
     expect(result.muscle(MajorMuscleGroup.quads).effectiveSets28d, 4);
+  });
+
+  group('bouldering stimulus', () {
+    test('duration and effort update pull/grip muscles conservatively', () {
+      final result = engine.buildFromSessionLogs(
+        logs: const [],
+        boulderingLogs: [
+          BoulderingLog(
+            id: 'boulder-yesterday',
+            date: DateTime(2026, 7, 14),
+            durationMinutes: 90,
+            effort: BoulderingEffort.moderate,
+          ),
+        ],
+        asOf: asOf,
+      );
+
+      expect(result.muscle(MajorMuscleGroup.coreGrip).effectiveSets7d, 2.25);
+      expect(result.muscle(MajorMuscleGroup.back).effectiveSets7d, 1.6875);
+      expect(result.muscle(MajorMuscleGroup.biceps).effectiveSets7d, 1.125);
+      expect(result.muscle(MajorMuscleGroup.delts).effectiveSets7d, 0.5625);
+      expect(result.muscle(MajorMuscleGroup.quads).effectiveSets7d, 0);
+      expect(result.muscle(MajorMuscleGroup.chest).effectiveSets7d, 0);
+      expect(result.muscle(MajorMuscleGroup.coreGrip).daysSinceLastStimulus, 1);
+    });
+
+    test('long gym time is capped but harder effort still counts more', () {
+      const policy = BoulderingStimulusPolicy();
+      MuscleStimulusEvent event(int minutes, BoulderingEffort effort) =>
+          policy.eventFor(
+            BoulderingLog(
+              id: '$minutes-${effort.name}',
+              date: asOf,
+              durationMinutes: minutes,
+              effort: effort,
+            ),
+          );
+
+      expect(
+        event(180, BoulderingEffort.hard)
+            .effectiveSets[MajorMuscleGroup.coreGrip],
+        3,
+      );
+      expect(
+        event(90, BoulderingEffort.hard)
+            .effectiveSets[MajorMuscleGroup.coreGrip],
+        3,
+      );
+      expect(
+        event(90, BoulderingEffort.easy)
+            .effectiveSets[MajorMuscleGroup.coreGrip],
+        1.5,
+      );
+    });
   });
 }

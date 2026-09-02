@@ -1,4 +1,5 @@
 import '../models/analytics_event.dart';
+import '../models/bouldering_log.dart';
 import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
@@ -30,6 +31,21 @@ DateTime? _tryParseOptionalDateTime(Object? value) {
   if (value is! String) return null;
   return DateTime.tryParse(value);
 }
+
+Map<String, dynamic> boulderingLogToJson(BoulderingLog log) => {
+      'id': log.id,
+      'date': _dateStr(log.date),
+      'durationMinutes': log.durationMinutes,
+      'effort': log.effort.name,
+    };
+
+BoulderingLog boulderingLogFromJson(Map<String, dynamic> json) =>
+    BoulderingLog(
+      id: json['id'] as String,
+      date: _parseDate(json['date'] as String),
+      durationMinutes: (json['durationMinutes'] as num).toInt(),
+      effort: BoulderingEffort.values.byName(json['effort'] as String),
+    );
 
 ExerciseMetric _exerciseMetricFromJson(Object? value) {
   if (value is String) {

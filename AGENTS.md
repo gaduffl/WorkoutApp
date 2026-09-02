@@ -20,6 +20,12 @@ safety rules, validation, or delivery workflow changes.
 - Muscle-map views render the existing stimulus ledger and current plan. Label
   recency as recency, never fatigue, recovery, or injury readiness; the visual must
   not create a second stimulus-accounting path.
+- Manually logged bouldering is external activity, not a MorningCoach prescription.
+  Duration and perceived effort feed one conservative, capped pull/grip stimulus
+  adapter for recommendation and muscle-map history, but must never complete the
+  daily plan, advance the queue or an exercise ladder, grant cardio/leg credit, or
+  progress lower-back recovery stages. The annual activity heatmap includes its
+  actual duration; the category-only Classic heatmap remains unchanged.
 - The time-allocation chart uses a fixed colorblind-safe categorical palette and
   matching label swatches. Keep segment widths proportional to elapsed time; do not
   replace the category colors with adjacent theme roles or describe it as progress.
@@ -80,6 +86,10 @@ safety rules, validation, or delivery workflow changes.
 - Run `dart format`, `flutter analyze`, and the complete `flutter test` suite. When the
   local runtime lacks Flutter, GitHub Actions is the authoritative validation and every
   failure must be fixed before merge.
+- Bouldering regressions must cover same-day replacement, date/duration validation,
+  serialization and backup inclusion, the capped duration/effort mapping, muscle-map
+  history, no non-pull/cardio credit, and plan timing: yesterday updates an unlocked
+  current plan, while bouldering after primary work leaves today fixed for tomorrow.
 - Inspect `git diff --check`, the complete diff, and repository status before staging.
 - The logger may keep the Android display awake only while its route is active and
   the app is resumed. Clear the platform flag on pause, detach, and dispose; a

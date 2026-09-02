@@ -1,4 +1,5 @@
 import '../models/check_in.dart';
+import '../models/bouldering_log.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
 import '../models/exercise_metric.dart';
@@ -45,6 +46,7 @@ class DecisionEngineInput {
   final List<RecoverySnapshot> recoveryHistory;
   final List<CheckIn> checkinHistory;
   final List<SessionLog> sessionLogs;
+  final List<BoulderingLog> boulderingLogs;
   final Map<String, ExerciseState> exerciseStates;
   final QueueState queueState;
   final UserSettings settings;
@@ -76,6 +78,7 @@ class DecisionEngineInput {
     required this.recoveryHistory,
     required this.checkinHistory,
     required this.sessionLogs,
+    this.boulderingLogs = const [],
     required this.exerciseStates,
     required this.queueState,
     required this.settings,
@@ -278,6 +281,7 @@ class DecisionEngine {
         : today;
     final ledger = stimulusLedgerEngine.buildFromSessionLogs(
       logs: input.sessionLogs,
+      boulderingLogs: input.boulderingLogs,
       asOf: ledgerAsOf,
     );
     final trainingStatus = trainingStatusEngine.build(

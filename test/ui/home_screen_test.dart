@@ -8,6 +8,7 @@ import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/history_data.dart';
@@ -150,6 +151,47 @@ void main() {
     expect(find.text('Morning check-in'), findsOneWidget);
   });
 
+  testWidgets('start screen logs yesterday bouldering with duration and effort',
+      (tester) async {
+    final controller = await pumpHome(tester);
+
+    await tester.tap(find.byKey(const Key('home-log-bouldering')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('When?'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
+    expect(find.text('Overall perceived effort'), findsOneWidget);
+    expect(find.text('Easy'), findsOneWidget);
+    expect(find.text('Moderate'), findsOneWidget);
+    expect(find.text('Hard'), findsOneWidget);
+    expect(
+      find.textContaining('does not complete a MorningCoach workout'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Yesterday'));
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Duration (min)'),
+      '95',
+    );
+    await tester.tap(find.text('Hard'));
+    await tester.tap(find.text('Save bouldering'));
+    await tester.pumpAndSettle();
+
+    expect(controller.boulderingCalls, 1);
+    expect(
+      controller.boulderingDate,
+      controller.today().subtract(const Duration(days: 1)),
+    );
+    expect(controller.boulderingDurationMinutes, 95);
+    expect(controller.boulderingEffort, BoulderingEffort.hard);
+    expect(
+      find.text('Bouldering logged — the next plan will account for it'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('completed unplanned REHIT captures structured dose and credit',
       (tester) async {
     final saveGate = Completer<void>();
@@ -263,7 +305,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.history));
     await tester.pumpAndSettle();
-    expect(find.text('No sessions logged yet.'), findsOneWidget);
+    expect(find.text('No activity logged yet.'), findsOneWidget);
 
     saveGate.complete();
     await tester.pumpAndSettle();
@@ -274,7 +316,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('1/3 DISTINCT DAYS'), findsOneWidget);
-    expect(find.text('No sessions logged yet.'), findsNothing);
+    expect(find.text('No activity logged yet.'), findsNothing);
   });
 
   testWidgets('below-dose unplanned REHIT is saved without credit wording',
@@ -307,9 +349,29 @@ class _RecordingHomeController extends AppController {
   }
 
   int logCalls = 0;
+  int boulderingCalls = 0;
   CardioCompletion? completion;
+  DateTime? boulderingDate;
+  int? boulderingDurationMinutes;
+  BoulderingEffort? boulderingEffort;
   Completer<void>? saveGate;
   final List<SessionLog> historyLogs = [];
+
+  @override
+  DateTime today() => DateTime(2026, 9, 2);
+
+  @override
+  Future<bool> logBouldering({
+    required DateTime date,
+    required int durationMinutes,
+    required BoulderingEffort effort,
+  }) async {
+    boulderingCalls += 1;
+    boulderingDate = date;
+    boulderingDurationMinutes = durationMinutes;
+    boulderingEffort = effort;
+    return false;
+  }
 
   @override
   Future<void> logUnplannedRehit({

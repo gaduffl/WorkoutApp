@@ -26,6 +26,7 @@ import '../integrations/onedrive_client.dart';
 import '../integrations/oura_client.dart';
 import '../notifications/notification_service.dart';
 import '../models/analytics_event.dart';
+import '../models/bouldering_log.dart';
 import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
@@ -70,6 +71,7 @@ class AppController extends ChangeNotifier {
   /// Serializes session persistence so a rapid double action cannot append
   /// the same workout twice or advance the queue twice.
   bool _completionInFlight = false;
+  bool _boulderingWriteInFlight = false;
   bool _travelModeChangeInFlight = false;
   Future<void>? _notificationSyncTask;
   bool _notificationSyncQueued = false;
@@ -826,12 +828,16 @@ class AppController extends ChangeNotifier {
     final logs = await repo.loadSessionLogsSince(
       historyDay.subtract(const Duration(days: 371)),
     );
+    final boulderingLogs = await repo.loadBoulderingLogsSince(
+      historyDay.subtract(const Duration(days: 371)),
+    );
     final recoverySnapshots = await repo.loadRecoverySnapshotsSince(
       historyDay.subtract(const Duration(days: 28)),
     );
     final targets = TrainingTargets();
     final ledger = const StimulusLedgerEngine().buildFromSessionLogs(
       logs: logs,
+      boulderingLogs: boulderingLogs,
       asOf: effectiveAsOf,
     );
     final trainingStatus = const TrainingStatusEngine().build(
@@ -841,6 +847,7 @@ class AppController extends ChangeNotifier {
     return HistoryData(
       asOf: effectiveAsOf,
       logs: logs,
+      boulderingLogs: boulderingLogs,
       recoverySnapshots: recoverySnapshots,
       targets: targets,
       ledger: ledger,
@@ -1258,6 +1265,9 @@ class AppController extends ChangeNotifier {
     final sessionLogs = await repo.loadSessionLogsSince(
       now.subtract(const Duration(days: 29)),
     );
+    final boulderingLogs = await repo.loadBoulderingLogsSince(
+      now.subtract(const Duration(days: 29)),
+    );
 
     final input = DecisionEngineInput(
       checkin: checkin,
@@ -1265,6 +1275,7 @@ class AppController extends ChangeNotifier {
       recoveryHistory: recoveryHistory,
       checkinHistory: checkinHistory,
       sessionLogs: sessionLogs,
+      boulderingLogs: boulderingLogs,
       exerciseStates: exerciseStates,
       queueState: queueState,
       settings: settings,
@@ -1295,6 +1306,62 @@ class AppController extends ChangeNotifier {
     unawaited(syncNotifications()); // check-in done -> today's cutoff nudge moves to tomorrow
     notifyListeners();
     return output.trace;
+  }
+
+  /// Saves or replaces the bouldering entry for today/yesterday. Returns
+  /// whether an unlocked recommendation for today was recalculated.
+  Future<bool> logBouldering({
+    required DateTime date,
+    required int durationMinutes,
+    required BoulderingEffort effort,
+  }) async {
+    if (_boulderingWriteInFlight) {
+      throw StateError('A bouldering entry is already being saved.');
+    }
+    final day = DateTime(date.year, date.month, date.day);
+    final currentDay = today();
+    final yesterday = currentDay.subtract(const Duration(days: 1));
+    if (!_isSameDate(day, currentDay) && !_isSameDate(day, yesterday)) {
+      throw ArgumentError.value(
+        date,
+        'date',
+        'Bouldering can be entered only for today or yesterday',
+      );
+    }
+    if (durationMinutes <= 0 || durationMinutes > 24 * 60) {
+      throw ArgumentError.value(
+        durationMinutes,
+        'durationMinutes',
+        'Must be between 1 minute and 24 hours',
+      );
+    }
+
+    _boulderingWriteInFlight = true;
+    try {
+      final log = BoulderingLog(
+        id: 'bouldering-${repo.ymd(day)}',
+        date: day,
+        durationMinutes: durationMinutes,
+        effort: effort,
+      );
+      await repo.saveBoulderingLog(log);
+
+      final current = todayTrace;
+      if (current != null && !sessionLoggedToday) {
+        final snapshots = (await repo.loadRecoverySnapshotsSince(currentDay))
+            .where((value) => _isSameDate(value.date, currentDay))
+            .toList();
+        await _recomputeAndPersist(
+          checkin: current.checkin,
+          todaySnapshot: snapshots.isEmpty ? null : snapshots.first,
+        );
+        return true;
+      }
+      notifyListeners();
+      return false;
+    } finally {
+      _boulderingWriteInFlight = false;
+    }
   }
 
   bool _isSameDate(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;

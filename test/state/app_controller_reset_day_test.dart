@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/ladders.dart';
@@ -47,6 +48,14 @@ void main() {
             'decision_traces', 'date', dateKey(day), {'date': dateKey(day)});
         await db.putJsonWithDate(
             'session_logs', 'log-${day.month}-${day.day}', day, {'id': 'x'});
+        await repo.saveBoulderingLog(
+          BoulderingLog(
+            id: 'bouldering-${day.month}-${day.day}',
+            date: day,
+            durationMinutes: 60,
+            effort: BoulderingEffort.moderate,
+          ),
+        );
       }
 
       await repo.deleteDayData(today);
@@ -56,6 +65,7 @@ void main() {
         'recovery_snapshots',
         'decision_traces',
         'session_logs',
+        'bouldering_logs',
       ]) {
         final remaining = await db.getAllJson(table);
         expect(remaining.length, 2,

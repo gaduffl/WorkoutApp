@@ -1,4 +1,5 @@
 import '../models/cardio_protocol.dart';
+import '../models/bouldering_log.dart';
 import '../models/floor_category.dart';
 import '../models/movement_pattern.dart';
 import '../models/session_log.dart';
@@ -339,13 +340,46 @@ class SessionLogStimulusAdapter {
   }
 }
 
+/// Converts a bouldering session into a deliberately conservative estimate of
+/// hypertrophy-relevant stimulus. These values are not literal gym sets:
+/// bouldering contains variable climbing/rest time and route demands. The
+/// 90-minute cap prevents time spent resting in the gym from scaling dose
+/// without bound, while recency still protects the next recommendation.
+class BoulderingStimulusPolicy {
+  const BoulderingStimulusPolicy();
+
+  MuscleStimulusEvent eventFor(BoulderingLog log) {
+    final durationUnits =
+        (log.durationMinutes / 30).clamp(0.0, 3.0).toDouble();
+    final effortMultiplier = switch (log.effort) {
+      BoulderingEffort.easy => 0.5,
+      BoulderingEffort.moderate => 0.75,
+      BoulderingEffort.hard => 1.0,
+    };
+    final dose = durationUnits * effortMultiplier;
+    return MuscleStimulusEvent(
+      sourceId: log.id,
+      performedAt: log.date,
+      effectiveSets: {
+        MajorMuscleGroup.coreGrip: dose,
+        MajorMuscleGroup.back: dose * 0.75,
+        MajorMuscleGroup.biceps: dose * 0.5,
+        MajorMuscleGroup.delts: dose * 0.25,
+      },
+    );
+  }
+}
+
 class StimulusLedgerEngine {
   const StimulusLedgerEngine();
 
   StimulusLedgerSnapshot buildFromSessionLogs({
     required Iterable<SessionLog> logs,
+    Iterable<BoulderingLog> boulderingLogs = const [],
     required DateTime asOf,
     SessionLogStimulusAdapter adapter = const SessionLogStimulusAdapter(),
+    BoulderingStimulusPolicy boulderingPolicy =
+        const BoulderingStimulusPolicy(),
   }) {
     final muscleEvents = <MuscleStimulusEvent>[];
     final aerobicEvents = <AerobicStimulusEvent>[];
@@ -353,6 +387,7 @@ class StimulusLedgerEngine {
       muscleEvents.addAll(adapter.strengthEvents(log));
       aerobicEvents.addAll(adapter.aerobicEvents(log));
     }
+    muscleEvents.addAll(boulderingLogs.map(boulderingPolicy.eventFor));
     return build(
       muscleEvents: muscleEvents,
       aerobicEvents: aerobicEvents,
