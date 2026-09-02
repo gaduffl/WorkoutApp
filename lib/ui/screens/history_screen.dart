@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/stimulus_ledger_engine.dart';
+import '../../models/bouldering_log.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/history_data.dart';
@@ -98,6 +99,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           }
           final data = snap.data!;
           final logs = data.logs.toList();
+          final boulderingLogs = data.boulderingLogs.toList()
+            ..sort((a, b) => a.date.compareTo(b.date));
           final snaps = data.recoverySnapshots;
           logs.sort((a, b) => a.date.compareTo(b.date));
           final today = DateTime(
@@ -131,7 +134,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               if (controller.settings.classicHeatmap)
                 _ClassicCalendarHeatCard(logs: logs, today: today)
               else
-                _YearActivityHeatCard(logs: logs, today: today),
+                _YearActivityHeatCard(
+                  logs: logs,
+                  boulderingLogs: boulderingLogs,
+                  today: today,
+                ),
               const SizedBox(height: 12),
               _ProgressionCard(
                 logs: logs
@@ -141,9 +148,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const SizedBox(height: 12),
               _HrvCard(snaps: snaps, today: today),
               const SizedBox(height: 12),
-              Text('Sessions', style: Theme.of(context).textTheme.titleMedium),
-              if (logs.isEmpty)
-                const Padding(padding: EdgeInsets.all(16), child: Text('No sessions logged yet.')),
+              Text(
+                'Activity log',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (logs.isEmpty && boulderingLogs.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No activity logged yet.'),
+                ),
+              ...boulderingLogs.reversed.take(30).map(
+                    (log) => Card(
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.terrain),
+                        title: Text(
+                          'Bouldering · ${_boulderingEffortLabel(log.effort)}',
+                        ),
+                        subtitle: Text(
+                          '${_d(log.date)} · ${log.durationMinutes} min · '
+                          'estimated pull/grip stimulus',
+                        ),
+                      ),
+                    ),
+                  ),
               ...logs.reversed.take(30).map((l) => Card(
                     child: ListTile(
                       dense: true,
@@ -604,13 +632,20 @@ String _heatDuration(int seconds) {
 class HistoryActivityDay {
   final int elapsedSeconds;
   final List<SessionLog> logs;
+  final List<BoulderingLog> boulderingLogs;
 
   HistoryActivityDay({
     required this.elapsedSeconds,
     required List<SessionLog> logs,
-  }) : logs = List<SessionLog>.unmodifiable(logs);
+    required List<BoulderingLog> boulderingLogs,
+  })  : logs = List<SessionLog>.unmodifiable(logs),
+        boulderingLogs = List<BoulderingLog>.unmodifiable(boulderingLogs);
 
-  static final empty = HistoryActivityDay(elapsedSeconds: 0, logs: const []);
+  static final empty = HistoryActivityDay(
+    elapsedSeconds: 0,
+    logs: const [],
+    boulderingLogs: const [],
+  );
 
   int get level {
     if (elapsedSeconds <= 0) return 0;
@@ -621,22 +656,36 @@ class HistoryActivityDay {
   }
 
   String tooltip(DateTime date) =>
-      '${_d(date)}: ${logs.isEmpty ? 'No logged training' : '${_heatDuration(elapsedSeconds)} trained · ${logs.length} ${logs.length == 1 ? 'session' : 'sessions'}'}';
+      '${_d(date)}: ${logs.isEmpty && boulderingLogs.isEmpty ? 'No logged training' : '${_heatDuration(elapsedSeconds)} trained · ${logs.length + boulderingLogs.length} ${(logs.length + boulderingLogs.length) == 1 ? 'activity' : 'activities'}'}';
 
-  static Map<String, HistoryActivityDay> project(List<SessionLog> logs) {
+  static Map<String, HistoryActivityDay> project(
+    List<SessionLog> logs, {
+    List<BoulderingLog> boulderingLogs = const [],
+  }) {
     final grouped = <String, List<SessionLog>>{};
+    final groupedBouldering = <String, List<BoulderingLog>>{};
     for (final log in logs) {
       final key = '${log.date.year}-${log.date.month}-${log.date.day}';
       grouped.putIfAbsent(key, () => []).add(log);
     }
+    for (final log in boulderingLogs) {
+      final key = '${log.date.year}-${log.date.month}-${log.date.day}';
+      groupedBouldering.putIfAbsent(key, () => []).add(log);
+    }
+    final keys = {...grouped.keys, ...groupedBouldering.keys};
     return {
-      for (final entry in grouped.entries)
-        entry.key: HistoryActivityDay(
-          elapsedSeconds: entry.value.fold(
+      for (final key in keys)
+        key: HistoryActivityDay(
+          elapsedSeconds: (grouped[key] ?? const []).fold<int>(
             0,
             (sum, log) => sum + log.elapsedSecondsOrEstimate,
-          ),
-          logs: entry.value,
+          ) +
+              (groupedBouldering[key] ?? const []).fold<int>(
+                0,
+                (sum, log) => sum + log.durationMinutes * 60,
+              ),
+          logs: grouped[key] ?? const [],
+          boulderingLogs: groupedBouldering[key] ?? const [],
         ),
     };
   }
@@ -644,9 +693,14 @@ class HistoryActivityDay {
 
 class _YearActivityHeatCard extends StatefulWidget {
   final List<SessionLog> logs;
+  final List<BoulderingLog> boulderingLogs;
   final DateTime today;
 
-  const _YearActivityHeatCard({required this.logs, required this.today});
+  const _YearActivityHeatCard({
+    required this.logs,
+    required this.boulderingLogs,
+    required this.today,
+  });
 
   @override
   State<_YearActivityHeatCard> createState() => _YearActivityHeatCardState();
@@ -689,10 +743,15 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
     final today = DateTime(widget.today.year, widget.today.month, widget.today.day);
     final gridEnd = today.add(Duration(days: 7 - today.weekday));
     final gridStart = gridEnd.subtract(const Duration(days: 370));
-    final days = HistoryActivityDay.project(widget.logs);
+    final days = HistoryActivityDay.project(
+      widget.logs,
+      boulderingLogs: widget.boulderingLogs,
+    );
     final trainedDays = days.values.where((day) => day.elapsedSeconds > 0).length;
     final activeWeeks = <String>{
       for (final log in widget.logs)
+        '${log.date.subtract(Duration(days: log.date.weekday - 1)).year}-${log.date.subtract(Duration(days: log.date.weekday - 1)).month}-${log.date.subtract(Duration(days: log.date.weekday - 1)).day}',
+      for (final log in widget.boulderingLogs)
         '${log.date.subtract(Duration(days: log.date.weekday - 1)).year}-${log.date.subtract(Duration(days: log.date.weekday - 1)).month}-${log.date.subtract(Duration(days: log.date.weekday - 1)).day}',
     }.length;
 
@@ -782,11 +841,13 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
                                     padding: const EdgeInsets.only(bottom: _gap),
                                     child: Semantics(
                                       label: evidence.tooltip(date),
-                                      button: evidence.logs.isNotEmpty,
+                                      button: evidence.logs.isNotEmpty ||
+                                          evidence.boulderingLogs.isNotEmpty,
                                       child: Tooltip(
                                         message: evidence.tooltip(date),
                                         child: GestureDetector(
-                                          onTap: evidence.logs.isEmpty
+                                          onTap: evidence.logs.isEmpty &&
+                                                  evidence.boulderingLogs.isEmpty
                                               ? null
                                               : () => _showDay(
                                                     context,
@@ -896,6 +957,17 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
                   title: Text(log.templateId.name.toUpperCase()),
                   subtitle: Text(historySessionDoseSummary(log)),
                 ),
+              for (final log in day.boulderingLogs)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.terrain),
+                  title: const Text('Bouldering'),
+                  subtitle: Text(
+                    '${log.durationMinutes} min · '
+                    '${_boulderingEffortLabel(log.effort)} effort',
+                  ),
+                ),
             ],
           ),
         ),
@@ -903,6 +975,12 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
     );
   }
 }
+
+String _boulderingEffortLabel(BoulderingEffort effort) => switch (effort) {
+      BoulderingEffort.easy => 'Easy',
+      BoulderingEffort.moderate => 'Moderate',
+      BoulderingEffort.hard => 'Hard',
+    };
 
 // ---------- muscle map (rendering of existing ledger only) ----------
 

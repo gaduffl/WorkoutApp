@@ -7,6 +7,7 @@ import 'package:morningcoach/engine/progression_engine.dart';
 import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
@@ -29,6 +30,7 @@ void main() {
     int subjective = 4,
     DateTime? asOf,
     List<SessionLog> logs = const [],
+    List<BoulderingLog> boulderingLogs = const [],
     QueueState queue = const QueueState(),
     SessionTypeId? forced,
     UserSettings settings = const UserSettings(),
@@ -49,6 +51,7 @@ void main() {
       recoveryHistory: const [],
       checkinHistory: checkinHistory,
       sessionLogs: logs,
+      boulderingLogs: boulderingLogs,
       exerciseStates: exerciseStates,
       queueState: queue,
       settings: settings,
@@ -188,6 +191,47 @@ void main() {
           .firstWhere((value) => value.sessionId == SessionTypeId.s3)
           .scoreTerms,
       contains('norwegian4x4Due'),
+    );
+  });
+
+  test('recent bouldering lowers pull-heavy strength candidate priority', () {
+    final baseline = engine.decide(
+      input(
+        time: 60,
+        logs: cardioTargetsFilled(today),
+      ),
+    );
+    final withBouldering = engine.decide(
+      input(
+        time: 60,
+        logs: cardioTargetsFilled(today),
+        boulderingLogs: [
+          BoulderingLog(
+            id: 'bouldering-yesterday',
+            date: today.subtract(const Duration(days: 1)),
+            durationMinutes: 90,
+            effort: BoulderingEffort.hard,
+          ),
+        ],
+      ),
+    );
+
+    ScoredCandidate upper(DecisionEngineOutput output) => output
+        .trace.candidates
+        .firstWhere((candidate) => candidate.sessionId == SessionTypeId.s2);
+
+    expect(
+      upper(baseline).scoreTerms,
+      isNot(contains('muscleRecoveryDemotion')),
+    );
+    expect(
+      upper(withBouldering).scoreTerms['muscleRecoveryDemotion'],
+      lessThan(0),
+    );
+    expect(upper(withBouldering).score, lessThan(upper(baseline).score));
+    expect(
+      withBouldering.trace.firedRuleCodes,
+      isNot(contains('QUEUE_ADVANCED')),
     );
   });
 

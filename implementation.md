@@ -565,3 +565,29 @@ treat filename as canonical version).
     and work dose persist and receive normal completion credit. The existing 24-hour
     validation ceiling remains; 4 x 4 and REHIT/CAROL interval work still cannot
     exceed its prescribed work dose.
+
+## Session 2026-09-02 (manual bouldering load)
+
+70. **Bouldering is an external activity record, not a synthetic workout.** A
+    start-screen dialog records today or yesterday, total gym duration, and easy /
+    moderate / hard overall effort. One deterministic day ID makes a correction
+    replace that day's entry instead of double-counting it. The separate
+    `bouldering_logs` table participates in reset-day deletion and whole-database
+    backup/import, but never creates a `SessionLog`, finishes the MorningCoach plan,
+    advances the queue, or changes exercise progression.
+71. **The stimulus conversion is deliberately conservative and visibly estimated.**
+    Every 30 minutes contributes one duration unit, capped at three units (90 minutes)
+    because total time at a bouldering gym includes variable climbing and rest. Easy,
+    moderate, and hard multiply that unit by 0.5, 0.75, and 1.0. The resulting dose is
+    assigned to grip/core (1.0), back (0.75), biceps (0.5), and delts (0.25), with no
+    leg, chest, triceps, aerobic, high-intensity, or lower-back-recovery credit. This is
+    a product heuristic grounded in climbing's documented forearm/finger-flexor,
+    brachioradialis, and biceps demands and the established duration × session-RPE
+    concept; it is not presented as a validated effective-set equation.
+72. **Calendar timing decides which recommendation may move.** A yesterday entry
+    recomputes today's recommendation when a check-in exists and no primary workout
+    attempt has been saved. An entry before check-in is naturally present when the
+    plan is first generated. Once primary work exists today, today's trace is left
+    immutable and the persisted stimulus affects the next recommendation instead.
+    The normal annual activity heatmap includes actual bouldering minutes and its day
+    detail; the category-only Classic heatmap intentionally remains unchanged.

@@ -5,6 +5,7 @@ import '../../engine/cardio_engine.dart';
 import '../../models/lower_back_recovery.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
+import '../widgets/bouldering_widgets.dart';
 import '../widgets/cardio_widgets.dart';
 import 'checkin_screen.dart';
 import 'history_screen.dart';
@@ -42,6 +43,40 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _loggingUnplannedRehit = false;
+  bool _loggingBouldering = false;
+
+  Future<void> _logBouldering() async {
+    if (_loggingBouldering) return;
+    final controller = context.read<AppController>();
+    final draft = await showBoulderingEntryDialog(
+      context,
+      today: controller.today(),
+    );
+    if (draft == null || !mounted) return;
+
+    setState(() => _loggingBouldering = true);
+    try {
+      final updatedToday = await controller.logBouldering(
+        date: draft.date,
+        durationMinutes: draft.durationMinutes,
+        effort: draft.effort,
+      );
+      if (!mounted) return;
+      final message = updatedToday
+          ? 'Bouldering logged — today’s plan updated'
+          : 'Bouldering logged — the next plan will account for it';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not log bouldering: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _loggingBouldering = false);
+    }
+  }
 
   Future<void> _recordLowerBackMorningResponse(
     LowerBackSymptomResponse response,
@@ -321,6 +356,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                   sessionDone: controller.sessionDoneToday,
                                 ),
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              key: const Key('home-log-bouldering'),
+                              onPressed:
+                                  _loggingBouldering ? null : _logBouldering,
+                              icon: _loggingBouldering
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.terrain),
+                              label: const Text('Log bouldering'),
                             ),
                             const SizedBox(height: 8),
                             OutlinedButton.icon(

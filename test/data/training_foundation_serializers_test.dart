@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:morningcoach/data/serializers.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -15,6 +16,26 @@ Map<String, dynamic> _throughJson(Map<String, dynamic> value) =>
     jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
 
 void main() {
+  test('bouldering entry round-trips date, duration, and effort', () {
+    final restored = boulderingLogFromJson(
+      _throughJson(
+        boulderingLogToJson(
+          BoulderingLog(
+            id: 'bouldering-2026-09-01',
+            date: DateTime(2026, 9, 1),
+            durationMinutes: 95,
+            effort: BoulderingEffort.hard,
+          ),
+        ),
+      ),
+    );
+
+    expect(restored.id, 'bouldering-2026-09-01');
+    expect(restored.date, DateTime(2026, 9, 1));
+    expect(restored.durationMinutes, 95);
+    expect(restored.effort, BoulderingEffort.hard);
+  });
+
   test('structured cardio plan and completion round-trip exactly', () {
     const prescription = CardioPrescription(
       protocol: CardioProtocol.norwegian4x4,

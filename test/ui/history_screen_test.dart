@@ -7,6 +7,7 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/history_data.dart';
@@ -23,10 +24,14 @@ import 'package:provider/provider.dart';
 void main() {
   final asOf = DateTime(2026, 7, 15, 18);
 
-  HistoryData dataWith({List<SessionLog> logs = const []}) {
+  HistoryData dataWith({
+    List<SessionLog> logs = const [],
+    List<BoulderingLog> boulderingLogs = const [],
+  }) {
     final targets = TrainingTargets();
     final ledger = const StimulusLedgerEngine().buildFromSessionLogs(
       logs: logs,
+      boulderingLogs: boulderingLogs,
       asOf: asOf,
     );
     final status = const TrainingStatusEngine().build(
@@ -36,6 +41,7 @@ void main() {
     return HistoryData(
       asOf: asOf,
       logs: logs,
+      boulderingLogs: boulderingLogs,
       recoverySnapshots: const [],
       targets: targets,
       ledger: ledger,
@@ -107,6 +113,27 @@ void main() {
     expect(projected['2026-7-11']!.level, 2);
     expect(projected['2026-7-12']!.level, 3);
     expect(projected['2026-7-13']!.level, 4);
+  });
+
+  test('bouldering contributes its duration to the annual activity heatmap',
+      () {
+    final projected = HistoryActivityDay.project(
+      const [],
+      boulderingLogs: [
+        BoulderingLog(
+          id: 'boulder',
+          date: DateTime(2026, 7, 13),
+          durationMinutes: 90,
+          effort: BoulderingEffort.moderate,
+        ),
+      ],
+    );
+
+    final day = projected['2026-7-13']!;
+    expect(day.level, 4);
+    expect(day.elapsedSeconds, 90 * 60);
+    expect(day.boulderingLogs.single.id, 'boulder');
+    expect(day.tooltip(DateTime(2026, 7, 13)), contains('1 activity'));
   });
 
   testWidgets('year activity heatmap is the default history view',
@@ -329,7 +356,7 @@ void main() {
     expect(find.text('Activity · last 12 months'), findsOneWidget);
     expect(find.text('Progression (top set, 12 weeks)'), findsOneWidget);
     expect(find.text('HRV, last 28 days'), findsOneWidget);
-    expect(find.text('No sessions logged yet.'), findsOneWidget);
+    expect(find.text('No activity logged yet.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

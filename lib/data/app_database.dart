@@ -16,12 +16,13 @@ class AppDatabase {
     final path = join(dir, 'morningcoach.db');
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE exercise_states (trackKey TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE check_ins (date TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE recovery_snapshots (date TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE session_logs (id TEXT PRIMARY KEY, date TEXT NOT NULL, json TEXT NOT NULL)');
+        await _createBoulderingLogs(db);
         await db.execute('CREATE TABLE decision_traces (date TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await db.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, json TEXT NOT NULL)');
         await _createAnalyticsEvents(db);
@@ -30,6 +31,7 @@ class AppDatabase {
         // v1 -> v2 adds the analytics event timeline. Existing rows are
         // untouched; history simply has no events before the upgrade.
         if (oldVersion < 2) await _createAnalyticsEvents(db);
+        if (oldVersion < 3) await _createBoulderingLogs(db);
       },
     );
     return _db!;
@@ -37,6 +39,11 @@ class AppDatabase {
 
   static Future<void> _createAnalyticsEvents(Database db) => db.execute(
         'CREATE TABLE IF NOT EXISTS analytics_events '
+        '(id TEXT PRIMARY KEY, date TEXT NOT NULL, json TEXT NOT NULL)',
+      );
+
+  static Future<void> _createBoulderingLogs(Database db) => db.execute(
+        'CREATE TABLE IF NOT EXISTS bouldering_logs '
         '(id TEXT PRIMARY KEY, date TEXT NOT NULL, json TEXT NOT NULL)',
       );
 
@@ -101,6 +108,7 @@ class AppDatabase {
     'check_ins': ['date', 'json'],
     'recovery_snapshots': ['date', 'json'],
     'session_logs': ['id', 'date', 'json'],
+    'bouldering_logs': ['id', 'date', 'json'],
     'decision_traces': ['date', 'json'],
     'analytics_events': ['id', 'date', 'json'],
     'meta': ['key', 'json'],

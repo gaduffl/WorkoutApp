@@ -1,5 +1,6 @@
 import '../engine/queue_engine.dart';
 import '../models/analytics_event.dart';
+import '../models/bouldering_log.dart';
 import '../models/check_in.dart';
 import '../models/decision_trace.dart';
 import '../models/exercise_state.dart';
@@ -97,6 +98,24 @@ class Repository {
     await db.putJsonWithDate('session_logs', log.id, log.date, sessionLogToJson(log));
   }
 
+  Future<List<BoulderingLog>> loadBoulderingLogsSince(DateTime since) async {
+    final rows = await db.getJsonSince('bouldering_logs', 'date', since);
+    return rows.map(boulderingLogFromJson).toList();
+  }
+
+  Future<void> saveBoulderingLog(BoulderingLog log) async {
+    await db.putJsonWithDate(
+      'bouldering_logs',
+      log.id,
+      log.date,
+      boulderingLogToJson(log),
+    );
+  }
+
+  Future<void> deleteBoulderingLog(String id) async {
+    await db.delete('bouldering_logs', 'id', id);
+  }
+
   /// Append-only analytics timeline. Writes are best-effort at the call site:
   /// losing an observation must never cost the user a workout.
   Future<void> saveAnalyticsEvent(AnalyticsEvent event) async {
@@ -139,6 +158,7 @@ class Repository {
     await db.deleteByDatePrefix('recovery_snapshots', 'date', prefix);
     await db.deleteByDatePrefix('decision_traces', 'date', prefix);
     await db.deleteByDatePrefix('session_logs', 'date', prefix);
+    await db.deleteByDatePrefix('bouldering_logs', 'date', prefix);
     // The analytics timeline describes the day that is being erased, so it
     // goes with it — otherwise "Reset day" would leave latencies pointing at
     // a check-in and a session that no longer exist.
