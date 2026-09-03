@@ -1072,6 +1072,7 @@ void main() {
     expect(ex.first.trackKey, 'warmup:s1');
     expect(ex.first.isWarmup, isTrue);
     expect(ex.first.metric, ExerciseMetric.minutes);
+    expect(ex.first.instruction, contains('jumping jacks'));
     // squat (goblet, single-DB, 24 lb): ramp rounds down on the single-DB set
     final ramp = ex.where((e) => e.isWarmup && e.name.contains('Goblet squat')).toList();
     expect(ramp.map((e) => e.loadTotal), [9, 12, 18]);
@@ -1091,6 +1092,40 @@ void main() {
     expect(output.trace.plan!.plannedWorkSets, 6);
   });
 
+  test('every general strength prep includes jumping jacks', () {
+    for (final travelMode in [false, true]) {
+      for (final sessionId in [
+        SessionTypeId.s1,
+        SessionTypeId.s2,
+        SessionTypeId.s5,
+      ]) {
+        final output = decisionEngine.decide(buildInput(
+          time: 35,
+          subjective: 4,
+          recoveryHistory: normalHrvHistory(),
+          todaySnapshot: RecoverySnapshot(
+            date: today,
+            hrvRmssd: 50,
+            restingHr: 60,
+            sleepScore: 90,
+          ),
+          queueState: QueueState(pointer: sessionId),
+          sessionLogs: floorSatisfiedLogs(),
+          settings: UserSettings(travelMode: travelMode),
+        ));
+        final prep = output.trace.plan!.exercises.firstWhere(
+          (exercise) => exercise.trackKey == 'warmup:${sessionId.name}',
+        );
+
+        expect(
+          prep.instruction,
+          contains('jumping jacks'),
+          reason: '${sessionId.name}, travelMode=$travelMode',
+        );
+      }
+    }
+  });
+
   test('the ATG block replaces general prep, not the first-compound ramp', () {
     final input = buildInput(
       time: 60,
@@ -1108,7 +1143,8 @@ void main() {
     expect(ex.first.targetRange, (5, 5));
     expect(ex.first.name, 'ATG + upper-body prep');
     for (final cue in [
-      '0:00–2:00 · Backward treadmill',
+      '0:00–0:45 · Jumping jacks',
+      '0:45–2:00 · Backward treadmill',
       '2:00–2:45 · Tibialis raises (15–20)',
       '2:45–3:30 · Calf raises (15–20)',
       '3:30–4:15 · Shoulder circles (10 each direction)',
@@ -1123,6 +1159,24 @@ void main() {
     final squatIdx = ex.indexWhere((e) => e.pattern == MovementPattern.squat && !e.isWarmup);
     expect(ex[squatIdx - 1].isWarmup, isTrue);
     expect(ex[squatIdx - 1].name, contains('80%'));
+
+    final compressed = decisionEngine.decide(buildInput(
+      time: 20,
+      subjective: 4,
+      recoveryHistory: normalHrvHistory(),
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      queueState: const QueueState(pointer: SessionTypeId.s4),
+      sessionLogs: floorSatisfiedLogs(),
+    ));
+    expect(
+      compressed.trace.plan!.exercises.first.instruction,
+      contains('0:00–0:30 · Jumping jacks'),
+    );
   });
 
   test('current knee pain replaces S4 ATG loading with equal-time pain-aware prep', () {
@@ -1153,6 +1207,8 @@ void main() {
     expect(prep.targetRange, (5, 5));
     expect(prep.name, 'Pain-aware general + upper/scapular prep');
     expect(prep.name, isNot(contains('ATG')));
+    expect(prep.instruction, contains('pain-free jumping jacks'));
+    expect(prep.instruction, contains('low-impact step jacks'));
     expect(prep.instruction, contains('Skip backward treadmill'));
     expect(prep.instruction, contains('pain-provoking knee movement'));
   });
@@ -1187,6 +1243,8 @@ void main() {
     expect(prep.trackKey, 'warmup:s2');
     expect(prep.isWarmup, isTrue);
     expect(prep.targetRange, (5, 5));
+    expect(prep.instruction, contains('pain-free jumping jacks'));
+    expect(prep.instruction, contains('low-impact step jacks'));
     expect(prep.instruction, contains('non-reproducing scapular motion'));
     expect(prep.instruction, contains('Skip every flagged'));
     expect(prep.instruction, isNot(contains('shoulder circles')));
@@ -1286,6 +1344,7 @@ void main() {
     final travelWarmups = s1.trace.plan!.exercises.where((e) => e.isWarmup).toList();
     expect(travelWarmups, hasLength(1));
     expect(travelWarmups.single.trackKey, 'warmup:s1');
+    expect(travelWarmups.single.instruction, contains('jumping jacks'));
     expect(s1.trace.plan!.plannedWorkSets, 6);
 
     final s2 = decisionEngine.decide(buildInput(
@@ -1316,7 +1375,8 @@ void main() {
     expect(s4Prep.name, 'Travel ATG + upper-body prep');
     expect(s4Prep.targetRange, (5, 5));
     for (final cue in [
-      '0:00–2:00 · Safe backward walking',
+      '0:00–0:45 · Jumping jacks',
+      '0:45–2:00 · Safe backward walking',
       '2:00–2:45 · Wall tibialis raises (15–20)',
       '2:45–3:30 · Wall calf raises (15–20)',
       '3:30–4:15 · Shoulder circles (10 each direction)',

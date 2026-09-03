@@ -591,3 +591,13 @@ treat filename as canonical version).
     immutable and the persisted stimulus affects the next recommendation instead.
     The normal annual activity heatmap includes actual bouldering minutes and its day
     detail; the category-only Classic heatmap intentionally remains unchanged.
+
+## Session 2026-09-03 (jumping jacks in strength preparation)
+
+73. **Every app-authored strength prep block now starts with jumping jacks.**
+    General, ATG, and travel preparation keep their existing 3/5/6-minute hard
+    allocation; the ATG timelines make room by shortening backward walking rather
+    than lengthening the plan. Pain-aware and lower-back-recovery preparation names
+    the jumping-jack slot but explicitly substitutes low-impact step jacks or
+    marching when jumping or impact reproduces symptoms. CAROL and other cardio-owned
+    protocol warm-ups remain untouched.

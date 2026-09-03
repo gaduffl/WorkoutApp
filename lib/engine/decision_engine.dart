@@ -762,37 +762,41 @@ class DecisionEngine {
         if (kneePainActive) {
           prepName = 'Pain-aware general + upper/scapular prep';
           prepInstruction =
-              'Within $atgMinutes min: use easy pain-free whole-body movement, breathing/bracing, and non-reproducing upper/scapular motion. Skip backward treadmill and every flagged or pain-provoking knee movement.';
+              'Within $atgMinutes min: begin with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. Continue with easy pain-free whole-body movement, breathing/bracing, and non-reproducing upper/scapular motion. Skip backward treadmill and every flagged or pain-provoking knee movement.';
         } else if (prepPainAware) {
           prepName = 'Pain-aware movement prep';
           prepInstruction =
-              'Within $atgMinutes min: use only pain-free movement, breathing/bracing, and non-reproducing lower-body or scapular rehearsal. Skip every flagged or pain-provoking movement.';
+              'Within $atgMinutes min: begin with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. Continue with pain-free movement, breathing/bracing, and non-reproducing lower-body or scapular rehearsal. Skip every flagged or pain-provoking movement.';
         } else {
           prepName = input.settings.travelMode
               ? 'Travel ATG + upper-body prep'
               : 'ATG + upper-body prep';
           prepInstruction = input.settings.travelMode
               ? atgMinutes == 3
-                  ? '0:00–1:00 · Safe backward walking\n'
+                  ? '0:00–0:30 · Jumping jacks\n'
+                      '0:30–1:00 · Safe backward walking\n'
                       '1:00–1:30 · Wall tibialis raises (10–15)\n'
                       '1:30–2:00 · Wall calf raises (10–15)\n'
                       '2:00–2:30 · Shoulder circles (8 each direction)\n'
                       '2:30–3:00 · Scapular push-ups (6–10)\n'
                       'No equipment; replaces general movement prep.'
-                  : '0:00–2:00 · Safe backward walking\n'
+                  : '0:00–0:45 · Jumping jacks\n'
+                      '0:45–2:00 · Safe backward walking\n'
                       '2:00–2:45 · Wall tibialis raises (15–20)\n'
                       '2:45–3:30 · Wall calf raises (15–20)\n'
                       '3:30–4:15 · Shoulder circles (10 each direction)\n'
                       '4:15–5:00 · Scapular push-ups (8–12)\n'
                       'No equipment; replaces general movement prep.'
               : atgMinutes == 3
-                  ? '0:00–1:00 · Backward treadmill\n'
+                  ? '0:00–0:30 · Jumping jacks\n'
+                      '0:30–1:00 · Backward treadmill\n'
                       '1:00–1:30 · Tibialis raises (10–15)\n'
                       '1:30–2:00 · Calf raises (10–15)\n'
                       '2:00–2:30 · Shoulder circles (8 each direction)\n'
                       '2:30–3:00 · Scapular push-ups (6–10)\n'
                       'Replaces general movement prep.'
-                  : '0:00–2:00 · Backward treadmill\n'
+                  : '0:00–0:45 · Jumping jacks\n'
+                      '0:45–2:00 · Backward treadmill\n'
                       '2:00–2:45 · Tibialis raises (15–20)\n'
                       '2:45–3:30 · Calf raises (15–20)\n'
                       '3:30–4:15 · Shoulder circles (10 each direction)\n'
@@ -2263,25 +2267,31 @@ class DecisionEngine {
     required bool painAware,
   }) {
     final prepMinutes = StrengthPrepPolicy.generalMinutes(slotMinutes);
-    final instruction = painAware
-        ? switch (id) {
-            SessionTypeId.s1 =>
-              'Use easy pain-free movement and breathing/bracing only. Skip every flagged or pain-provoking squat, hinge, or lower-body rehearsal.',
-            SessionTypeId.s2 || SessionTypeId.s5 =>
-              'Use easy pain-free movement, breathing/bracing, and non-reproducing scapular motion only. Skip every flagged or pain-provoking upper-body movement.',
-            _ =>
-              'Use easy pain-free movement, breathing/bracing, and non-reproducing rehearsal only. Skip every flagged or pain-provoking movement.',
-          }
-        : switch (id) {
-            SessionTypeId.s1 =>
-              'Start with easy walking or marching, then controlled hip hinges, squats, and ankle movement',
-            SessionTypeId.s2 =>
-              'Start with easy movement, then shoulder circles, scapular push-ups, and light reach-and-pulls',
-            SessionTypeId.s5 =>
-              'Start with easy movement, then shoulder, elbow, wrist, and trunk preparation',
-            _ =>
-              'Start easy, then rehearse today\'s movement patterns through a comfortable range',
-          };
+    const painAwareJumpingJacks =
+        'Start with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. ';
+    final String instruction;
+    if (painAware) {
+      final painAwareMovement = switch (id) {
+        SessionTypeId.s1 =>
+          'Use easy pain-free movement and breathing/bracing only. Skip every flagged or pain-provoking squat, hinge, or lower-body rehearsal.',
+        SessionTypeId.s2 || SessionTypeId.s5 =>
+          'Use easy pain-free movement, breathing/bracing, and non-reproducing scapular motion only. Skip every flagged or pain-provoking upper-body movement.',
+        _ =>
+          'Use easy pain-free movement, breathing/bracing, and non-reproducing rehearsal only. Skip every flagged or pain-provoking movement.',
+      };
+      instruction = painAwareJumpingJacks + painAwareMovement;
+    } else {
+      instruction = switch (id) {
+        SessionTypeId.s1 =>
+          'Start with jumping jacks, then easy walking or marching, controlled hip hinges, squats, and ankle movement',
+        SessionTypeId.s2 =>
+          'Start with jumping jacks, then shoulder circles, scapular push-ups, and light reach-and-pulls',
+        SessionTypeId.s5 =>
+          'Start with jumping jacks, then shoulder, elbow, wrist, and trunk preparation',
+        _ =>
+          'Start with jumping jacks, then rehearse today\'s movement patterns through a comfortable range',
+      };
+    }
     return PlannedExercise(
       trackKey: 'warmup:${id.name}',
       pattern: MovementPattern.kneeHealth,

@@ -40,6 +40,10 @@ safety rules, validation, or delivery workflow changes.
   preserve the release Android `INTERNET` permission. Never guess by name or let a
   substitution inherit a demo for different equipment or motion; unsupported variants
   display no graphic.
+- Every app-authored strength preparation block includes jumping jacks inside its
+  existing time allocation. Pain-aware and lower-back-recovery plans must retain
+  the low-impact step-jack or marching fallback when jumping or impact reproduces
+  symptoms. Cardio-owned preset warm-ups remain unchanged.
 - Prefer existing models, repositories, and engines over parallel state or duplicate
   rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
 
