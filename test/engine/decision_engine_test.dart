@@ -1072,7 +1072,7 @@ void main() {
     expect(ex.first.trackKey, 'warmup:s1');
     expect(ex.first.isWarmup, isTrue);
     expect(ex.first.metric, ExerciseMetric.minutes);
-    expect(ex.first.instruction, contains('Jumping jacks'));
+    expect(ex.first.instruction, contains('jumping jacks'));
     // squat (goblet, single-DB, 24 lb): ramp rounds down on the single-DB set
     final ramp = ex.where((e) => e.isWarmup && e.name.contains('Goblet squat')).toList();
     expect(ramp.map((e) => e.loadTotal), [9, 12, 18]);
@@ -1119,7 +1119,7 @@ void main() {
 
         expect(
           prep.instruction,
-          contains('Jumping jacks'),
+          contains('jumping jacks'),
           reason: '${sessionId.name}, travelMode=$travelMode',
         );
       }
@@ -1344,7 +1344,7 @@ void main() {
     final travelWarmups = s1.trace.plan!.exercises.where((e) => e.isWarmup).toList();
     expect(travelWarmups, hasLength(1));
     expect(travelWarmups.single.trackKey, 'warmup:s1');
-    expect(travelWarmups.single.instruction, contains('Jumping jacks'));
+    expect(travelWarmups.single.instruction, contains('jumping jacks'));
     expect(s1.trace.plan!.plannedWorkSets, 6);
 
     final s2 = decisionEngine.decide(buildInput(

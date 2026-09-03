@@ -368,7 +368,7 @@ void main() {
           (exercise) => exercise.trackKey == 'warmup:s1',
         );
         expect(general.targetRange, (entry.value, entry.value));
-        expect(general.instruction, contains('Jumping jacks'));
+        expect(general.instruction, contains('jumping jacks'));
       }
       for (final entry in {20: 3, 35: 5, 60: 5}.entries) {
         final plan = decide(
