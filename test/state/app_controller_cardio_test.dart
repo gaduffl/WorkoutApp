@@ -574,6 +574,80 @@ void main() {
     expect(await repo.loadSessionLogsSince(DateTime(2000)), isEmpty);
   });
 
+  test('unplanned Zone 2 saves actual dose without changing the primary plan',
+      () async {
+    for (final minutes in [20, 30, 60, 95]) {
+      for (final primaryState in [0, 1, 2]) {
+        final primaryDone = primaryState == 2;
+        final controller = primaryDone
+            ? await controllerAfterStrength()
+            : AppController(Repository(_MemoryDatabase()));
+        if (primaryState == 1) {
+          controller.todayTrace = traceFor(DateTime.now(), strengthPlan());
+        }
+        final traceBefore = controller.todayTrace;
+        final pointerBefore = controller.queueState.pointer;
+        final servedBefore = controller.queueState.served;
+        final prescription = cardio.prescriptionFor(
+          sessionId: SessionTypeId.s6,
+          durationMinutes: 60,
+          heartRateMaxBpm: 180,
+        );
+        await controller.logUnplannedZone2(
+          completion: cardio.completionFromEntry(
+            prescription: prescription,
+            completedWorkIntervals: 1,
+            completedDurationMinutes: minutes,
+            rpe: 4,
+          ),
+        );
+        final logs = await controller.repo.loadSessionLogsSince(DateTime(2000));
+        final ride = logs.singleWhere((log) => log.isUnplanned);
+        expect(ride.templateId, SessionTypeId.s6);
+        expect(ride.isSupplemental, isTrue);
+        expect(ride.durationMinutes, minutes);
+        expect(ride.cardioCompletion!.completedWorkSeconds, minutes * 60);
+        expect(ride.cardioCompletion!.rpe, 4);
+        expect(
+          ride.countsAs,
+          minutes >= 30 ? {FloorCategory.aerobic} : <FloorCategory>{},
+        );
+        expect(ride.timings!.plannedDurationMinutes, isNull);
+        expect(ride.completesTodaysPlan, isFalse);
+        expect(controller.todayTrace, same(traceBefore));
+        expect(controller.sessionLoggedToday, primaryDone);
+        expect(controller.sessionDoneToday, primaryDone);
+        expect(controller.queueState.pointer, pointerBefore);
+        expect(controller.queueState.served, servedBefore);
+        final history = await controller.loadHistoryData();
+        expect(history.logs.any((log) => log.id == ride.id), isTrue);
+        final zone2 = history.ledger.protocol(CardioProtocolType.zone2Base);
+        expect(zone2.durationMinutes7d, minutes >= 30 ? minutes : 0);
+        expect(zone2.sessionsAtLeastMinutes7d(60), minutes >= 60 ? 1 : 0);
+      }
+    }
+  });
+
+  test('unplanned Zone 2 rejects interval completions without saving', () async {
+    final controller = AppController(Repository(_MemoryDatabase()));
+    final prescription = cardio.prescriptionFor(
+      sessionId: SessionTypeId.s7,
+      durationMinutes: 9,
+      heartRateMaxBpm: 180,
+    );
+    await expectLater(
+      controller.logUnplannedZone2(
+        completion: cardio.completionFromElapsedSeconds(
+          prescription: prescription,
+          completedWorkIntervals: 2,
+          completedDurationSeconds: 520,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    expect(await controller.repo.loadSessionLogsSince(DateTime(2000)), isEmpty);
+  });
+
   test('high intensity requires an authoritative current GREEN trace', () {
     final controller = AppController(Repository(_MemoryDatabase()));
     final now = DateTime.now();

@@ -1936,7 +1936,7 @@ class AppController extends ChangeNotifier {
       final timings = SessionTimings(
         startedAt: resolvedStartedAt,
         elapsedSeconds: measuredElapsedSeconds,
-        plannedDurationMinutes: plan.estimatedDurationMin,
+        plannedDurationMinutes: isUnplanned ? null : plan.estimatedDurationMin,
       );
 
       final log = SessionLog(
@@ -2144,6 +2144,45 @@ class AppController extends ChangeNotifier {
       isSupplemental: true,
       isUnplanned: true,
       bypassProspectiveHighIntensityGate: true,
+    );
+  }
+
+  /// Retrospective Zone 2 entry for today, independent of the primary plan.
+  /// Use the actual ride duration for the internal completion record, not a
+  /// fictitious 60-minute recommendation or an incomplete prescribed ride.
+  Future<void> logUnplannedZone2({
+    required CardioCompletion completion,
+  }) async {
+    const cardioEngine = CardioEngine();
+    final minutes = (completion.completedDurationSeconds + 59) ~/ 60;
+    final prescription = cardioEngine.prescriptionFor(
+      sessionId: SessionTypeId.s6,
+      durationMinutes: minutes,
+      heartRateMaxBpm: settings.hrMax,
+    );
+    cardioEngine.validateSessionMatch(
+      sessionId: SessionTypeId.s6,
+      prescription: prescription,
+      completion: completion,
+    );
+    if (completion.completedWorkSeconds != completion.completedDurationSeconds) {
+      throw ArgumentError('Zone 2 ride duration must equal continuous work time.');
+    }
+    await _completeSession(
+      SessionPlan(
+        sessionId: SessionTypeId.s6,
+        sessionName: sessionTypes[SessionTypeId.s6]!.name,
+        tier: SessionTier.full,
+        exercises: const [],
+        estimatedDurationMin: minutes,
+        cardioPrescription: prescription,
+        grantsQueueCredit: false,
+      ),
+      const [],
+      durationMinutes: minutes,
+      cardioCompletion: completion,
+      isSupplemental: true,
+      isUnplanned: true,
     );
   }
 

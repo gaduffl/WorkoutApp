@@ -439,6 +439,14 @@ Daily text: small/fast model (e.g., Haiku class), ~500 input / 100 output tokens
 
 ## 11. Screens (concise)
 
+The Home screen offers **Log Zone 2 ride** for a ride already completed today,
+independently of the recommendation or check-in. Enter actual duration (1–1440
+minutes), with optional average/peak heart rate and RPE. Records are unplanned and
+supplemental, appear in history/heatmaps and use the ordinary aerobic ledger rules;
+they never complete, replace, or lock the primary MorningCoach plan or advance its
+queue. The next recommendation reads the saved dose. Retrospective activities have
+no planner-duration estimate for accuracy comparisons.
+
 1. **Check-in** — time buttons, feel 1–5, body map, Oura strip (pre-filled), submit.
 2. **Today** — session card: name/tier, AI "why" text, exercise list with targets, start button, "swap session" (shows the 2 next-ranked alternatives from the decision trace, keeping user agency).
 3. **Logger** — one exercise at a time; global exercise/set progress; concise last-time performance; original static start/finish guide when the resolved exercise has an explicit visual ID; big steppers for weight/reps; RIR buttons (0/1/2/3+); pain button; rest timer; "wrap up" button. Android keeps the display awake only while this route is active and resumed.

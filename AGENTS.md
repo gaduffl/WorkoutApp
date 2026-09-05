@@ -78,6 +78,10 @@ safety rules, validation, or delivery workflow changes.
 - A continuous Zone 2 completion may exceed its prescribed duration and must retain
   the full actual dose, subject to the existing 24-hour input bound. Interval cardio
   protocols remain capped at their prescribed work dose.
+- Home-screen retrospective Zone 2 rides are unplanned, supplemental records:
+  preserve actual dose and normal aerobic credit, without completing/replacing the
+  primary plan or advancing the queue. No prospective duration estimate is recorded
+  for unplanned activity. Reuse the existing cardio validation and persistence path.
 
 ## Implementation and validation
 
