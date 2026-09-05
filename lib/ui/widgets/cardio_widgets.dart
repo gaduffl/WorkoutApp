@@ -227,22 +227,26 @@ Future<CardioCompletion?> showCardioCompletionDialog(
   BuildContext context, {
   required CardioPrescription prescription,
   String title = 'Log cardio attempt',
+  bool unplannedRide = false,
 }) =>
     showDialog<CardioCompletion>(
       context: context,
       builder: (_) => _CardioCompletionDialog(
         prescription: prescription,
         title: title,
+        unplannedRide: unplannedRide,
       ),
     );
 
 class _CardioCompletionDialog extends StatefulWidget {
   final CardioPrescription prescription;
   final String title;
+  final bool unplannedRide;
 
   const _CardioCompletionDialog({
     required this.prescription,
     required this.title,
+    this.unplannedRide = false,
   });
 
   @override
@@ -276,10 +280,12 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
       text: widget.prescription.plannedWorkIntervals.toString(),
     );
     _duration = TextEditingController(
-      text: _isCarolPreset
-          ? _carolClock(widget.prescription.plannedDurationSeconds)
-          : ((widget.prescription.plannedDurationSeconds + 59) ~/ 60)
-              .toString(),
+      text: widget.unplannedRide
+          ? ''
+          : _isCarolPreset
+              ? _carolClock(widget.prescription.plannedDurationSeconds)
+              : ((widget.prescription.plannedDurationSeconds + 59) ~/ 60)
+                  .toString(),
     );
   }
 
@@ -387,6 +393,14 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
               style: Theme.of(context).textTheme.titleSmall,
             ),
             spacing,
+            if (widget.unplannedRide) ...[
+              const Text(
+                'Record a Zone 2 ride you already completed today. '
+                'It counts toward your training history and aerobic targets, '
+                'but does not complete or replace your MorningCoach plan.',
+              ),
+              spacing,
+            ],
             if (!_isContinuous) ...[
               TextField(
                 controller: _intervals,
@@ -410,7 +424,9 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
                     ? 'Duration shown by CAROL (M:SS)'
                     : 'Duration (min)',
                 helperText: _isContinuous
-                    ? 'Actual ride time; may exceed the plan'
+                    ? widget.unplannedRide
+                        ? 'Actual ride time, 1–1440 minutes'
+                        : 'Actual ride time; may exceed the plan'
                     : null,
               ),
             ),
@@ -475,7 +491,7 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
         ),
         FilledButton(
           onPressed: _save,
-          child: const Text('Save attempt'),
+          child: Text(widget.unplannedRide ? 'Save ride' : 'Save attempt'),
         ),
       ],
     );

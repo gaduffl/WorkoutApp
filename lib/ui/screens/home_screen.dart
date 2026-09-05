@@ -44,6 +44,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _loggingUnplannedRehit = false;
   bool _loggingBouldering = false;
+  bool _loggingZone2 = false;
+
+  Future<void> _logZone2() async {
+    if (_loggingZone2) return;
+    setState(() => _loggingZone2 = true);
+    final controller = context.read<AppController>();
+    try {
+      final completion = await showCardioCompletionDialog(
+        context,
+        prescription: const CardioEngine().prescriptionFor(
+          sessionId: SessionTypeId.s6,
+          durationMinutes: 60,
+          heartRateMaxBpm: controller.settings.hrMax,
+        ),
+        title: 'Log completed Zone 2 ride',
+        unplannedRide: true,
+      );
+      if (completion == null || !mounted) return;
+      await controller.logUnplannedZone2(completion: completion);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Zone 2 ride saved — ${completion.completedDurationSeconds ~/ 60} min',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not log Zone 2 ride: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _loggingZone2 = false);
+    }
+  }
 
   Future<void> _logBouldering() async {
     if (_loggingBouldering) return;
@@ -389,6 +425,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                     )
                                   : const Icon(Icons.add_chart),
                               label: const Text('Log unplanned REHIT'),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              key: const Key('home-log-unplanned-zone2'),
+                              onPressed: _loggingZone2 ? null : _logZone2,
+                              icon: const Icon(Icons.directions_bike),
+                              label: const Text('Log Zone 2 ride'),
                             ),
                           ],
                         ),

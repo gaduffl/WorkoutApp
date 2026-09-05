@@ -601,3 +601,15 @@ treat filename as canonical version).
     the jumping-jack slot but explicitly substitutes low-impact step jacks or
     marching when jumping or impact reproduces symptoms. CAROL and other cardio-owned
     protocol warm-ups remain untouched.
+
+## Session 2026-09-05 (manual Zone 2 rides)
+
+74. **Zone 2 rides can be logged independently of the recommendation.** The Home
+    button records an already-completed ride today, with actual duration (1–1440
+    minutes) and optional heart rate/RPE through the existing validated cardio
+    dialog. Unplanned supplemental session records feed history, heatmaps, and
+    the aerobic ledger without completing/replacing the primary plan or advancing
+    the queue. Existing dose thresholds remain unchanged: at least 30 minutes for
+    aerobic credit and at least 60 minutes for the long Zone 2 target. Future plan
+    generation reads that persisted dose. Unplanned activity has no prospective
+    duration estimate, avoiding a synthetic sample in planner-accuracy reporting.

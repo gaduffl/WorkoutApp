@@ -192,6 +192,52 @@ void main() {
     );
   });
 
+  testWidgets('unplanned Zone 2 logs a ride over 60 minutes from home',
+      (tester) async {
+    final controller = await pumpHome(tester);
+    final button = find.byKey(const Key('home-log-unplanned-zone2'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('Log completed Zone 2 ride'), findsOneWidget);
+    expect(find.textContaining('already completed today'), findsOneWidget);
+    final duration = find.widgetWithText(TextField, 'Duration (min)');
+    expect(tester.widget<TextField>(duration).controller!.text, isEmpty);
+    await tester.enterText(duration, '95');
+    await tester.tap(find.text('Save ride'));
+    await tester.pumpAndSettle();
+    expect(controller.zone2Calls, 1);
+    expect(
+      controller.zone2Completion!.protocol.type,
+      CardioProtocolType.zone2Base,
+    );
+    expect(controller.zone2Completion!.completedDurationSeconds, 5700);
+    expect(find.text('Morning check-in'), findsOneWidget);
+    expect(find.text('Zone 2 ride saved — 95 min'), findsOneWidget);
+  });
+
+  testWidgets('unplanned Zone 2 validates duration and allows cancellation',
+      (tester) async {
+    final controller = await pumpHome(tester);
+    final button = find.byKey(const Key('home-log-unplanned-zone2'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    for (final invalid in ['0', '1441', 'abc']) {
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Duration (min)'),
+        invalid,
+      );
+      await tester.tap(find.text('Save ride'));
+      await tester.pumpAndSettle();
+      expect(controller.zone2Calls, 0);
+      expect(find.text('Log completed Zone 2 ride'), findsOneWidget);
+    }
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(controller.zone2Calls, 0);
+  });
+
   testWidgets('completed unplanned REHIT captures structured dose and credit',
       (tester) async {
     final saveGate = Completer<void>();
@@ -349,6 +395,8 @@ class _RecordingHomeController extends AppController {
   }
 
   int logCalls = 0;
+  int zone2Calls = 0;
+  CardioCompletion? zone2Completion;
   int boulderingCalls = 0;
   CardioCompletion? completion;
   DateTime? boulderingDate;
@@ -359,6 +407,12 @@ class _RecordingHomeController extends AppController {
 
   @override
   DateTime today() => DateTime(2026, 9, 2);
+
+  @override
+  Future<void> logUnplannedZone2({required CardioCompletion completion}) async {
+    zone2Calls += 1;
+    zone2Completion = completion;
+  }
 
   @override
   Future<bool> logBouldering({
