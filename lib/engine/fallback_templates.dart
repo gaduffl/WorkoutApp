@@ -12,6 +12,7 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
     case RuleKey.restTimeZero:
       return lang == AppLanguage.de ? 'Ruhetag - heute kein Zeitfenster.' : 'Rest day - no time slot today.';
     case RuleKey.restDoubleRed:
+      if (p['recovery'] == 'true') return 'Two RED days in a row: rest. Recovery progression is paused.';
       return lang == AppLanguage.de
           ? 'Zwei RED-Tage in Folge - volle Ruhe (oder ein lockerer 20-30 Min. Spaziergang) empfohlen.'
           : 'Two RED days in a row - full rest (or a light 20-30 min walk) recommended.';
@@ -122,9 +123,12 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           ? 'Reisemodus ist aktiv: keine Geräte, Fortschritt über Wiederholungen, Tempo oder Bewegungsumfang; die Laststeigerung pausiert.'
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.lowerBackRecoveryActive:
-      return lang == AppLanguage.de
-          ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; heute gilt nur die konservative Recovery-Dosis.'
-          : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; only the conservative recovery dose applies today.';
+    case RuleKey.recoveryProgram:
+      return rule.params['message'] ?? 'Recovery work is individually selected. No automatic stage or load increases. Record symptoms later today and next morning.';
+    case RuleKey.stationaryBikePaused:
+      return 'Stationary cycling is paused for recovery, including Zone 2, REHIT, 4×4, finishers and catch-up prompts. Actual history is retained.';
+    case RuleKey.deadliftAlternative:
+      return 'Deadlifts are replaced by separate floor glute-bridge and sliding hamstring-curl tracks; previous deadlift loads are not transferred.';
     case RuleKey.lowerBackRecoveryLoadMinimized:
       return lang == AppLanguage.de
           ? 'Der Rücken-Recovery-Modus minimiert die LWS-Last: keine belasteten Squats, ungestützten Rows oder Presses, Zusatzgewichte bei Pull-ups oder belastenden Core-Stufen. Stattdessen gelten gestützte Oberkörperarbeit, Pull-ups ohne Zusatzgewicht und ATG-1/Pump-Arbeit.'

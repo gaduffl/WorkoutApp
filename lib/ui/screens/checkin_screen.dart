@@ -5,6 +5,7 @@ import '../../models/pain.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../state/app_controller.dart';
 import 'today_screen.dart';
+import '../widgets/recovery_widgets.dart';
 
 /// §3 morning check-in: single screen, <=10s to fill in.
 class CheckInScreen extends StatefulWidget {
@@ -176,6 +177,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
               ),
               const SizedBox(height: 24),
               Text('How do you feel? (1 = wrecked, 5 = great)', style: Theme.of(context).textTheme.titleMedium),
+              if (context.watch<AppController>().lowerBackRecovery.active)
+                const RecoveryControls(),
               Slider(
                 value: _feel.toDouble(),
                 min: 1,

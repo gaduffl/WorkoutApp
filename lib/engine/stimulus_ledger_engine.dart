@@ -18,6 +18,12 @@ class ExerciseMuscleMap {
   const ExerciseMuscleMap();
 
   static const Map<String, _MuscleProfile> _namedTracks = {
+    'sub:hinge:alternative_glute_bridge': _MuscleProfile(
+      primary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:hinge:alternative_hamstring_curl': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
+    ),
     'sub:hinge:bridge_hamstring_curl': _MuscleProfile(
       primary: {MajorMuscleGroup.hamstrings},
       secondary: {MajorMuscleGroup.glutes},
@@ -142,6 +148,9 @@ class ExerciseMuscleMap {
     if (trackKey.startsWith('warmup:') || trackKey == 'atg_block') {
       return const {};
     }
+    // Easy, symptom-limited recovery work is recorded but is not a hard
+    // hypertrophy set for the broad underlying movement pattern.
+    if (trackKey.startsWith('recovery:')) return const {};
 
     final normalizedName = exerciseName?.trim().toLowerCase();
     final named = _namedTracks[trackKey] ??

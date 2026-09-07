@@ -504,7 +504,7 @@ class _LoggerScreenState extends State<LoggerScreen>
         (setLog) =>
             !setLog.isWarmup &&
             setLog.value > 0 &&
-            setLog.trackKey == lowerBackRecoveryTrackKey,
+            (setLog.trackKey == lowerBackRecoveryTrackKey || setLog.trackKey.startsWith('recovery:v2:')),
       );
       if (completedRecoveryWork) {
         lowerBackResponse = await _askLowerBackSameDayResponse();

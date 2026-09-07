@@ -8,6 +8,7 @@ import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/lower_back_recovery.dart';
+import '../models/recovery_program.dart';
 import '../models/movement_pattern.dart';
 import '../models/onedrive_connection.dart';
 import '../models/oura_connection.dart';
@@ -500,6 +501,8 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'checkInCutoffHour': u.checkInCutoffHour,
       'travelMode': u.travelMode,
       'classicHeatmap': u.classicHeatmap,
+      'deadliftAlternative': u.deadliftAlternative,
+      'stationaryBikePaused': u.stationaryBikePaused,
       'notificationsEnabled': u.notificationsEnabled,
       'secondRehitNudgeEnabled': u.secondRehitNudgeEnabled,
       'secondRehitNudgeScheduledDay': u.secondRehitNudgeScheduledDay,
@@ -532,6 +535,8 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
       classicHeatmap: j['classicHeatmap'] as bool? ?? false,
+      deadliftAlternative: j['deadliftAlternative'] as bool? ?? false,
+      stationaryBikePaused: j['stationaryBikePaused'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
       secondRehitNudgeEnabled: j['secondRehitNudgeEnabled'] as bool? ?? false,
       secondRehitNudgeScheduledDay: j['secondRehitNudgeScheduledDay'] as String?,
@@ -567,6 +572,7 @@ Map<String, dynamic> lowerBackRecoveryStateToJson(
 ) =>
     {
       'active': state.active,
+      'program': state.program.toJson(),
       'activatedAt': state.activatedAt?.toIso8601String(),
       'completedAt': state.completedAt?.toIso8601String(),
       'symptomOnsetDate': state.symptomOnsetDate?.toIso8601String(),
@@ -608,6 +614,9 @@ LowerBackRecoveryState lowerBackRecoveryStateFromJson(
     if (parsed != null) dates.add(parsed);
   }
   return LowerBackRecoveryState(
+    program: RecoveryProgram.fromJson(
+      (json['program'] as Map? ?? const {}).cast<String, dynamic>(),
+    ),
     active: json['active'] as bool? ?? false,
     activatedAt: _tryParseOptionalDateTime(json['activatedAt']),
     completedAt: _tryParseOptionalDateTime(json['completedAt']),

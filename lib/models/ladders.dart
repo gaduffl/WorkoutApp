@@ -206,6 +206,16 @@ const lightSingleLegRdl = SubstituteExercise(
   dumbbells: 1,
 );
 
+// Independent alternative tracks: never inherit the normal hinge load.
+const alternativeGluteBridge = SubstituteExercise(
+  slug: 'alternative_glute_bridge', name: 'Floor glute bridge',
+  pattern: MovementPattern.hinge, dumbbells: 1,
+);
+const alternativeHamstringCurl = SubstituteExercise(
+  slug: 'alternative_hamstring_curl', name: 'Sliding hamstring curl',
+  pattern: MovementPattern.hinge,
+);
+
 const floorPress = SubstituteExercise(
   slug: 'floor_press',
   name: 'Floor press',
@@ -313,6 +323,8 @@ const s5NamedAccessories = <SubstituteExercise>[
 /// their normal track keys means the session still records recency for the
 /// intended slot while load-based progression remains frozen in travel mode.
 const Map<String, LadderStep> travelNamedSteps = {
+  'sub:hinge:alternative_glute_bridge': LadderStep(name: 'Floor glute bridge'),
+  'sub:hinge:alternative_hamstring_curl': LadderStep(name: 'Hamstring heel-dig hold', metric: ExerciseMetric.seconds, targetRange: (10, 20)),
   'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
   'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
   'sub:pushHorizontal:floor_press': LadderStep(
@@ -341,6 +353,8 @@ const Map<String, LadderStep> travelNamedSteps = {
 final Map<String, SubstituteExercise> substituteRegistry = {
   for (final s in [
     bridgeHamstringCurl,
+    alternativeGluteBridge,
+    alternativeHamstringCurl,
     lightSingleLegRdl,
     floorPress,
     lowerBackRecoveryPullUp,

@@ -5,9 +5,45 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/state/app_controller.dart';
+import 'package:morningcoach/models/recovery_program.dart';
+import 'package:morningcoach/models/pain.dart';
+import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/plan.dart';
+import 'package:morningcoach/engine/recovery_program_engine.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('recovery check persists resolved symptoms and blocks saved prescriptions', () async {
+    final controller = _SettingsController(Repository(_SettingsMemoryDatabase()));
+    await controller.activateLowerBackRecovery(symptomOnsetDate: controller.today(), confirmedNoRedFlags: true);
+    await controller.recordRecoveryObservation(RecoveryObservation(date: DateTime.now(),
+      pain: 1, sittingMinutes: 30, function: RecoveryFunction.better));
+    final plan = const RecoveryProgramEngine().plan(controller.lowerBackRecovery.program,
+      date: controller.today(), minutes: 20, alternative: false, pain: []);
+    expect(plan, isNotNull);
+    expect(controller.isPlanUsableNow(plan), isTrue);
+    await controller.recordRecoveryObservation(RecoveryObservation(date: DateTime.now(),
+      pain: 1, sittingMinutes: 30, function: RecoveryFunction.unchanged,
+      symptoms: {PainTag.tingling}));
+    expect(controller.isPlanUsableNow(plan), isFalse);
+    final restored = await controller.repo.loadSettings();
+    expect(restored.lowerBackRecovery.program.reviewRequired, isTrue);
+    expect(controller.stationaryBikePaused, isTrue);
+    await expectLater(controller.deactivateLowerBackRecovery(), throwsStateError);
+  });
+
+  test('bike and deadlift preferences invalidate saved work immediately', () async {
+    final controller = _SettingsController(Repository(_SettingsMemoryDatabase()));
+    const bike = SessionPlan(sessionId: SessionTypeId.s6, sessionName: 'Zone 2',
+      tier: SessionTier.full, exercises: [], estimatedDurationMin: 60);
+    await controller.saveSettings(controller.settings.copyWith(stationaryBikePaused: true, deadliftAlternative: true));
+    expect(controller.isPlanUsableNow(bike), isFalse);
+    final restored = await controller.repo.loadSettings();
+    expect(restored.stationaryBikePaused, isTrue);
+    expect(restored.deadliftAlternative, isTrue);
+    expect(controller.isHighIntensityUsableNow(), isFalse);
+  });
 
   test('controller persists explicitly cleared optional settings', () async {
     final db = _SettingsMemoryDatabase();

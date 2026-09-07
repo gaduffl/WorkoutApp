@@ -6,7 +6,7 @@ import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/ladders.dart';
-import '../models/lower_back_recovery.dart';
+
 import '../models/movement_pattern.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
@@ -22,7 +22,8 @@ import '../models/user_settings.dart';
 import 'cardio_engine.dart';
 import 'equipment_engine.dart';
 import 'intensity_recovery_policy.dart';
-import 'lower_back_recovery_engine.dart';
+
+import 'recovery_program_engine.dart';
 import 'pain_engine.dart';
 import 'progression_engine.dart';
 import 'queue_engine.dart';
@@ -115,7 +116,7 @@ class DecisionEngine {
   static const progressionEngine = ProgressionEngine();
   static const equipmentEngine = EquipmentEngine();
   static const intensityRecoveryPolicy = IntensityRecoveryPolicy();
-  static const lowerBackRecoveryEngine = LowerBackRecoveryEngine();
+
   static const stimulusLedgerEngine = StimulusLedgerEngine();
   static const trainingStatusEngine = TrainingStatusEngine();
   static const exerciseMuscleMap = ExerciseMuscleMap();
@@ -251,7 +252,9 @@ class DecisionEngine {
 
     final yesterdayBucket = _bucketForDate(input, yesterday);
     if (recovery.bucket == ReadinessBucket.red && yesterdayBucket == ReadinessBucket.red) {
-      fired.add(const FiredRule(RuleKey.restDoubleRed));
+      fired.add(FiredRule(RuleKey.restDoubleRed, params: {
+        if (input.settings.lowerBackRecovery.active) 'recovery': 'true',
+      }));
       return DecisionEngineOutput(
         DecisionTrace(
           date: today,
@@ -260,7 +263,9 @@ class DecisionEngine {
           candidates: const [],
           firedRules: fired,
           plan: null,
-          restReason: 'Two RED days in a row - full rest or a light walk',
+          restReason: input.settings.lowerBackRecovery.active
+              ? 'Two RED days in a row - rest; recovery progression is paused.'
+              : 'Two RED days in a row - full rest or a light walk',
           queue: queueTraceBase,
         ),
         patchedStates,
@@ -268,7 +273,43 @@ class DecisionEngine {
     }
 
     // --- Step 2: candidate filtering and target-status calculation ---
+    if (input.settings.lowerBackRecovery.active) {
+      final program = input.settings.lowerBackRecovery.program;
+      final pain = [
+        ...checkin.pain,
+        for (final state in patchedStates.values)
+          if (state.painFrozen && state.painRegion != null)
+            PainFlag(region: state.painRegion!, severity: state.painSeverity ?? PainSeverity.sharp,
+              flaggedDate: state.painFlaggedDate ?? today, tags: state.painTags),
+      ];
+      final plan = const RecoveryProgramEngine().plan(program,
+        date: today, minutes: checkin.timeMinutes,
+        alternative: input.settings.deadliftAlternative, pain: pain,
+        travel: input.settings.travelMode,
+      );
+      final message = program.trainingBlocked
+          ? program.latest?.urgent == true
+              ? 'New weakness, saddle numbness or bladder/bowel changes: seek urgent medical assessment. Training is paused.'
+              : 'Leg symptoms were reported, including resolved symptoms. Training is paused pending clinical assessment.'
+          : !program.checkedToday(today)
+              ? 'Record today’s back symptoms before choosing recovery work.'
+              : plan == null
+                  ? 'No recovery workout is due or suitable today. Review selected exercises, paused movements and pending morning feedback. No catch-up volume is added.'
+                  : '${program.phaseLabel}. Individually selected exercises only; stop for increasing or spreading symptoms. Check the delayed and next-morning response.';
+      fired.add(FiredRule(RuleKey.recoveryProgram, params: {'message': message}));
+      if (program.bikePaused || input.settings.stationaryBikePaused) {
+        fired.add(const FiredRule(RuleKey.stationaryBikePaused));
+      }
+      return DecisionEngineOutput(DecisionTrace(
+        date: today, checkin: checkin, recovery: recoveryTrace,
+        candidates: const [], firedRules: fired, plan: plan,
+        restReason: plan == null ? message : null, queue: queueTraceBase,
+      ), patchedStates);
+    }
+    if (input.settings.stationaryBikePaused) fired.add(const FiredRule(RuleKey.stationaryBikePaused));
+    if (input.settings.deadliftAlternative) fired.add(const FiredRule(RuleKey.deadliftAlternative));
     final feasible = _feasibleCandidates(checkin.timeMinutes)
+        .where((id) => !input.settings.stationaryBikePaused || !sessionTemplates[id]!.isCardioOnly)
         .where(
           (id) =>
               !input.settings.travelMode ||
@@ -392,6 +433,7 @@ class DecisionEngine {
           travelMode: input.settings.travelMode,
           lowerBackRecoveryMode:
               input.settings.lowerBackRecovery.active,
+          deadliftAlternative: input.settings.deadliftAlternative,
         );
         final painAdjusted = _painAdjustedStrengthProjection(
           workSlots,
@@ -834,6 +876,7 @@ class DecisionEngine {
         travelMode: input.settings.travelMode,
         lowerBackRecoveryMode:
             input.settings.lowerBackRecovery.active,
+        deadliftAlternative: input.settings.deadliftAlternative,
       );
       for (final (pattern, usesCompoundSetCount, namedExercise) in slots) {
         final isGenuineCompound = namedExercise == null &&
@@ -849,6 +892,15 @@ class DecisionEngine {
         var state = patchedStates[trackKey] ??
             ExerciseState(trackKey: trackKey, pattern: pattern);
 
+        // Alternatives keep their own load history, but cannot evade a frozen hinge.
+        final hinge = patchedStates[MovementPattern.hinge.name];
+        if ((trackKey == alternativeGluteBridge.trackKey || trackKey == alternativeHamstringCurl.trackKey) &&
+            hinge != null && hinge.painFrozen && hinge.painRegion != null) {
+          state = painEngine.advanceFlagState(state,
+            activeFlag: PainFlag(region: hinge.painRegion!, severity: hinge.painSeverity ?? PainSeverity.sharp,
+              flaggedDate: hinge.painFlaggedDate ?? today, tags: hinge.painTags),
+            patternScheduledToday: false, sessionRanPainFree: false, today: today);
+        }
         // Pain flag lifecycle for this pattern.
         final persistedFlag = state.painFrozen && state.painRegion != null
             ? PainFlag(
@@ -902,38 +954,8 @@ class DecisionEngine {
           continue;
         }
 
-        final lowerBackRecoveryActive =
-            input.settings.lowerBackRecovery.active &&
-                pattern == MovementPattern.hinge;
-        if (lowerBackRecoveryActive &&
-            !input.settings.travelMode &&
-            flag?.severity != PainSeverity.sharp) {
-          final recoveryExercise =
-              lowerBackRecoveryEngine.prescriptionFor(
-            input.settings.lowerBackRecovery,
-            today: today,
-            equipment: input.settings.equipment,
-          );
-          if (recoveryExercise != null) {
-            exercises.add(recoveryExercise);
-            fired.add(FiredRule(
-              input.settings.lowerBackRecovery.stage ==
-                      LowerBackRecoveryStage.deadliftReentry
-                  ? RuleKey.lowerBackRecoveryReentry
-                  : RuleKey.lowerBackRecoveryActive,
-            ));
-            continue;
-          }
-        }
-
         PainAction action = const PainAction(PainActionKind.none);
-        if (lowerBackRecoveryActive) {
-          action = const PainAction(
-            PainActionKind.substituteNamed,
-            substitute: bridgeHamstringCurl,
-          );
-          fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
-        } else if (flag != null && !reentryPending) {
+        if (flag != null && !reentryPending) {
           action = painEngine.resolve(flag.region, flag.severity, pattern);
           if (action.kind != PainActionKind.none) {
             fired.add(FiredRule(
@@ -1420,7 +1442,7 @@ class DecisionEngine {
       for (final pattern in ladders.keys)
         if (pattern.patternClass != PatternClass.kneeHealth)
           ExerciseState(trackKey: pattern.name, pattern: pattern),
-      for (final named in s5NamedAccessories)
+      for (final named in [...s5NamedAccessories, alternativeGluteBridge, alternativeHamstringCurl])
         ExerciseState(trackKey: named.trackKey, pattern: named.pattern),
     ];
     final result = Map<String, ExerciseState>.from(states);
@@ -1670,6 +1692,7 @@ class DecisionEngine {
     required double stimulusSetMultiplier,
     required bool travelMode,
     required bool lowerBackRecoveryMode,
+    bool deadliftAlternative = false,
   }) {
     final template = sessionTemplates[sessionId]!;
     final compress60to35 = isTimeCompressedSession(sessionId, tier);
@@ -1687,9 +1710,16 @@ class DecisionEngine {
             stimulusSetMultiplier: stimulusSetMultiplier,
             dropAccessories: compress60to35,
           );
-    if (!travelMode) return slots;
+    final resolvedSlots = [
+      for (final slot in slots)
+        if (deadliftAlternative && slot.$1 == MovementPattern.hinge && slot.$3 == null) ...[
+          (MovementPattern.hinge, slot.$2, alternativeGluteBridge as SubstituteExercise?),
+          (MovementPattern.hinge, slot.$2, alternativeHamstringCurl as SubstituteExercise?),
+        ] else slot,
+    ];
+    if (!travelMode) return resolvedSlots;
 
-    final travelViable = slots
+    final travelViable = resolvedSlots
         .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
         .toList();
     if (travelViable.isNotEmpty) return travelViable;
@@ -1728,6 +1758,7 @@ class DecisionEngine {
       travelMode: input.settings.travelMode,
       lowerBackRecoveryMode:
           input.settings.lowerBackRecovery.active,
+      deadliftAlternative: input.settings.deadliftAlternative,
     );
     return _painAdjustedStrengthProjection(
       slots,
@@ -2363,6 +2394,17 @@ class DecisionEngine {
       loadDisplay = 'backpack/DB @ ${loadTotal.toStringAsFixed(0)} lb';
     }
 
+    if (state.trackKey == alternativeGluteBridge.trackKey) {
+      loadSteps = [0, ...equipmentEngine.singleDbAchievableTotals(equipmentConfig)];
+      if (state.currentLoad == 0) {
+        loadTotal = 0;
+        loadDisplay = 'Bodyweight · no added load';
+      }
+      instruction = 'Lift the hips only through a comfortable range; do not arch at the top. '
+          'Any dumbbell must be padded and securely controlled. Stop if back symptoms worsen during or afterward.';
+    } else if (state.trackKey == alternativeHamstringCurl.trackKey) {
+      instruction = 'Use sliders or towels on a compatible surface. Keep the trunk comfortable and shorten the range if needed. Stop if symptoms worsen during or afterward.';
+    }
     return PlannedExercise(
       trackKey: state.trackKey,
       pattern: state.pattern,

@@ -39,6 +39,8 @@ class UserSettings {
   /// fixed-scale 12-month activity view; true restores the compact 12-week
   /// strength/cardio category heatmap.
   final bool classicHeatmap;
+  final bool deadliftAlternative;
+  final bool stationaryBikePaused;
 
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
@@ -93,6 +95,8 @@ class UserSettings {
     this.checkInCutoffHour = 10,
     this.travelMode = false,
     this.classicHeatmap = false,
+    this.deadliftAlternative = false,
+    this.stationaryBikePaused = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeEnabled = false,
     this.secondRehitNudgeScheduledDay,
@@ -129,6 +133,8 @@ class UserSettings {
     int? checkInCutoffHour,
     bool? travelMode,
     bool? classicHeatmap,
+    bool? deadliftAlternative,
+    bool? stationaryBikePaused,
     bool? notificationsEnabled,
     bool? secondRehitNudgeEnabled,
     String? secondRehitNudgeScheduledDay,
@@ -164,6 +170,8 @@ class UserSettings {
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
+      deadliftAlternative: deadliftAlternative ?? this.deadliftAlternative,
+      stationaryBikePaused: stationaryBikePaused ?? this.stationaryBikePaused,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       secondRehitNudgeEnabled:
           secondRehitNudgeEnabled ?? this.secondRehitNudgeEnabled,

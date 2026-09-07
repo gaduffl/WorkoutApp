@@ -2,6 +2,9 @@
 ///
 /// This describes training modifications and observed symptom response. It is
 /// deliberately not a diagnosis or a claim that a particular tissue healed.
+import 'dart:convert';
+import 'recovery_program.dart';
+
 enum LowerBackRecoveryStage {
   isometricHold,
   dynamicUnloaded,
@@ -17,6 +20,7 @@ const lowerBackRecoveryTrackKey =
     'recovery:lower_back:back_extension';
 
 class LowerBackRecoveryState {
+  final RecoveryProgram program;
   final bool active;
   final DateTime? activatedAt;
   final DateTime? completedAt;
@@ -45,6 +49,7 @@ class LowerBackRecoveryState {
   final double? lastReentryLoad;
 
   const LowerBackRecoveryState({
+    this.program = const RecoveryProgram(),
     this.active = false,
     this.activatedAt,
     this.completedAt,
@@ -66,25 +71,14 @@ class LowerBackRecoveryState {
   bool get awaitingNextMorningResponse =>
       pendingNextMorningSessionDate != null;
 
-  String get stageLabel => switch (stage) {
-        LowerBackRecoveryStage.isometricHold =>
-          'Stage 1 · static back-extension holds',
-        LowerBackRecoveryStage.dynamicUnloaded =>
-          'Stage 2 · controlled unweighted back extensions',
-        LowerBackRecoveryStage.deadliftReentry =>
-          'Stage 3 · graded deadlift re-entry',
-      };
+  String get stageLabel => program.phaseLabel;
 
-  String get targetLabel => switch (stage) {
-        LowerBackRecoveryStage.isometricHold =>
-          '3 × $targetHoldSeconds-second holds',
-        LowerBackRecoveryStage.dynamicUnloaded =>
-          '2 × $targetDynamicReps controlled repetitions',
-        LowerBackRecoveryStage.deadliftReentry =>
-          '1 × 8 elevated-start deadlift at 50%',
-      };
+  String get targetLabel => program.trainingBlocked
+      ? 'Training paused · assessment needed'
+      : 'Individually selected work · no automatic progression';
 
   LowerBackRecoveryState copyWith({
+    RecoveryProgram? program,
     bool? active,
     DateTime? activatedAt,
     DateTime? completedAt,
@@ -107,6 +101,7 @@ class LowerBackRecoveryState {
     bool clearLastReentryLoad = false,
   }) =>
       LowerBackRecoveryState(
+        program: program ?? this.program,
         active: active ?? this.active,
         activatedAt: activatedAt ?? this.activatedAt,
         completedAt: clearCompletedAt
@@ -147,6 +142,7 @@ class LowerBackRecoveryState {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is LowerBackRecoveryState &&
+          jsonEncode(other.program.toJson()) == jsonEncode(program.toJson()) &&
           other.active == active &&
           other.activatedAt == activatedAt &&
           other.completedAt == completedAt &&
@@ -170,6 +166,7 @@ class LowerBackRecoveryState {
 
   @override
   int get hashCode => Object.hashAll([
+        jsonEncode(program.toJson()),
         active,
         activatedAt,
         completedAt,

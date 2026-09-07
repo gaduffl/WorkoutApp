@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/recovery_widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/schedule_fit_engine.dart';
@@ -213,16 +214,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Start lower-back recovery mode?'),
         content: const Text(
-          'This mode does not diagnose a disc injury or promise a cure. It '
-          'replaces high lumbar-load strength work with unweighted pull-ups, '
-          'supported upper-body work, ATG 1 pump work, and a conservative '
-          'symptom-gated back-extension progression. Because pain has persisted for weeks, '
-          'arrange an assessment with a qualified clinician.\n\n'
-          'Do not start this program if you have leg weakness, spreading leg '
-          'pain, numbness or tingling, saddle-area numbness, bladder/bowel '
-          'changes, fever, major trauma, or rapidly worsening pain. Seek '
-          'urgent medical care for bladder/bowel changes, saddle numbness, '
-          'or progressive weakness.',
+          'This mode records symptoms and individually selected exercise. It '
+          'does not diagnose an injury or certify healing. It starts in a '
+          'flare-up phase, pauses stationary cycling and does not prescribe walking. '
+          'Persistent pain or new leg symptoms need clinical assessment.\n\n'
+          'Do not train with new weakness, saddle numbness or bladder/bowel changes; '
+          'seek urgent medical assessment. Record resolved tingling in the symptom check too.',
         ),
         actions: [
           TextButton(
@@ -257,31 +254,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _stopLowerBackRecovery() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('End recovery mode?'),
-        content: const Text(
-          'Normal loaded squat, hinge, press, row, pull-up, and core ladders '
-          'may return on the next plan. End the mode only if you intentionally '
-          'want to leave its staged re-entry.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep mode active'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('End mode'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    final controller = context.read<AppController>();
-    await controller.deactivateLowerBackRecovery();
-    if (mounted) setState(() => _settings = controller.settings);
+    await Navigator.push(context, MaterialPageRoute<void>(
+      builder: (_) => const RecoveryProgramScreen(),
+    ));
+    if (mounted) setState(() => _settings = context.read<AppController>().settings);
   }
 
   String _fmtTime(DateTime t) {
@@ -355,24 +331,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               key: const Key('settings-lower-back-recovery'),
               secondary: const Icon(Icons.health_and_safety_outlined),
               title: const Text('Recovery mode'),
-              subtitle: Text(
-                controller.lowerBackRecovery.active
-                    ? '${controller.lowerBackRecovery.stageLabel}\n'
-                        '${controller.lowerBackRecovery.targetLabel} · lumbar-load-minimized strength catalogue active'
-                    : 'Replace high lumbar-load strength work and use symptom-gated recovery work',
-              ),
+              subtitle: Text(controller.lowerBackRecovery.active
+                  ? controller.lowerBackRecovery.stageLabel
+                  : 'Start with a flare-up phase and individually selected exercises'),
               value: controller.lowerBackRecovery.active,
-              onChanged: (enabled) => enabled
-                  ? _startLowerBackRecovery()
-                  : _stopLowerBackRecovery(),
+              onChanged: (enabled) => enabled ? _startLowerBackRecovery() : _stopLowerBackRecovery(),
             ),
+            SwitchListTile(
+              key: const Key('settings-deadlift-alternative'),
+              title: const Text('Deadlift alternative'),
+              subtitle: const Text('Replace deadlifts with floor glute bridges and sliding hamstring curls. Separate progression; no transfer of your old deadlift load. Sliders or towels need a compatible surface.'),
+              value: _settings.deadliftAlternative,
+              onChanged: (v) async {
+                setState(() => _settings = _settings.copyWith(deadliftAlternative: v));
+                await controller.saveSettings(_settings);
+              },
+            ),
+            SwitchListTile(
+              key: const Key('settings-stationary-bike-paused'),
+              title: const Text('Cycling aggravates my back'),
+              subtitle: const Text('Pause stationary Zone 2, REHIT, 4×4, finishers and catch-up prompts. History stays intact; no automatic restart.'),
+              value: controller.stationaryBikePaused,
+              onChanged: controller.lowerBackRecovery.active ? null : (v) async {
+                setState(() => _settings = _settings.copyWith(stationaryBikePaused: v));
+                await controller.saveSettings(_settings);
+              },
+            ),
+            if (controller.lowerBackRecovery.active) const RecoveryControls(),
+
             if (controller.lowerBackRecovery.active)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'At most 2 recovery sessions per rolling 7 days, at least '
-                  '48 hours apart. Progress requires both same-day and '
-                  'next-morning symptoms to be no worse.',
+                  'Strength rebuilding: at most two sessions per rolling week, with two calendar days between them. Increases and phase changes require explicit review.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

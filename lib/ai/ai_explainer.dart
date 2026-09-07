@@ -79,6 +79,9 @@ class AiExplainer {
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.lowerBackRecoveryActive:
+      case RuleKey.recoveryProgram:
+      case RuleKey.stationaryBikePaused:
+      case RuleKey.deadliftAlternative:
         return 'dedicated lower-back recovery mode is active; loaded hinge work and load progression stay paused';
       case RuleKey.lowerBackRecoveryLoadMinimized:
         return 'lower-back recovery uses a load-minimized strength catalogue: symptom-gated back extensions, unweighted pull-ups, supported presses/rows, and ATG 1 pump work replace weighted squats, unsupported trunk loading, loaded pull-ups, and demanding core variants';
@@ -148,6 +151,7 @@ class AiExplainer {
       return fallbackText(medicalEscalation.first, settings.language);
     }
     final fallback = _fallbackConcat(trace, settings.language) + _painAdvisory(trace);
+    if (trace.firedRules.any((r) => r.key == RuleKey.recoveryProgram || r.key == RuleKey.stationaryBikePaused)) return fallback;
     if (!settings.aiExplanationsEnabled) return fallback;
     final apiKey = settings.anthropicApiKey;
     if (apiKey == null || apiKey.isEmpty) return fallback;

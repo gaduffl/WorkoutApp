@@ -422,6 +422,8 @@ class _CardioTargetsCard extends StatelessWidget {
                 'Cardio targets',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              if (context.watch<AppController>().stationaryBikePaused)
+                const Text('Temporarily paused for recovery. Values below are actual history, not catch-up recommendations.'),
               const SizedBox(height: 4),
               Text(
                 'Trailing windows · high-intensity days can be Norwegian 4×4 or REHIT',

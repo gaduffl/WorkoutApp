@@ -13,6 +13,8 @@ import '../engine/decision_engine.dart';
 import '../engine/equipment_engine.dart';
 import '../engine/intensity_recovery_policy.dart';
 import '../engine/lower_back_recovery_engine.dart';
+import '../engine/recovery_program_engine.dart';
+import '../models/recovery_program.dart';
 import '../engine/pain_engine.dart';
 import '../engine/progression_engine.dart';
 import '../engine/queue_engine.dart';
@@ -82,7 +84,7 @@ class AppController extends ChangeNotifier {
 
   bool get lowerBackMorningResponseDue {
     final sessionDate =
-        settings.lowerBackRecovery.pendingNextMorningSessionDate;
+        settings.lowerBackRecovery.program.pendingSession;
     final sessionDay = sessionDate == null
         ? null
         : DateTime(sessionDate.year, sessionDate.month, sessionDate.day);
@@ -93,6 +95,7 @@ class AppController extends ChangeNotifier {
   /// Today plan. Recheck every hard gate at the action/UI boundary so an old
   /// S3/S7 prescription cannot bypass recovery, pain, deload, or travel.
   bool isHighIntensityUsableNow({DateTime? nowLocal}) {
+    if (stationaryBikePaused || lowerBackRecovery.active) return false;
     final observedAt = nowLocal ?? DateTime.now();
     final trace = todayTrace;
     final currentTrace = trace != null && _isSameDate(trace.date, observedAt)
@@ -117,11 +120,28 @@ class AppController extends ChangeNotifier {
     return !safety.blocked;
   }
 
-  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) =>
-      plan == null ||
-      (plan.sessionId != SessionTypeId.s3 &&
-          plan.sessionId != SessionTypeId.s7) ||
-      isHighIntensityUsableNow(nowLocal: nowLocal);
+  bool get stationaryBikePaused => settings.stationaryBikePaused ||
+      lowerBackRecovery.active && lowerBackRecovery.program.bikePaused;
+
+  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) {
+    if (plan == null) return true;
+    if (stationaryBikePaused && sessionTemplates[plan.sessionId]?.isCardioOnly == true) return false;
+    if (settings.deadliftAlternative && plan.exercises.any((e) =>
+        e.trackKey == MovementPattern.hinge.name || e.trackKey == RecoveryExercise.deadlift.trackKey)) return false;
+    if (lowerBackRecovery.active) {
+      final program = lowerBackRecovery.program;
+      if (!plan.lowerBackRecoveryMode || program.trainingBlocked ||
+          !program.checkedToday(nowLocal ?? today())) return false;
+      return plan.exercises.where((e) => !e.isWarmup).every((e) =>
+        RecoveryExercise.values.any((choice) => choice.trackKey == e.trackKey &&
+          const RecoveryProgramEngine().allowed(program, choice,
+            alternative: settings.deadliftAlternative, travel: settings.travelMode) &&
+          e.targetRange.$2 == program.dose(choice).reps &&
+          (e.loadTotal ?? 0) == program.dose(choice).load));
+    }
+    return plan.sessionId != SessionTypeId.s3 && plan.sessionId != SessionTypeId.s7 ||
+        isHighIntensityUsableNow(nowLocal: nowLocal);
+  }
 
   /// Loaded from whole local calendar days so the shared recovery policy can
   /// apply its precision-aware trailing-48-hour filter and the rolling
@@ -386,7 +406,7 @@ class AppController extends ChangeNotifier {
             false,
         firstSession: firstSession,
         contraindicatingPainActive:
-            highIntensitySafety.contraindicatingPainActive,
+            highIntensitySafety.contraindicatingPainActive || stationaryBikePaused || lowerBackRecovery.active,
         painEscalationActive: painEscalationActive,
         globalDeloadActive: false,
         patternDeloadActive: patternDeloadActive,
@@ -723,6 +743,13 @@ class AppController extends ChangeNotifier {
   /// The rest-day REHIT reminder decision: is today going unused, is a short
   /// high-intensity exposure safe, and when would it fit?
   RestDayRehitResult restDayRehitEligibilityAt(DateTime nowLocal) {
+    if (stationaryBikePaused || lowerBackRecovery.active) {
+      return RestDayRehitResult(
+        closedReasons: const [RestDayRehitClosedReason.contraindicatingPainActive],
+        observedAt: nowLocal, suggestedNudgeTime: null, slotSource: null,
+        checkInMissing: todayTrace == null,
+      );
+    }
     final trace = todayTrace;
     final currentTrace =
         trace != null && _isSameDate(trace.date, nowLocal) ? trace : null;
@@ -944,7 +971,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveSettings(UserSettings newSettings) async {
-    final travelModeChanged = settings.travelMode != newSettings.travelMode;
+    final travelModeChanged = settings.travelMode != newSettings.travelMode ||
+        settings.deadliftAlternative != newSettings.deadliftAlternative ||
+        settings.stationaryBikePaused != newSettings.stationaryBikePaused;
     // The REHIT day marker is internal state, not an editable preference.
     // Preserve a marker written while a settings screen held an older copy.
     settings = newSettings.copyWith(
@@ -954,6 +983,13 @@ class AppController extends ChangeNotifier {
       restDayRehitNudgeScheduledFor: settings.restDayRehitNudgeScheduledFor,
       lowerBackRecovery: settings.lowerBackRecovery,
     );
+    if (settings.deadliftAlternative && lowerBackRecovery.program.selected.contains(RecoveryExercise.deadlift)) {
+      final program = lowerBackRecovery.program;
+      settings = settings.copyWith(lowerBackRecovery: lowerBackRecovery.copyWith(program: program.copyWith(
+        selected: {...program.selected}..remove(RecoveryExercise.deadlift)..addAll({RecoveryExercise.gluteBridge, RecoveryExercise.hamstringCurl}),
+        toleratedExposures: 0, clearPending: true,
+      )));
+    }
     await repo.saveSettings(settings);
     unawaited(syncNotifications());
     if (travelModeChanged && todayTrace != null && !sessionLoggedToday) {
@@ -976,6 +1012,7 @@ class AppController extends ChangeNotifier {
     }
     final now = today();
     settings = settings.copyWith(
+      stationaryBikePaused: true,
       lowerBackRecovery: _lowerBackRecoveryEngine.activate(
         now: now,
         symptomOnsetDate: symptomOnsetDate,
@@ -992,6 +1029,11 @@ class AppController extends ChangeNotifier {
 
   Future<void> deactivateLowerBackRecovery() async {
     if (!settings.lowerBackRecovery.active) return;
+    final program = lowerBackRecovery.program;
+    if (program.phase != RecoveryPhase.returnToTraining ||
+        !const RecoveryProgramEngine().canAdvance(program, today()) || program.assessedAt == null) {
+      throw StateError('Complete the gradual return phase with improving function and recorded assessment before ending recovery.');
+    }
     settings = settings.copyWith(
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
         settings.lowerBackRecovery,
@@ -1006,44 +1048,37 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateRecoveryProgram(RecoveryProgram program) async {
+    settings = settings.copyWith(lowerBackRecovery: lowerBackRecovery.copyWith(program: program));
+    await repo.saveSettings(settings);
+    unawaited(syncNotifications());
+    if (todayTrace != null && !sessionLoggedToday) {
+      await _refreshPendingPlanForSettings();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  Future<void> recordRecoveryObservation(RecoveryObservation observation) =>
+      updateRecoveryProgram(const RecoveryProgramEngine().observe(lowerBackRecovery.program, observation));
+
+  Future<void> reportBackFlare({Set<RecoveryExercise> provoking = const {}}) =>
+      updateRecoveryProgram(const RecoveryProgramEngine().flare(lowerBackRecovery.program, DateTime.now(), provoking: provoking));
+
   Future<void> recordLowerBackNextMorningResponse(
     LowerBackSymptomResponse response,
   ) async {
-    final previous = settings.lowerBackRecovery;
-    final next = _lowerBackRecoveryEngine.recordNextMorningResponse(
-      previous,
-      response: response,
-      responseDate: today(),
-    );
-    if (identical(next, previous)) return;
-
-    settings = settings.copyWith(lowerBackRecovery: next);
-    if (previous.stage == LowerBackRecoveryStage.deadliftReentry &&
-        previous.active &&
-        !next.active &&
-        next.lastReentryLoad != null) {
-      final existing = exerciseStates[MovementPattern.hinge.name] ??
-          ExerciseState(
-            trackKey: MovementPattern.hinge.name,
-            pattern: MovementPattern.hinge,
-          );
-      final resumed = existing.clone()
-        ..currentLoad = next.lastReentryLoad!
-        ..status = ExerciseStatus.progress
-        ..lastTrainedDate = today()
-        ..consecutiveHoldCount = 0
-        ..microStepStage = 0
-        ..lastPrescriptionChange =
-            'Graded lower-back recovery re-entry baseline retained';
-      exerciseStates[resumed.trackKey] = resumed;
-      await repo.saveExerciseState(resumed);
-    }
-    await repo.saveSettings(settings);
-    if (todayTrace != null && !sessionLoggedToday) {
-      await _refreshPendingPlanForSettings();
-      return;
-    }
-    notifyListeners();
+    // Legacy callers cannot advance the old extension ladder.
+    final program = lowerBackRecovery.program;
+    final last = program.latest;
+    await recordRecoveryObservation(RecoveryObservation(
+      date: DateTime.now(), pain: last?.pain ?? 0,
+      sittingMinutes: last?.sittingMinutes ?? 0,
+      function: response == LowerBackSymptomResponse.better
+          ? RecoveryFunction.better : response == LowerBackSymptomResponse.worse
+              ? RecoveryFunction.worse : RecoveryFunction.unchanged,
+      nextMorningWorse: response == LowerBackSymptomResponse.worse,
+    ));
   }
 
   /// Enables or disables no-equipment travel mode immediately. If today's
@@ -1637,7 +1672,7 @@ class AppController extends ChangeNotifier {
     if (!isSupplemental) {
       await _assertPrimaryPlanUnlocked();
     }
-    if (!bypassProspectiveHighIntensityGate && !isPlanUsableNow(plan)) {
+    if (!isUnplanned && !bypassProspectiveHighIntensityGate && !isPlanUsableNow(plan)) {
       throw StateError(
         'This high-intensity session does not pass the current recovery/safety gate.',
       );
@@ -1646,7 +1681,7 @@ class AppController extends ChangeNotifier {
       (setLog) =>
           !setLog.isWarmup &&
           setLog.value > 0 &&
-          setLog.trackKey == lowerBackRecoveryTrackKey,
+          (setLog.trackKey == lowerBackRecoveryTrackKey || setLog.trackKey.startsWith('recovery:v2:')),
     );
     if (completedLowerBackRecovery && lowerBackSameDayResponse == null) {
       throw ArgumentError.notNull('lowerBackSameDayResponse');
@@ -1910,7 +1945,7 @@ class AppController extends ChangeNotifier {
 
       final def = sessionTypes[plan.sessionId]!;
       final countsAs = <FloorCategory>{};
-      if (def.countsAs.contains(FloorCategory.strength)) countsAs.add(FloorCategory.strength);
+      if (!plan.lowerBackRecoveryMode && def.countsAs.contains(FloorCategory.strength)) countsAs.add(FloorCategory.strength);
       if (plan.sessionId == SessionTypeId.s2) {
         if (rehitFinisherCompletion?.meetsCreditableDose == true) {
           countsAs.add(FloorCategory.intensity);
@@ -1969,25 +2004,29 @@ class AppController extends ChangeNotifier {
       await repo.saveSessionLog(log);
       _recentLogs = [..._recentLogs, log];
       _scheduleLogs = [..._scheduleLogs, log];
-      if (completedLowerBackRecovery) {
-        final recoveryExercise = plan.exercises.firstWhere(
-          (exercise) => exercise.trackKey == lowerBackRecoveryTrackKey,
-        );
-        final recoveryPainFlagged = loggedSets.any(
-          (setLog) =>
-              setLog.trackKey == lowerBackRecoveryTrackKey &&
-              setLog.painFlag,
-        );
-        settings = settings.copyWith(
-          lowerBackRecovery: _lowerBackRecoveryEngine.recordSession(
-            settings.lowerBackRecovery,
-            sessionDate: now,
-            sameDayResponse: recoveryPainFlagged
-                ? LowerBackSymptomResponse.worse
-                : lowerBackSameDayResponse!,
-            performedLoad: recoveryExercise.loadTotal,
+      if (completedLowerBackRecovery && lowerBackRecovery.active) {
+        final expected = plan.exercises.where((e) =>
+            !e.isWarmup && e.trackKey.startsWith('recovery:v2:')).toList();
+        final actual = loggedSets.where((s) => !s.isWarmup && s.value > 0).toList();
+        final eligible = RecoveryExercise.values.where((e) => const RecoveryProgramEngine().allowed(
+          lowerBackRecovery.program, e, alternative: settings.deadliftAlternative, travel: settings.travelMode));
+        final completeDose = expected.isNotEmpty && expected.length == eligible.length &&
+            lowerBackSameDayResponse != null && !endedEarly && expected.every((e) {
+          final sets = actual.where((s) => s.trackKey == e.trackKey).toList();
+          return sets.length == e.sets && sets.every((s) =>
+            s.value == e.targetRange.$2 && s.metric == e.metric &&
+            s.weight == (e.loadTotal ?? 0) && s.rir == Rir.rir4plus && !s.painFlag);
+        });
+        final performed = RecoveryExercise.values.where((e) =>
+            actual.any((s) => s.trackKey == e.trackKey)).toSet();
+        final worse = loggedSets.any((s) => s.painFlag) ||
+            lowerBackSameDayResponse == LowerBackSymptomResponse.worse;
+        settings = settings.copyWith(lowerBackRecovery: lowerBackRecovery.copyWith(
+          program: const RecoveryProgramEngine().complete(
+            lowerBackRecovery.program, date: completedAt, completeDose: completeDose,
+            worse: worse, exercises: performed,
           ),
-        );
+        ));
         await repo.saveSettings(settings);
       }
       await recordAnalyticsEvent(

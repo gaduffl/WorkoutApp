@@ -35,6 +35,9 @@ enum RuleKey {
   timeCompress35_20,
   travelModeActive,
   lowerBackRecoveryActive,
+  recoveryProgram,
+  stationaryBikePaused,
+  deadliftAlternative,
   lowerBackRecoveryLoadMinimized,
   lowerBackRecoverySpacing,
   lowerBackRecoveryReentry,
@@ -133,6 +136,12 @@ extension RuleKeyCode on RuleKey {
         return 'TRAVEL_MODE_ACTIVE';
       case RuleKey.lowerBackRecoveryActive:
         return 'LOWER_BACK_RECOVERY_ACTIVE';
+      case RuleKey.recoveryProgram:
+        return 'RECOVERY_PROGRAM';
+      case RuleKey.stationaryBikePaused:
+        return 'STATIONARY_BIKE_PAUSED';
+      case RuleKey.deadliftAlternative:
+        return 'DEADLIFT_ALTERNATIVE';
       case RuleKey.lowerBackRecoveryLoadMinimized:
         return 'LOWER_BACK_RECOVERY_LOAD_MINIMIZED';
       case RuleKey.lowerBackRecoverySpacing:
