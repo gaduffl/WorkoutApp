@@ -6,7 +6,7 @@ import '../models/exercise_metric.dart';
 import '../models/exercise_state.dart';
 import '../models/floor_category.dart';
 import '../models/ladders.dart';
-import '../models/lower_back_recovery.dart';
+
 import '../models/movement_pattern.dart';
 import '../models/pain.dart';
 import '../models/plan.dart';
@@ -22,7 +22,8 @@ import '../models/user_settings.dart';
 import 'cardio_engine.dart';
 import 'equipment_engine.dart';
 import 'intensity_recovery_policy.dart';
-import 'lower_back_recovery_engine.dart';
+
+import 'recovery_program_engine.dart';
 import 'pain_engine.dart';
 import 'progression_engine.dart';
 import 'queue_engine.dart';
@@ -35,10 +36,7 @@ import 'training_status_engine.dart';
 /// Why a caller asked the engine to preserve or choose a specific session.
 /// Internal recomputations must not masquerade as an explicit user swap in
 /// the persisted decision trace.
-enum ForcedSessionProvenance {
-  manualOverride,
-  internalRefresh,
-}
+enum ForcedSessionProvenance { manualOverride, internalRefresh }
 
 class DecisionEngineInput {
   final CheckIn checkin;
@@ -115,7 +113,7 @@ class DecisionEngine {
   static const progressionEngine = ProgressionEngine();
   static const equipmentEngine = EquipmentEngine();
   static const intensityRecoveryPolicy = IntensityRecoveryPolicy();
-  static const lowerBackRecoveryEngine = LowerBackRecoveryEngine();
+
   static const stimulusLedgerEngine = StimulusLedgerEngine();
   static const trainingStatusEngine = TrainingStatusEngine();
   static const exerciseMuscleMap = ExerciseMuscleMap();
@@ -139,9 +137,15 @@ class DecisionEngine {
       history: input.recoveryHistory,
       asOf: today,
     );
-    if (recovery.illnessGuardFired) fired.add(const FiredRule(RuleKey.illnessGuard));
-    if (recovery.subjOverrideDownFired) fired.add(const FiredRule(RuleKey.subjOverrideDown));
-    if (recovery.subjOverrideUpBlockedFired) fired.add(const FiredRule(RuleKey.subjOverrideUpBlocked));
+    if (recovery.illnessGuardFired) {
+      fired.add(const FiredRule(RuleKey.illnessGuard));
+    }
+    if (recovery.subjOverrideDownFired) {
+      fired.add(const FiredRule(RuleKey.subjOverrideDown));
+    }
+    if (recovery.subjOverrideUpBlockedFired) {
+      fired.add(const FiredRule(RuleKey.subjOverrideUpBlocked));
+    }
 
     final recoveryTrace = RecoveryTrace(
       hrvZToday: recovery.hrvZToday,
@@ -153,7 +157,10 @@ class DecisionEngine {
       inputsMissing: recovery.inputsMissing,
     );
 
-    final queueTraceBase = QueueTraceInfo(pointerBefore: input.queueState.pointer, servedBefore: input.queueState.served);
+    final queueTraceBase = QueueTraceInfo(
+      pointerBefore: input.queueState.pointer,
+      servedBefore: input.queueState.served,
+    );
 
     // Pain-lifecycle bookkeeping: tick "scheduled while flagged" counters
     // regardless of what gets picked below (§7.2). Patched at the very end
@@ -165,16 +172,14 @@ class DecisionEngine {
     // while the same RED cluster remains in the rolling window. Apply the
     // crossing before any rest short circuit so the current third RED still
     // persists the episode even when it is also the second consecutive RED.
-    final redDaysToday =
-        _redDaysInRollingWindow(input, recovery.bucket, today);
+    final redDaysToday = _redDaysInRollingWindow(input, recovery.bucket, today);
     final yesterday = today.subtract(const Duration(days: 1));
     final redDaysYesterday = _redDaysInRollingWindow(
       input,
       _bucketForDate(input, yesterday),
       yesterday,
     );
-    final automaticGlobalDeload =
-        redDaysToday >= 3 && redDaysYesterday < 3;
+    final automaticGlobalDeload = redDaysToday >= 3 && redDaysYesterday < 3;
     if (automaticGlobalDeload) {
       patchedStates = progressionEngine.forceGlobalDeloadForBuiltInTracks(
         patchedStates,
@@ -192,9 +197,8 @@ class DecisionEngine {
       checkin.pain,
       today,
     );
-    final urgentNeurologicalWarning = checkin.pain.any(
-          painEngine.requiresUrgentMedicalAssessment,
-        ) ||
+    final urgentNeurologicalWarning =
+        checkin.pain.any(painEngine.requiresUrgentMedicalAssessment) ||
         patchedStates.values.any(
           (state) =>
               state.painFrozen &&
@@ -223,7 +227,8 @@ class DecisionEngine {
         patchedStates,
       );
     }
-    final sharpHipPainActive = painEngine.hipSharpActive(checkin.pain) ||
+    final sharpHipPainActive =
+        painEngine.hipSharpActive(checkin.pain) ||
         patchedStates.values.any(
           (state) =>
               state.painFrozen &&
@@ -250,8 +255,16 @@ class DecisionEngine {
     }
 
     final yesterdayBucket = _bucketForDate(input, yesterday);
-    if (recovery.bucket == ReadinessBucket.red && yesterdayBucket == ReadinessBucket.red) {
-      fired.add(const FiredRule(RuleKey.restDoubleRed));
+    if (recovery.bucket == ReadinessBucket.red &&
+        yesterdayBucket == ReadinessBucket.red) {
+      fired.add(
+        FiredRule(
+          RuleKey.restDoubleRed,
+          params: {
+            if (input.settings.lowerBackRecovery.active) 'recovery': 'true',
+          },
+        ),
+      );
       return DecisionEngineOutput(
         DecisionTrace(
           date: today,
@@ -260,7 +273,9 @@ class DecisionEngine {
           candidates: const [],
           firedRules: fired,
           plan: null,
-          restReason: 'Two RED days in a row - full rest or a light walk',
+          restReason: input.settings.lowerBackRecovery.active
+              ? 'Two RED days in a row - rest; recovery progression is paused.'
+              : 'Two RED days in a row - full rest or a light walk',
           queue: queueTraceBase,
         ),
         patchedStates,
@@ -268,7 +283,68 @@ class DecisionEngine {
     }
 
     // --- Step 2: candidate filtering and target-status calculation ---
+    if (input.settings.lowerBackRecovery.active) {
+      final program = input.settings.lowerBackRecovery.program;
+      final pain = [
+        ...checkin.pain,
+        for (final state in patchedStates.values)
+          if (state.painFrozen && state.painRegion != null)
+            PainFlag(
+              region: state.painRegion!,
+              severity: state.painSeverity ?? PainSeverity.sharp,
+              flaggedDate: state.painFlaggedDate ?? today,
+              tags: state.painTags,
+            ),
+      ];
+      final plan = const RecoveryProgramEngine().plan(
+        program,
+        date: today,
+        minutes: checkin.timeMinutes,
+        alternative: input.settings.deadliftAlternative,
+        pain: pain,
+        travel: input.settings.travelMode,
+      );
+      final message = program.trainingBlocked
+          ? program.latest?.urgent == true
+                ? 'New weakness, saddle numbness or bladder/bowel changes: seek urgent medical assessment. Training is paused.'
+                : 'Leg symptoms were reported, including resolved symptoms. Training is paused pending clinical assessment.'
+          : !program.checkedToday(today)
+          ? 'Record today’s back symptoms before choosing recovery work.'
+          : plan == null
+          ? 'No recovery workout is due or suitable today. Review selected exercises, paused movements and pending morning feedback. No catch-up volume is added.'
+          : '${program.phaseLabel}. Individually selected exercises only; stop for increasing or spreading symptoms. Check the delayed and next-morning response.';
+      fired.add(
+        FiredRule(RuleKey.recoveryProgram, params: {'message': message}),
+      );
+      if (program.bikePaused || input.settings.stationaryBikePaused) {
+        fired.add(const FiredRule(RuleKey.stationaryBikePaused));
+      }
+      return DecisionEngineOutput(
+        DecisionTrace(
+          date: today,
+          checkin: checkin,
+          recovery: recoveryTrace,
+          candidates: const [],
+          firedRules: fired,
+          plan: plan,
+          restReason: plan == null ? message : null,
+          queue: queueTraceBase,
+        ),
+        patchedStates,
+      );
+    }
+    if (input.settings.stationaryBikePaused) {
+      fired.add(const FiredRule(RuleKey.stationaryBikePaused));
+    }
+    if (input.settings.deadliftAlternative) {
+      fired.add(const FiredRule(RuleKey.deadliftAlternative));
+    }
     final feasible = _feasibleCandidates(checkin.timeMinutes)
+        .where(
+          (id) =>
+              !input.settings.stationaryBikePaused ||
+              !sessionTemplates[id]!.isCardioOnly,
+        )
         .where(
           (id) =>
               !input.settings.travelMode ||
@@ -302,18 +378,18 @@ class DecisionEngine {
     );
     final naturalHighIntensityTargetDue =
         highIntensityDays.distinctDayDeficit > 0;
-    final fourByFourPreferenceUnmet =
-        fourByFourPreference.exposureDeficit > 0;
-    final highIntensitySafety =
-        intensityRecoveryPolicy.evaluateHighIntensitySafety(
-      logs: input.sessionLogs,
-      asOf: ledgerAsOf,
-      checkInPain: checkin.pain,
-      exerciseStates: input.exerciseStates.values,
-      automaticGlobalDeload: automaticGlobalDeload,
-      travelMode: input.settings.travelMode,
-    );
-    final canAdvanceFourByFour = naturalHighIntensityTargetDue &&
+    final fourByFourPreferenceUnmet = fourByFourPreference.exposureDeficit > 0;
+    final highIntensitySafety = intensityRecoveryPolicy
+        .evaluateHighIntensitySafety(
+          logs: input.sessionLogs,
+          asOf: ledgerAsOf,
+          checkInPain: checkin.pain,
+          exerciseStates: input.exerciseStates.values,
+          automaticGlobalDeload: automaticGlobalDeload,
+          travelMode: input.settings.travelMode,
+        );
+    final canAdvanceFourByFour =
+        naturalHighIntensityTargetDue &&
         fourByFourPreferenceUnmet &&
         checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
         !highIntensitySafety.blocked;
@@ -328,8 +404,12 @@ class DecisionEngine {
           };
 
     // --- Step 3: target-dose scoring ---
-    final yesterdayLegHeavy = input.sessionLogs.any((l) =>
-        _isSameDate(l.date, yesterday) && l.countsTowardQueueAndFloor && sessionTypes[l.templateId]!.legHeavy);
+    final yesterdayLegHeavy = input.sessionLogs.any(
+      (l) =>
+          _isSameDate(l.date, yesterday) &&
+          l.countsTowardQueueAndFloor &&
+          sessionTypes[l.templateId]!.legHeavy,
+    );
 
     final scored = <_Scored>[];
     for (final id in feasible) {
@@ -354,7 +434,8 @@ class DecisionEngine {
         terms['norwegian4x4Due'] = 20000;
       }
 
-      final canAdvanceRehit = naturalHighIntensityTargetDue &&
+      final canAdvanceRehit =
+          naturalHighIntensityTargetDue &&
           checkin.timeMinutes == 20 &&
           !highIntensitySafety.blocked;
       if (id == SessionTypeId.s7 && canAdvanceRehit) {
@@ -363,7 +444,8 @@ class DecisionEngine {
       final surplusOrRecoveryBlockedFourByFour =
           id == SessionTypeId.s3 && !canAdvanceFourByFour;
       final surplusRehit = id == SessionTypeId.s7 && !canAdvanceRehit;
-      final unadvanceableConceptualS3 = id == SessionTypeId.s3 &&
+      final unadvanceableConceptualS3 =
+          id == SessionTypeId.s3 &&
           checkin.timeMinutes == 20 &&
           !canAdvanceRehit;
       if (surplusOrRecoveryBlockedFourByFour ||
@@ -390,8 +472,8 @@ class DecisionEngine {
           targets: targets,
           stimulusSetMultiplier: strengthStimulusMultiplier,
           travelMode: input.settings.travelMode,
-          lowerBackRecoveryMode:
-              input.settings.lowerBackRecovery.active,
+          lowerBackRecoveryMode: input.settings.lowerBackRecovery.active,
+          deadliftAlternative: input.settings.deadliftAlternative,
         );
         final painAdjusted = _painAdjustedStrengthProjection(
           workSlots,
@@ -405,14 +487,16 @@ class DecisionEngine {
           // unavailability explicit for selection and UI alternative lists.
           terms[painNoSafeWorkScoreTerm] = 0;
         }
-        terms.addAll(_strengthScoreTerms(
-          slots: painAdjusted.stimulusSlots,
-          template: sessionTemplates[id]!,
-          tier: tier,
-          ledger: ledger,
-          targets: targets,
-          stimulusSetMultiplier: strengthStimulusMultiplier,
-        ));
+        terms.addAll(
+          _strengthScoreTerms(
+            slots: painAdjusted.stimulusSlots,
+            template: sessionTemplates[id]!,
+            tier: tier,
+            ledger: ledger,
+            targets: targets,
+            stimulusSetMultiplier: strengthStimulusMultiplier,
+          ),
+        );
       }
 
       if (def.legHeavy && yesterdayLegHeavy) {
@@ -460,8 +544,12 @@ class DecisionEngine {
       if (byScore != 0) return byScore;
       final aCycle = cycleOrder.contains(a.id);
       final bCycle = cycleOrder.contains(b.id);
-      if (aCycle && bCycle) return cycleOrder.indexOf(a.id).compareTo(cycleOrder.indexOf(b.id));
-      if (aCycle != bCycle) return aCycle ? -1 : 1; // cycle members before S6/S7
+      if (aCycle && bCycle) {
+        return cycleOrder.indexOf(a.id).compareTo(cycleOrder.indexOf(b.id));
+      }
+      if (aCycle != bCycle) {
+        return aCycle ? -1 : 1; // cycle members before S6/S7
+      }
       if (a.id == SessionTypeId.s7 && b.id == SessionTypeId.s6) return -1;
       if (a.id == SessionTypeId.s6 && b.id == SessionTypeId.s7) return 1;
       return 0;
@@ -469,19 +557,21 @@ class DecisionEngine {
 
     scored.sort((a, b) => compareCandidates(a, b));
     final winnerWithoutLegHeavyDemotion = yesterdayLegHeavy
-        ? (scored.toList()
-              ..sort(
-                (a, b) => compareCandidates(
-                  a,
-                  b,
-                  ignoreLegHeavyDemotion: true,
-                ),
+        ? (scored.toList()..sort(
+                (a, b) => compareCandidates(a, b, ignoreLegHeavyDemotion: true),
               ))
-            .first
+              .first
         : scored.first;
 
     final candidatesTrace = scored
-        .map((s) => ScoredCandidate(sessionId: s.id, tier: s.tier, score: s.score, scoreTerms: s.terms))
+        .map(
+          (s) => ScoredCandidate(
+            sessionId: s.id,
+            tier: s.tier,
+            score: s.score,
+            scoreTerms: s.terms,
+          ),
+        )
         .toList();
 
     _Scored? forcedCandidate;
@@ -513,7 +603,9 @@ class DecisionEngine {
       );
       if (!identical(alt, chosen)) {
         chosen = alt;
-        fired.add(const FiredRule(RuleKey.painSubSharp, pattern: 'HIP_SESSION_SWAP'));
+        fired.add(
+          const FiredRule(RuleKey.painSubSharp, pattern: 'HIP_SESSION_SWAP'),
+        );
       }
     }
 
@@ -569,10 +661,12 @@ class DecisionEngine {
         chosenHasPainSafeWork &&
         input.forcedSessionProvenance ==
             ForcedSessionProvenance.manualOverride) {
-      fired.add(FiredRule(
-        RuleKey.manualSessionOverride,
-        params: {'session': forcedCandidate.def.name},
-      ));
+      fired.add(
+        FiredRule(
+          RuleKey.manualSessionOverride,
+          params: {'session': forcedCandidate.def.name},
+        ),
+      );
     }
 
     var volumeCutForLegHeavyEscape = false;
@@ -654,7 +748,8 @@ class DecisionEngine {
         fired.add(const FiredRule(RuleKey.recoverySwapEasyCardio));
       }
     } else if (recovery.bucket == ReadinessBucket.red) {
-      if (effectiveSessionId == SessionTypeId.s3 || effectiveSessionId == SessionTypeId.s7) {
+      if (effectiveSessionId == SessionTypeId.s3 ||
+          effectiveSessionId == SessionTypeId.s7) {
         effectiveSessionId = SessionTypeId.s6;
         fired.add(const FiredRule(RuleKey.redSwapZ2));
       } else if (effectiveSessionId == SessionTypeId.s6) {
@@ -724,10 +819,9 @@ class DecisionEngine {
         chosen.id == effectiveSessionId &&
         !redTechnique &&
         cycleOrder.contains(chosen.id)) {
-      fired.add(FiredRule(
-        RuleKey.queueNext,
-        params: {'session': chosen.def.name},
-      ));
+      fired.add(
+        FiredRule(RuleKey.queueNext, params: {'session': chosen.def.name}),
+      );
     }
 
     // --- Plan assembly (Steps 7-9) ---
@@ -740,12 +834,10 @@ class DecisionEngine {
     final exercises = <PlannedExercise>[];
     final lowerBackLoadMinimizedPlan =
         input.settings.lowerBackRecovery.active &&
-            template != null &&
-            !template.isCardioOnly;
+        template != null &&
+        !template.isCardioOnly;
     if (lowerBackLoadMinimizedPlan) {
-      fired.add(
-        const FiredRule(RuleKey.lowerBackRecoveryLoadMinimized),
-      );
+      fired.add(const FiredRule(RuleKey.lowerBackRecoveryLoadMinimized));
     }
 
     if (template != null && !template.isCardioOnly) {
@@ -755,8 +847,7 @@ class DecisionEngine {
       // compound's percent-load ramp.
       var loadedCompoundRampDone = false;
       if (template.hasKneeHealthBlock) {
-        final atgMinutes =
-            StrengthPrepPolicy.atgMinutes(checkin.timeMinutes);
+        final atgMinutes = StrengthPrepPolicy.atgMinutes(checkin.timeMinutes);
         final String prepName;
         final String prepInstruction;
         if (kneePainActive) {
@@ -773,82 +864,112 @@ class DecisionEngine {
               : 'ATG + upper-body prep';
           prepInstruction = input.settings.travelMode
               ? atgMinutes == 3
-                  ? '0:00–0:30 · Jumping jacks\n'
-                      '0:30–1:00 · Safe backward walking\n'
-                      '1:00–1:30 · Wall tibialis raises (10–15)\n'
-                      '1:30–2:00 · Wall calf raises (10–15)\n'
-                      '2:00–2:30 · Shoulder circles (8 each direction)\n'
-                      '2:30–3:00 · Scapular push-ups (6–10)\n'
-                      'No equipment; replaces general movement prep.'
-                  : '0:00–0:45 · Jumping jacks\n'
-                      '0:45–2:00 · Safe backward walking\n'
-                      '2:00–2:45 · Wall tibialis raises (15–20)\n'
-                      '2:45–3:30 · Wall calf raises (15–20)\n'
-                      '3:30–4:15 · Shoulder circles (10 each direction)\n'
-                      '4:15–5:00 · Scapular push-ups (8–12)\n'
-                      'No equipment; replaces general movement prep.'
+                    ? '0:00–0:30 · Jumping jacks\n'
+                          '0:30–1:00 · Safe backward walking\n'
+                          '1:00–1:30 · Wall tibialis raises (10–15)\n'
+                          '1:30–2:00 · Wall calf raises (10–15)\n'
+                          '2:00–2:30 · Shoulder circles (8 each direction)\n'
+                          '2:30–3:00 · Scapular push-ups (6–10)\n'
+                          'No equipment; replaces general movement prep.'
+                    : '0:00–0:45 · Jumping jacks\n'
+                          '0:45–2:00 · Safe backward walking\n'
+                          '2:00–2:45 · Wall tibialis raises (15–20)\n'
+                          '2:45–3:30 · Wall calf raises (15–20)\n'
+                          '3:30–4:15 · Shoulder circles (10 each direction)\n'
+                          '4:15–5:00 · Scapular push-ups (8–12)\n'
+                          'No equipment; replaces general movement prep.'
               : atgMinutes == 3
-                  ? '0:00–0:30 · Jumping jacks\n'
-                      '0:30–1:00 · Backward treadmill\n'
-                      '1:00–1:30 · Tibialis raises (10–15)\n'
-                      '1:30–2:00 · Calf raises (10–15)\n'
-                      '2:00–2:30 · Shoulder circles (8 each direction)\n'
-                      '2:30–3:00 · Scapular push-ups (6–10)\n'
-                      'Replaces general movement prep.'
-                  : '0:00–0:45 · Jumping jacks\n'
-                      '0:45–2:00 · Backward treadmill\n'
-                      '2:00–2:45 · Tibialis raises (15–20)\n'
-                      '2:45–3:30 · Calf raises (15–20)\n'
-                      '3:30–4:15 · Shoulder circles (10 each direction)\n'
-                      '4:15–5:00 · Scapular push-ups (8–12)\n'
-                      'Replaces general movement prep.';
+              ? '0:00–0:30 · Jumping jacks\n'
+                    '0:30–1:00 · Backward treadmill\n'
+                    '1:00–1:30 · Tibialis raises (10–15)\n'
+                    '1:30–2:00 · Calf raises (10–15)\n'
+                    '2:00–2:30 · Shoulder circles (8 each direction)\n'
+                    '2:30–3:00 · Scapular push-ups (6–10)\n'
+                    'Replaces general movement prep.'
+              : '0:00–0:45 · Jumping jacks\n'
+                    '0:45–2:00 · Backward treadmill\n'
+                    '2:00–2:45 · Tibialis raises (15–20)\n'
+                    '2:45–3:30 · Calf raises (15–20)\n'
+                    '3:30–4:15 · Shoulder circles (10 each direction)\n'
+                    '4:15–5:00 · Scapular push-ups (8–12)\n'
+                    'Replaces general movement prep.';
         }
-        exercises.add(PlannedExercise(
-          trackKey: 'atg_block',
-          pattern: MovementPattern.kneeHealth,
-          name: prepName,
-          sets: 1,
-          metric: ExerciseMetric.minutes,
-          targetRange: (atgMinutes, atgMinutes),
-          rirTarget: Rir.rir3plus,
-          isWarmup: true,
-          instruction: prepInstruction,
-          progressionEligible: false,
-          isTravel: input.settings.travelMode,
-        ));
+        exercises.add(
+          PlannedExercise(
+            trackKey: 'atg_block',
+            pattern: MovementPattern.kneeHealth,
+            name: prepName,
+            sets: 1,
+            metric: ExerciseMetric.minutes,
+            targetRange: (atgMinutes, atgMinutes),
+            rirTarget: Rir.rir3plus,
+            isWarmup: true,
+            instruction: prepInstruction,
+            progressionEligible: false,
+            isTravel: input.settings.travelMode,
+          ),
+        );
       } else {
-        exercises.add(_generalWarmupEntry(
-          effectiveSessionId,
-          slotMinutes: checkin.timeMinutes,
-          travelMode: input.settings.travelMode,
-          painAware: prepPainAware,
-        ));
+        exercises.add(
+          _generalWarmupEntry(
+            effectiveSessionId,
+            slotMinutes: checkin.timeMinutes,
+            travelMode: input.settings.travelMode,
+            painAware: prepPainAware,
+          ),
+        );
       }
       final slots = _workSlotsForSession(
         sessionId: effectiveSessionId,
         tier: tier,
         ledger: ledger,
         targets: targets,
-        stimulusSetMultiplier:
-            recovery.bucket == ReadinessBucket.red ? 0.0 : setMultiplier,
+        stimulusSetMultiplier: recovery.bucket == ReadinessBucket.red
+            ? 0.0
+            : setMultiplier,
         travelMode: input.settings.travelMode,
-        lowerBackRecoveryMode:
-            input.settings.lowerBackRecovery.active,
+        lowerBackRecoveryMode: input.settings.lowerBackRecovery.active,
+        deadliftAlternative: input.settings.deadliftAlternative,
       );
       for (final (pattern, usesCompoundSetCount, namedExercise) in slots) {
-        final isGenuineCompound = namedExercise == null &&
+        final isGenuineCompound =
+            namedExercise == null &&
             template.compoundPatterns.contains(pattern);
         final baseSets = template.setsFor(
           usesCompoundSetCount,
           tier,
           timeCompressed: isTimeCompressedSession(template.id, tier),
         );
-        final cutSets = (baseSets * setMultiplier).floor().clamp(baseSets == 0 ? 0 : 1, baseSets);
+        final cutSets = (baseSets * setMultiplier).floor().clamp(
+          baseSets == 0 ? 0 : 1,
+          baseSets,
+        );
 
         final trackKey = namedExercise?.trackKey ?? pattern.name;
-        var state = patchedStates[trackKey] ??
+        var state =
+            patchedStates[trackKey] ??
             ExerciseState(trackKey: trackKey, pattern: pattern);
 
+        // Alternatives keep their own load history, but cannot evade a frozen hinge.
+        final hinge = patchedStates[MovementPattern.hinge.name];
+        if ((trackKey == alternativeGluteBridge.trackKey ||
+                trackKey == alternativeHamstringCurl.trackKey) &&
+            hinge != null &&
+            hinge.painFrozen &&
+            hinge.painRegion != null) {
+          state = painEngine.advanceFlagState(
+            state,
+            activeFlag: PainFlag(
+              region: hinge.painRegion!,
+              severity: hinge.painSeverity ?? PainSeverity.sharp,
+              flaggedDate: hinge.painFlaggedDate ?? today,
+              tags: hinge.painTags,
+            ),
+            patternScheduledToday: false,
+            sessionRanPainFree: false,
+            today: today,
+          );
+        }
         // Pain flag lifecycle for this pattern.
         final persistedFlag = state.painFrozen && state.painRegion != null
             ? PainFlag(
@@ -859,10 +980,7 @@ class DecisionEngine {
               )
             : null;
         final effectiveFlag = _flagFor(
-          [
-            ...checkin.pain,
-            if (persistedFlag != null) persistedFlag,
-          ],
+          [...checkin.pain, if (persistedFlag != null) persistedFlag],
           pattern,
           today,
         );
@@ -889,57 +1007,31 @@ class DecisionEngine {
             tags: state.painTags,
           );
         }
-        final reentryPending = state.painReentryTestOffered && !state.painReentryTestPassed;
+        final reentryPending =
+            state.painReentryTestOffered && !state.painReentryTestPassed;
 
         // §7.2 escalation: persistent sharp flag / radiating symptoms — the
         // pattern stays off the plan until the flag is cleared manually.
         if (flag != null && painEngine.isEscalated(flag, today)) {
           fired.add(FiredRule(RuleKey.painFreeze, pattern: pattern.name));
-          fired.add(FiredRule(
-            RuleKey.painMedicalEscalation,
-            pattern: pattern.name,
-          ));
+          fired.add(
+            FiredRule(RuleKey.painMedicalEscalation, pattern: pattern.name),
+          );
           continue;
         }
 
-        final lowerBackRecoveryActive =
-            input.settings.lowerBackRecovery.active &&
-                pattern == MovementPattern.hinge;
-        if (lowerBackRecoveryActive &&
-            !input.settings.travelMode &&
-            flag?.severity != PainSeverity.sharp) {
-          final recoveryExercise =
-              lowerBackRecoveryEngine.prescriptionFor(
-            input.settings.lowerBackRecovery,
-            today: today,
-            equipment: input.settings.equipment,
-          );
-          if (recoveryExercise != null) {
-            exercises.add(recoveryExercise);
-            fired.add(FiredRule(
-              input.settings.lowerBackRecovery.stage ==
-                      LowerBackRecoveryStage.deadliftReentry
-                  ? RuleKey.lowerBackRecoveryReentry
-                  : RuleKey.lowerBackRecoveryActive,
-            ));
-            continue;
-          }
-        }
-
         PainAction action = const PainAction(PainActionKind.none);
-        if (lowerBackRecoveryActive) {
-          action = const PainAction(
-            PainActionKind.substituteNamed,
-            substitute: bridgeHamstringCurl,
-          );
-          fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
-        } else if (flag != null && !reentryPending) {
+        if (flag != null && !reentryPending) {
           action = painEngine.resolve(flag.region, flag.severity, pattern);
           if (action.kind != PainActionKind.none) {
-            fired.add(FiredRule(
-              flag.severity == PainSeverity.mild ? RuleKey.painSubMild : RuleKey.painSubSharp,
-              pattern: pattern.name,
-            ));
+            fired.add(
+              FiredRule(
+                flag.severity == PainSeverity.mild
+                    ? RuleKey.painSubMild
+                    : RuleKey.painSubSharp,
+                pattern: pattern.name,
+              ),
+            );
           }
         }
         if (state.painFrozen) {
@@ -969,14 +1061,17 @@ class DecisionEngine {
         var painReentryPrescription = false;
         var capLadderJumpFired = false;
         var substituteIsNew = false;
-        var suppressMicroProgressionCue = input.settings.travelMode ||
+        var suppressMicroProgressionCue =
+            input.settings.travelMode ||
             flag != null ||
             state.painFrozen ||
             action.kind != PainActionKind.none;
-        if (action.kind == PainActionKind.substituteNamed && action.substitute != null) {
+        if (action.kind == PainActionKind.substituteNamed &&
+            action.substitute != null) {
           final sub = action.substitute!;
           substituteIsNew = !patchedStates.containsKey(sub.trackKey);
-          final subState = patchedStates[sub.trackKey] ??
+          final subState =
+              patchedStates[sub.trackKey] ??
               ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
           patchedStates[sub.trackKey] = subState;
           substitutedFrom = pattern.name;
@@ -992,10 +1087,9 @@ class DecisionEngine {
             suppressMicroProgressionCue = true;
           }
           if (resolution.detrainFired && !input.settings.travelMode) {
-            fired.add(FiredRule(
-              RuleKey.detrainAdjust,
-              pattern: sub.pattern.name,
-            ));
+            fired.add(
+              FiredRule(RuleKey.detrainAdjust, pattern: sub.pattern.name),
+            );
             // Persist the exact emitted comeback baseline after real work,
             // even when YELLOW/RED disables normal progression. A lower
             // readiness-modulated baseline is safer than snapping back to
@@ -1006,21 +1100,21 @@ class DecisionEngine {
             exerciseLoadMultiplier *= 0.6;
             exerciseSets = exerciseSets == 0
                 ? 0
-                : (exerciseSets * 0.5)
-                    .floor()
-                    .clamp(1, exerciseSets)
-                    .toInt();
+                : (exerciseSets * 0.5).floor().clamp(1, exerciseSets).toInt();
             exerciseRir = Rir.rir4plus;
-            fired.add(FiredRule(
-              RuleKey.deloadActive,
-              pattern: sub.pattern.name,
-            ));
+            fired.add(
+              FiredRule(RuleKey.deloadActive, pattern: sub.pattern.name),
+            );
           }
           if (substituteIsNew) {
             fired.add(const FiredRule(RuleKey.onboardSubstitute));
           }
         } else {
-          final resolution = progressionEngine.resolveTodaysPrescription(state, today, input.settings.equipment);
+          final resolution = progressionEngine.resolveTodaysPrescription(
+            state,
+            today,
+            input.settings.equipment,
+          );
           prescriptionState = resolution.state;
           if (resolution.detrainFired ||
               resolution.painReentryTestFired ||
@@ -1046,63 +1140,77 @@ class DecisionEngine {
             // pain-free movement check. It must not be represented as the
             // formal 50%-load re-entry test that resumes home progression.
             if (!input.settings.travelMode) {
-              fired.add(FiredRule(RuleKey.painReentryTest, pattern: pattern.name));
+              fired.add(
+                FiredRule(RuleKey.painReentryTest, pattern: pattern.name),
+              );
             }
           }
           if (resolution.deloadActive) {
             // §6.5 deload parameters: 60% load, 50% of sets, RIR >= 4.
             exerciseLoadMultiplier *= 0.6;
-            exerciseSets = exerciseSets == 0 ? 0 : (exerciseSets * 0.5).floor().clamp(1, exerciseSets).toInt();
+            exerciseSets = exerciseSets == 0
+                ? 0
+                : (exerciseSets * 0.5).floor().clamp(1, exerciseSets).toInt();
             exerciseRir = Rir.rir4plus;
             fired.add(FiredRule(RuleKey.deloadActive, pattern: pattern.name));
           }
 
-          capLadderJumpFired = !input.settings.travelMode &&
+          capLadderJumpFired =
+              !input.settings.travelMode &&
               state.awaitingUndershootCheck &&
               !resolution.detrainFired &&
               !resolution.painReentryTestFired &&
               !resolution.deloadActive;
 
           if (action.kind == PainActionKind.reduceLoadOne) {
-            prescriptionState = _reduceLoadOne(prescriptionState, input.settings.equipment);
+            prescriptionState = _reduceLoadOne(
+              prescriptionState,
+              input.settings.equipment,
+            );
           } else if (action.kind == PainActionKind.regressLadderAndReduce) {
-            prescriptionState = _regressLadderAndReduce(prescriptionState, input.settings.equipment);
+            prescriptionState = _regressLadderAndReduce(
+              prescriptionState,
+              input.settings.equipment,
+            );
           }
         }
 
-        final prescriptionStep = progressionEngine.ladderStepFor(prescriptionState);
+        final prescriptionStep = progressionEngine.ladderStepFor(
+          prescriptionState,
+        );
         final reentryTarget = painReentryPrescription
             ? prescriptionStep.metric == ExerciseMetric.seconds
-                ? const (10, 10)
-                : const (8, 8)
+                  ? const (10, 10)
+                  : const (8, 8)
             : null;
-        final timedDeloadTarget = !painReentryPrescription &&
+        final timedDeloadTarget =
+            !painReentryPrescription &&
                 prescriptionState.status == ExerciseStatus.deload &&
                 prescriptionStep.metric == ExerciseMetric.seconds
             ? progressionEngine.deloadTargetValueFor(prescriptionState)
             : null;
-        final targetOverride = reentryTarget ??
+        final targetOverride =
+            reentryTarget ??
             (timedDeloadTarget == null
                 ? null
                 : (timedDeloadTarget, timedDeloadTarget));
-        final lowerBackProgressionFrozen = lowerBackLoadMinimizedPlan &&
+        final lowerBackProgressionFrozen =
+            lowerBackLoadMinimizedPlan &&
             (pattern == MovementPattern.hinge ||
                 prescriptionState.trackKey ==
                     lowerBackRecoveryPullUp.trackKey ||
-                prescriptionState.trackKey ==
-                    lowerBackRecoveryDip.trackKey);
+                prescriptionState.trackKey == lowerBackRecoveryDip.trackKey);
         final lowerBackInstruction = lowerBackLoadMinimizedPlan
-            ? _lowerBackLoadMinimizedInstruction(
-                prescriptionState.trackKey,
-              )
+            ? _lowerBackLoadMinimizedInstruction(prescriptionState.trackKey)
             : null;
         final painActionInstruction = switch (action.kind) {
           PainActionKind.reduceLoadOne ||
           PainActionKind.regressLadderAndReduce =>
             'Use a pain-free range and controlled reps; stop if pain worsens.',
-          PainActionKind.substituteNamed => substituteIsNew
-              ? 'This substitute starts deliberately light. Use a pain-free range and stop if pain worsens.'
-              : 'Use a pain-free range and stop if pain worsens.',
+          PainActionKind.substituteNamed =>
+            substituteIsNew
+                ? 'This substitute starts deliberately light. Use a pain-free range and stop if pain worsens.'
+                : 'Use a pain-free range and stop if pain worsens.',
           PainActionKind.none || PainActionKind.removePattern => null,
         };
         var planned = _buildPlannedExercise(
@@ -1122,8 +1230,8 @@ class DecisionEngine {
           targetRangeOverride: targetOverride,
           instruction: painReentryPrescription
               ? prescriptionStep.metric == ExerciseMetric.seconds
-                  ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
-                  : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
+                    ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
+                    : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
               : painActionInstruction ?? lowerBackInstruction,
         );
 
@@ -1132,10 +1240,13 @@ class DecisionEngine {
         // equipment-free equivalents while keeping their own state tracks.
         if (input.settings.travelMode) {
           final travelNamedExercise =
-              action.kind == PainActionKind.substituteNamed ? action.substitute : namedExercise;
+              action.kind == PainActionKind.substituteNamed
+              ? action.substitute
+              : namedExercise;
           final travel = _travelStepFor(pattern, travelNamedExercise);
           if (travel != null) {
-            final painAdjusted = painReentryPrescription ||
+            final painAdjusted =
+                painReentryPrescription ||
                 action.kind == PainActionKind.reduceLoadOne ||
                 action.kind == PainActionKind.regressLadderAndReduce ||
                 action.kind == PainActionKind.substituteNamed;
@@ -1148,18 +1259,18 @@ class DecisionEngine {
               metric: travel.metric,
               targetRange: painReentryPrescription
                   ? travel.metric == ExerciseMetric.seconds
-                      ? const (10, 10)
-                      : const (8, 8)
+                        ? const (10, 10)
+                        : const (8, 8)
                   : travel.targetRange ?? const (8, 15),
               rirTarget: painAdjusted ? Rir.rir4plus : planned.rirTarget,
               substitutedFrom: planned.substitutedFrom,
               instruction: painReentryPrescription
                   ? 'Travel mode - light pain-free check only; the formal loaded re-entry remains pending'
                   : painAdjusted
-                      ? 'Travel mode - use an easier variation and pain-free range; stop if pain worsens'
-                      : travel.metric == ExerciseMetric.seconds
-                          ? 'Travel mode - no equipment; progress with hold duration, control, or position'
-                          : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
+                  ? 'Travel mode - use an easier variation and pain-free range; stop if pain worsens'
+                  : travel.metric == ExerciseMetric.seconds
+                  ? 'Travel mode - no equipment; progress with hold duration, control, or position'
+                  : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
               progressionEligible: false,
               isTravel: true,
               isCompoundWork: planned.isCompoundWork,
@@ -1181,15 +1292,19 @@ class DecisionEngine {
               final ramp = checkin.timeMinutes <= 20
                   ? const [(0.50, 5), (0.75, 3)]
                   : const [(0.40, 8), (0.60, 5), (0.80, 3)];
-              exercises.addAll(ramp
-                  .map((entry) => _warmupEntry(
+              exercises.addAll(
+                ramp
+                    .map(
+                      (entry) => _warmupEntry(
                         planned,
                         step,
                         entry.$1,
                         entry.$2,
                         input.settings.equipment,
-                      ))
-                  .whereType<PlannedExercise>());
+                      ),
+                    )
+                    .whereType<PlannedExercise>(),
+              );
             } else {
               final feeder = _warmupEntry(
                 planned,
@@ -1223,19 +1338,23 @@ class DecisionEngine {
         if (!e.isWarmup && e.isCompoundWork) compoundWork.add(i);
       }
       for (var g = 0; g + 1 < compoundWork.length; g += 2) {
-        exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(supersetGroup: g ~/ 2);
-        exercises[compoundWork[g + 1]] = exercises[compoundWork[g + 1]].copyWith(supersetGroup: g ~/ 2);
+        exercises[compoundWork[g]] = exercises[compoundWork[g]].copyWith(
+          supersetGroup: g ~/ 2,
+        );
+        exercises[compoundWork[g + 1]] = exercises[compoundWork[g + 1]]
+            .copyWith(supersetGroup: g ~/ 2);
       }
     }
 
     final planSessionDef = sessionTypes[effectiveSessionId]!;
-    final queueCreditType = redTechnique ? null : _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
+    final queueCreditType = redTechnique
+        ? null
+        : _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
     if (template != null &&
         !template.isCardioOnly &&
-        exercises.where((exercise) => !exercise.isWarmup).fold<int>(
-              0,
-              (sum, exercise) => sum + exercise.sets,
-            ) ==
+        exercises
+                .where((exercise) => !exercise.isWarmup)
+                .fold<int>(0, (sum, exercise) => sum + exercise.sets) ==
             0) {
       return DecisionEngineOutput(
         DecisionTrace(
@@ -1252,7 +1371,8 @@ class DecisionEngine {
       );
     }
     final int estimatedDuration;
-    final optionalRehitFinisherReserved = template != null &&
+    final optionalRehitFinisherReserved =
+        template != null &&
         template.hasOptionalRehitFinisher &&
         effectiveSessionId == SessionTypeId.s2 &&
         tier == SessionTier.extended &&
@@ -1261,8 +1381,9 @@ class DecisionEngine {
         !highIntensitySafety.blocked &&
         naturalHighIntensityTargetDue;
     if (template != null && !template.isCardioOnly) {
-      final unbudgetedWork =
-          exercises.where((exercise) => !exercise.isWarmup).toList();
+      final unbudgetedWork = exercises
+          .where((exercise) => !exercise.isWarmup)
+          .toList();
       final optionalRehitReserve = optionalRehitFinisherReserved
           ? sessionTypes[SessionTypeId.s7]!.fullDurationMin
           : 0;
@@ -1328,17 +1449,15 @@ class DecisionEngine {
         targets: targets,
       );
       if (targetedMuscles.isNotEmpty) {
-        fired.add(FiredRule(
-          RuleKey.muscleStimulusDeficit,
-          params: {'muscles': targetedMuscles},
-        ));
+        fired.add(
+          FiredRule(
+            RuleKey.muscleStimulusDeficit,
+            params: {'muscles': targetedMuscles},
+          ),
+        );
       }
     }
-    _advanceFinalScheduledPainStates(
-      patchedStates,
-      exercises,
-      today,
-    );
+    _advanceFinalScheduledPainStates(patchedStates, exercises, today);
     if (exercises.any((exercise) => exercise.isTravel)) {
       fired.add(const FiredRule(RuleKey.travelModeActive));
     }
@@ -1376,17 +1495,16 @@ class DecisionEngine {
         queue: QueueTraceInfo(
           pointerBefore: input.queueState.pointer,
           servedBefore: input.queueState.served,
-          pointerAfterIfCompleted: queueEngine.advance(input.queueState, queueCreditType).pointer,
+          pointerAfterIfCompleted: queueEngine
+              .advance(input.queueState, queueCreditType)
+              .pointer,
         ),
       ),
       patchedStates,
     );
   }
 
-  bool _prepPainActive(
-    DecisionEngineInput input,
-    SessionTemplateDef template,
-  ) {
+  bool _prepPainActive(DecisionEngineInput input, SessionTemplateDef template) {
     final rehearsedPatterns = <MovementPattern>{
       ...template.compoundPatterns,
       ...template.accessoryPatterns,
@@ -1396,14 +1514,14 @@ class DecisionEngine {
       (flag) => flag.region.affectedPatterns.any(rehearsedPatterns.contains),
     );
     final recoveryModeAffectsPrep =
-        input.settings.lowerBackRecovery.active &&
-            !template.isCardioOnly;
+        input.settings.lowerBackRecovery.active && !template.isCardioOnly;
     final persistedPain = input.exerciseStates.values.any(
       (state) =>
           state.painFrozen &&
           (rehearsedPatterns.contains(state.pattern) ||
-              (state.painRegion?.affectedPatterns
-                      .any(rehearsedPatterns.contains) ??
+              (state.painRegion?.affectedPatterns.any(
+                    rehearsedPatterns.contains,
+                  ) ??
                   false)),
     );
     return currentPain || persistedPain || recoveryModeAffectsPrep;
@@ -1420,7 +1538,11 @@ class DecisionEngine {
       for (final pattern in ladders.keys)
         if (pattern.patternClass != PatternClass.kneeHealth)
           ExerciseState(trackKey: pattern.name, pattern: pattern),
-      for (final named in s5NamedAccessories)
+      for (final named in [
+        ...s5NamedAccessories,
+        alternativeGluteBridge,
+        alternativeHamstringCurl,
+      ])
         ExerciseState(trackKey: named.trackKey, pattern: named.pattern),
     ];
     final result = Map<String, ExerciseState>.from(states);
@@ -1443,10 +1565,7 @@ class DecisionEngine {
       // Preserve the same deterministic most-restrictive resolution used by
       // plan assembly when multiple regions affect one movement pattern.
       final effectiveFlag = _flagFor(
-        [
-          ...currentPain,
-          if (persistedFlag != null) persistedFlag,
-        ],
+        [...currentPain, if (persistedFlag != null) persistedFlag],
         seed.pattern,
         today,
       );
@@ -1505,28 +1624,32 @@ class DecisionEngine {
     return travelSteps[pattern];
   }
 
-  String? _lowerBackLoadMinimizedInstruction(String trackKey) =>
-      switch (trackKey) {
-        'sub:pullVertical:lower_back_pull_up' =>
-          'Use assistance as needed, keep at least 4 RIR, and avoid swinging or deliberately arching the lower back. No added weight; stop if lower-back symptoms worsen or spread.',
-        'sub:pushHorizontal:floor_press' =>
-          'Keep the pelvis and lower back comfortably supported; do not force a lifting arch. Stop if lower-back symptoms worsen or spread.',
-        'sub:pullHorizontal:lower_back_chest_supported_row' =>
-          'Keep the chest supported for the entire set and avoid lifting the torso from the bolster. Stop if lower-back symptoms worsen or spread.',
-        'sub:coreGrip:db_curl' ||
-        'sub:pushVertical:lateral_raise' =>
-          'Keep the torso upright and supported if helpful; do not lean, swing, or extend the lower back. Stop if symptoms worsen or spread.',
-        'sub:pushVertical:lower_back_bodyweight_dip' =>
-          'Bodyweight only. Keep a comfortable neutral trunk without a forced arch; stop if lower-back symptoms worsen or spread.',
-        'sub:hinge:bridge_hamstring_curl' =>
-          'Keep the range comfortable and the trunk quiet at 4+ RIR; stop if lower-back symptoms worsen or spread.',
-        _ => null,
-      };
+  String? _lowerBackLoadMinimizedInstruction(
+    String trackKey,
+  ) => switch (trackKey) {
+    'sub:pullVertical:lower_back_pull_up' =>
+      'Use assistance as needed, keep at least 4 RIR, and avoid swinging or deliberately arching the lower back. No added weight; stop if lower-back symptoms worsen or spread.',
+    'sub:pushHorizontal:floor_press' =>
+      'Keep the pelvis and lower back comfortably supported; do not force a lifting arch. Stop if lower-back symptoms worsen or spread.',
+    'sub:pullHorizontal:lower_back_chest_supported_row' =>
+      'Keep the chest supported for the entire set and avoid lifting the torso from the bolster. Stop if lower-back symptoms worsen or spread.',
+    'sub:coreGrip:db_curl' || 'sub:pushVertical:lateral_raise' =>
+      'Keep the torso upright and supported if helpful; do not lean, swing, or extend the lower back. Stop if symptoms worsen or spread.',
+    'sub:pushVertical:lower_back_bodyweight_dip' =>
+      'Bodyweight only. Keep a comfortable neutral trunk without a forced arch; stop if lower-back symptoms worsen or spread.',
+    'sub:hinge:bridge_hamstring_curl' =>
+      'Keep the range comfortable and the trunk quiet at 4+ RIR; stop if lower-back symptoms worsen or spread.',
+    _ => null,
+  };
 
   /// Only a same-type completion grants queue credit; RED/YELLOW swaps
   /// (incl. the RED technique session, handled by the caller) and the
   /// S3->S7 time substitution never do (§2.1, §5 Step 6).
-  SessionTypeId? _queueCreditType(SessionTypeId chosenId, SessionTypeId effectiveId, ReadinessBucket bucket) {
+  SessionTypeId? _queueCreditType(
+    SessionTypeId chosenId,
+    SessionTypeId effectiveId,
+    ReadinessBucket bucket,
+  ) {
     if (chosenId != effectiveId) return null;
     if (!cycleOrder.contains(chosenId)) return null;
     return chosenId;
@@ -1569,11 +1692,7 @@ class DecisionEngine {
     required SessionTier tier,
     required bool dropAccessories,
   }) {
-    final hinge = (
-      MovementPattern.hinge,
-      true,
-      null as SubstituteExercise?,
-    );
+    final hinge = (MovementPattern.hinge, true, null as SubstituteExercise?);
     final pullUp = (
       MovementPattern.pullVertical,
       true,
@@ -1610,50 +1729,25 @@ class DecisionEngine {
         SessionTypeId.s1 || SessionTypeId.s4 => [hinge, pullUp],
         SessionTypeId.s2 => [supportedPress, pullUp],
         SessionTypeId.s5 => [pullUp, curl],
-        SessionTypeId.s3 ||
-        SessionTypeId.s6 ||
-        SessionTypeId.s7 =>
-          const [],
+        SessionTypeId.s3 || SessionTypeId.s6 || SessionTypeId.s7 => const [],
       };
     }
 
     return switch (sessionId) {
-      SessionTypeId.s1 => [
-          hinge,
-          pullUp,
-          curl,
-          raise,
-          bodyweightDip,
-        ],
+      SessionTypeId.s1 => [hinge, pullUp, curl, raise, bodyweightDip],
       SessionTypeId.s2 => [
-          supportedPress,
-          supportedRow,
-          pullUp,
-          if (!dropAccessories) ...[
-            raise,
-            curl,
-            bodyweightDip,
-          ],
-        ],
+        supportedPress,
+        supportedRow,
+        pullUp,
+        if (!dropAccessories) ...[raise, curl, bodyweightDip],
+      ],
       SessionTypeId.s4 => [
-          hinge,
-          pullUp,
-          if (!dropAccessories) ...[
-            curl,
-            raise,
-            bodyweightDip,
-          ],
-        ],
-      SessionTypeId.s5 => [
-          pullUp,
-          curl,
-          raise,
-          bodyweightDip,
-        ],
-      SessionTypeId.s3 ||
-      SessionTypeId.s6 ||
-      SessionTypeId.s7 =>
-        const [],
+        hinge,
+        pullUp,
+        if (!dropAccessories) ...[curl, raise, bodyweightDip],
+      ],
+      SessionTypeId.s5 => [pullUp, curl, raise, bodyweightDip],
+      SessionTypeId.s3 || SessionTypeId.s6 || SessionTypeId.s7 => const [],
     };
   }
 
@@ -1670,6 +1764,7 @@ class DecisionEngine {
     required double stimulusSetMultiplier,
     required bool travelMode,
     required bool lowerBackRecoveryMode,
+    bool deadliftAlternative = false,
   }) {
     final template = sessionTemplates[sessionId]!;
     final compress60to35 = isTimeCompressedSession(sessionId, tier);
@@ -1687,9 +1782,27 @@ class DecisionEngine {
             stimulusSetMultiplier: stimulusSetMultiplier,
             dropAccessories: compress60to35,
           );
-    if (!travelMode) return slots;
+    final resolvedSlots = [
+      for (final slot in slots)
+        if (deadliftAlternative &&
+            slot.$1 == MovementPattern.hinge &&
+            slot.$3 == null) ...[
+          (
+            MovementPattern.hinge,
+            slot.$2,
+            alternativeGluteBridge as SubstituteExercise?,
+          ),
+          (
+            MovementPattern.hinge,
+            slot.$2,
+            alternativeHamstringCurl as SubstituteExercise?,
+          ),
+        ] else
+          slot,
+    ];
+    if (!travelMode) return resolvedSlots;
 
-    final travelViable = slots
+    final travelViable = resolvedSlots
         .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
         .toList();
     if (travelViable.isNotEmpty) return travelViable;
@@ -1726,8 +1839,8 @@ class DecisionEngine {
       targets: targets,
       stimulusSetMultiplier: slotStimulusMultiplier,
       travelMode: input.settings.travelMode,
-      lowerBackRecoveryMode:
-          input.settings.lowerBackRecovery.active,
+      lowerBackRecoveryMode: input.settings.lowerBackRecovery.active,
+      deadliftAlternative: input.settings.deadliftAlternative,
     );
     return _painAdjustedStrengthProjection(
       slots,
@@ -1779,8 +1892,8 @@ class DecisionEngine {
   }) {
     final (pattern, usesCompoundSetCount, namedExercise) = slot;
     final trackKey = namedExercise?.trackKey ?? pattern.name;
-    final state = states[trackKey] ??
-        ExerciseState(trackKey: trackKey, pattern: pattern);
+    final state =
+        states[trackKey] ?? ExerciseState(trackKey: trackKey, pattern: pattern);
     final persistedFlag = state.painFrozen && state.painRegion != null
         ? PainFlag(
             region: state.painRegion!,
@@ -1790,10 +1903,7 @@ class DecisionEngine {
           )
         : null;
     var flag = _flagFor(
-      [
-        ...input.checkin.pain,
-        if (persistedFlag != null) persistedFlag,
-      ],
+      [...input.checkin.pain, if (persistedFlag != null) persistedFlag],
       pattern,
       input.today,
     );
@@ -1804,8 +1914,8 @@ class DecisionEngine {
       return const _PainAdjustedSlotResolution(hasWork: false);
     }
 
-    final reentryPending = state.painReentryTestOffered &&
-        !state.painReentryTestPassed;
+    final reentryPending =
+        state.painReentryTestOffered && !state.painReentryTestPassed;
     final action = flag == null || reentryPending
         ? const PainAction(PainActionKind.none)
         : painEngine.resolve(flag.region, flag.severity, pattern);
@@ -1813,19 +1923,18 @@ class DecisionEngine {
       return const _PainAdjustedSlotResolution(hasWork: false);
     }
 
-    final projectedNamedExercise =
-        action.kind == PainActionKind.substituteNamed
-            ? action.substitute
-            : namedExercise;
+    final projectedNamedExercise = action.kind == PainActionKind.substituteNamed
+        ? action.substitute
+        : namedExercise;
     final projectedPattern = projectedNamedExercise?.pattern ?? pattern;
     if (input.settings.travelMode &&
         _travelStepFor(pattern, projectedNamedExercise) == null) {
       return const _PainAdjustedSlotResolution(hasWork: false);
     }
 
-    final prescriptionTrackKey =
-        projectedNamedExercise?.trackKey ?? trackKey;
-    final prescriptionState = states[prescriptionTrackKey] ??
+    final prescriptionTrackKey = projectedNamedExercise?.trackKey ?? trackKey;
+    final prescriptionState =
+        states[prescriptionTrackKey] ??
         ExerciseState(
           trackKey: prescriptionTrackKey,
           pattern: projectedPattern,
@@ -1835,26 +1944,22 @@ class DecisionEngine {
       input.today,
       input.settings.equipment,
     );
-    final nonqualifyingPrescription = prescription.deloadActive ||
+    final nonqualifyingPrescription =
+        prescription.deloadActive ||
         prescription.painReentryTestFired ||
         reentryPending;
     return _PainAdjustedSlotResolution(
       hasWork: true,
       stimulusSlot: nonqualifyingPrescription
           ? null
-          : (
-              projectedPattern,
-              usesCompoundSetCount,
-              projectedNamedExercise,
-            ),
+          : (projectedPattern, usesCompoundSetCount, projectedNamedExercise),
     );
   }
 
   AerobicTrainingStatus _aerobicStatus(
     TrainingStatus status,
     AerobicTargetKind target,
-  ) =>
-      status.aerobic.firstWhere((value) => value.target == target);
+  ) => status.aerobic.firstWhere((value) => value.target == target);
 
   List<_TemplateSlot> _slotsForPlan({
     required SessionTypeId sessionId,
@@ -1867,16 +1972,13 @@ class DecisionEngine {
     final template = sessionTemplates[sessionId]!;
     if (template.isCardioOnly) return const [];
     if (tier != SessionTier.compressed) {
-      return template.slotsForTier(
-        tier,
-        dropAccessories: dropAccessories,
-      );
+      return template.slotsForTier(tier, dropAccessories: dropAccessories);
     }
 
     List<_TemplateSlot> pair(List<MovementPattern> patterns) => [
-          for (final pattern in patterns)
-            (pattern, true, null as SubstituteExercise?),
-        ];
+      for (final pattern in patterns)
+        (pattern, true, null as SubstituteExercise?),
+    ];
 
     switch (sessionId) {
       case SessionTypeId.s1:
@@ -1921,25 +2023,25 @@ class DecisionEngine {
           for (final pattern in template.accessoryPatterns)
             (pattern, true, null),
         ];
-        final ranked = <({int index, _TemplateSlot slot, int score})>[
-          for (var index = 0; index < candidates.length; index++)
-            (
-              index: index,
-              slot: candidates[index],
-              score: _slotNeedScore(
-                candidates[index],
-                template: template,
-                tier: tier,
-                ledger: ledger,
-                targets: targets,
-                stimulusSetMultiplier: stimulusSetMultiplier,
-              ),
-            ),
-        ]
-          ..sort((a, b) {
-            final byScore = b.score.compareTo(a.score);
-            return byScore != 0 ? byScore : a.index.compareTo(b.index);
-          });
+        final ranked =
+            <({int index, _TemplateSlot slot, int score})>[
+              for (var index = 0; index < candidates.length; index++)
+                (
+                  index: index,
+                  slot: candidates[index],
+                  score: _slotNeedScore(
+                    candidates[index],
+                    template: template,
+                    tier: tier,
+                    ledger: ledger,
+                    targets: targets,
+                    stimulusSetMultiplier: stimulusSetMultiplier,
+                  ),
+                ),
+            ]..sort((a, b) {
+              final byScore = b.score.compareTo(a.score);
+              return byScore != 0 ? byScore : a.index.compareTo(b.index);
+            });
         return ranked.take(2).map((value) => value.slot).toList();
       case SessionTypeId.s3:
       case SessionTypeId.s6:
@@ -1989,15 +2091,14 @@ class DecisionEngine {
     required StimulusLedgerSnapshot ledger,
     required TrainingTargets targets,
     required double stimulusSetMultiplier,
-  }) =>
-      _strengthScoreTerms(
-        slots: [slot],
-        template: template,
-        tier: tier,
-        ledger: ledger,
-        targets: targets,
-        stimulusSetMultiplier: stimulusSetMultiplier,
-      ).values.fold(0, (sum, value) => sum + value);
+  }) => _strengthScoreTerms(
+    slots: [slot],
+    template: template,
+    tier: tier,
+    ledger: ledger,
+    targets: targets,
+    stimulusSetMultiplier: stimulusSetMultiplier,
+  ).values.fold(0, (sum, value) => sum + value);
 
   Map<String, int> _strengthScoreTerms({
     required List<_TemplateSlot> slots,
@@ -2026,30 +2127,29 @@ class DecisionEngine {
       final weeklyDeficit = (band.minimum - observed.effectiveSets7d)
           .clamp(0, double.infinity)
           .toDouble();
-      final minimumDeficit28d = (band.minimumForWindow(28) -
-              observed.effectiveSets28d)
-          .clamp(0, double.infinity)
-          .toDouble();
-      final centerDeficit28d = (band.centerForWindow(28) -
-              observed.effectiveSets28d)
-          .clamp(0, double.infinity)
-          .toDouble();
+      final minimumDeficit28d =
+          (band.minimumForWindow(28) - observed.effectiveSets28d)
+              .clamp(0, double.infinity)
+              .toDouble();
+      final centerDeficit28d =
+          (band.centerForWindow(28) - observed.effectiveSets28d)
+              .clamp(0, double.infinity)
+              .toDouble();
 
       weekly += projected < weeklyDeficit ? projected : weeklyDeficit;
-      minimum28d +=
-          projected < minimumDeficit28d ? projected : minimumDeficit28d;
-      center28d +=
-          projected < centerDeficit28d ? projected : centerDeficit28d;
+      minimum28d += projected < minimumDeficit28d
+          ? projected
+          : minimumDeficit28d;
+      center28d += projected < centerDeficit28d ? projected : centerDeficit28d;
 
       final projectedOverWeeklyMaximum =
           (observed.effectiveSets7d + projected - band.maximum)
               .clamp(0, projected)
               .toDouble();
       final projectedOver28DayMaximum =
-          (observed.effectiveSets28d + projected -
-                  band.maximumForWindow(28))
-          .clamp(0, projected)
-          .toDouble();
+          (observed.effectiveSets28d + projected - band.maximumForWindow(28))
+              .clamp(0, projected)
+              .toDouble();
       // The same projected set can cross both rolling maxima. Penalize the
       // larger crossing only, so one set is never counted twice.
       overMax += projectedOverWeeklyMaximum > projectedOver28DayMaximum
@@ -2104,10 +2204,7 @@ class DecisionEngine {
       );
       final sets = setMultiplier <= 0 || baseSets == 0
           ? 0
-          : (baseSets * setMultiplier)
-              .floor()
-              .clamp(1, baseSets)
-              .toInt();
+          : (baseSets * setMultiplier).floor().clamp(1, baseSets).toInt();
       for (final contribution in perSet.entries) {
         result.update(
           contribution.key,
@@ -2127,9 +2224,7 @@ class DecisionEngine {
     final projection = <MajorMuscleGroup, double>{};
     for (final exercise in exercises.where(
       (value) =>
-          !value.isWarmup &&
-          value.sets > 0 &&
-          value.rirTarget != Rir.rir4plus,
+          !value.isWarmup && value.sets > 0 && value.rirTarget != Rir.rir4plus,
     )) {
       final perSet = exerciseMuscleMap.contributionForExercise(
         trackKey: exercise.trackKey,
@@ -2157,14 +2252,21 @@ class DecisionEngine {
     return targeted.join(', ');
   }
 
-  PainFlag? _flagFor(List<PainFlag> pain, MovementPattern pattern, DateTime today) {
+  PainFlag? _flagFor(
+    List<PainFlag> pain,
+    MovementPattern pattern,
+    DateTime today,
+  ) {
     final applicable = pain
         .where((flag) => flag.region.affectedPatterns.contains(pattern))
         .toList();
     if (applicable.isEmpty) return null;
     applicable.sort((a, b) {
-      final byRestriction =
-          _painRestrictionRank(b, pattern, today).compareTo(_painRestrictionRank(a, pattern, today));
+      final byRestriction = _painRestrictionRank(
+        b,
+        pattern,
+        today,
+      ).compareTo(_painRestrictionRank(a, pattern, today));
       if (byRestriction != 0) return byRestriction;
       final byRegion = a.region.index.compareTo(b.region.index);
       if (byRegion != 0) return byRegion;
@@ -2201,13 +2303,22 @@ class DecisionEngine {
     if (step.dumbbells == 0 || step.backpackLoaded) return state;
     final achievable = step.dumbbells == 1
         ? equipmentEngine.singleDbAchievableTotals(cfg)
-        : equipmentEngine.twoDbAchievableTotals(cfg, allowUneven: !step.unilateral);
+        : equipmentEngine.twoDbAchievableTotals(
+            cfg,
+            allowUneven: !step.unilateral,
+          );
     final next = state.clone();
-    next.currentLoad = equipmentEngine.nextAchievableBelow(state.currentLoad, achievable);
+    next.currentLoad = equipmentEngine.nextAchievableBelow(
+      state.currentLoad,
+      achievable,
+    );
     return next;
   }
 
-  ExerciseState _regressLadderAndReduce(ExerciseState state, EquipmentConfig cfg) {
+  ExerciseState _regressLadderAndReduce(
+    ExerciseState state,
+    EquipmentConfig cfg,
+  ) {
     if (substituteRegistry.containsKey(state.trackKey)) {
       // A named exercise has no backing movement ladder to regress. Its pain
       // adjustment is exactly one achievable step on that exercise's real
@@ -2232,12 +2343,22 @@ class DecisionEngine {
   }) {
     final achievable = step.dumbbells == 1
         ? equipmentEngine.singleDbAchievableTotals(cfg)
-        : equipmentEngine.twoDbAchievableTotals(cfg, allowUneven: !step.unilateral);
-    final load = equipmentEngine.roundDownToAchievable(work.loadTotal! * pct, achievable);
+        : equipmentEngine.twoDbAchievableTotals(
+            cfg,
+            allowUneven: !step.unilateral,
+          );
+    final load = equipmentEngine.roundDownToAchievable(
+      work.loadTotal! * pct,
+      achievable,
+    );
     if (load >= work.loadTotal!) return null;
     final resolved = step.dumbbells == 1
         ? equipmentEngine.resolveSingleDb(load, cfg)
-        : equipmentEngine.resolveTwoDb(load, cfg, allowUneven: !step.unilateral);
+        : equipmentEngine.resolveTwoDb(
+            load,
+            cfg,
+            allowUneven: !step.unilateral,
+          );
     return PlannedExercise(
       trackKey: work.trackKey,
       pattern: work.pattern,
@@ -2301,7 +2422,9 @@ class DecisionEngine {
       targetRange: (prepMinutes, prepMinutes),
       rirTarget: Rir.rir4plus,
       isWarmup: true,
-      instruction: travelMode ? '$instruction. No equipment needed.' : instruction,
+      instruction: travelMode
+          ? '$instruction. No equipment needed.'
+          : instruction,
       progressionEligible: false,
       isTravel: travelMode,
     );
@@ -2325,17 +2448,24 @@ class DecisionEngine {
     final substitute = substituteRegistry[state.trackKey];
     final step = substitute != null
         ? substitute.ladderStep
-        : ladders[state.pattern]!.steps[state.ladderStepIndex.clamp(0, ladders[state.pattern]!.steps.length - 1)];
+        : ladders[state.pattern]!.steps[state.ladderStepIndex.clamp(
+            0,
+            ladders[state.pattern]!.steps.length - 1,
+          )];
     final metric = step.metric;
-    final targetRange = targetRangeOverride ??
+    final targetRange =
+        targetRangeOverride ??
         step.targetRange ??
         (state.trackKey.startsWith('sub:') ? (8, 15) : state.pattern.repRange);
-    final progression =
-        progressionEngine.progressionPresentationFor(state, equipmentConfig);
+    final progression = progressionEngine.progressionPresentationFor(
+      state,
+      equipmentConfig,
+    );
     final suggestedValue = metric == ExerciseMetric.seconds
         ? targetRangeOverride?.$1 ?? progressionEngine.suggestedValueFor(state)
         : null;
-    final showProgression = progressionEligible &&
+    final showProgression =
+        progressionEligible &&
         !isPainReentryTest &&
         !state.painFrozen &&
         state.status != ExerciseStatus.deload;
@@ -2351,18 +2481,41 @@ class DecisionEngine {
       loadTotal = state.currentLoad * loadMultiplier;
       final achievable = step.dumbbells == 1
           ? equipmentEngine.singleDbAchievableTotals(equipmentConfig)
-          : equipmentEngine.twoDbAchievableTotals(equipmentConfig, allowUneven: !step.unilateral);
+          : equipmentEngine.twoDbAchievableTotals(
+              equipmentConfig,
+              allowUneven: !step.unilateral,
+            );
       loadSteps = achievable;
       loadTotal = equipmentEngine.roundDownToAchievable(loadTotal, achievable);
       final resolved = step.dumbbells == 1
           ? equipmentEngine.resolveSingleDb(loadTotal, equipmentConfig)
-          : equipmentEngine.resolveTwoDb(loadTotal, equipmentConfig, allowUneven: !step.unilateral);
+          : equipmentEngine.resolveTwoDb(
+              loadTotal,
+              equipmentConfig,
+              allowUneven: !step.unilateral,
+            );
       loadDisplay = equipmentEngine.describeLoad(resolved, equipmentConfig);
     } else if (step.backpackLoaded) {
       loadTotal = state.currentLoad * loadMultiplier;
       loadDisplay = 'backpack/DB @ ${loadTotal.toStringAsFixed(0)} lb';
     }
 
+    if (state.trackKey == alternativeGluteBridge.trackKey) {
+      loadSteps = [
+        0,
+        ...equipmentEngine.singleDbAchievableTotals(equipmentConfig),
+      ];
+      if (state.currentLoad == 0) {
+        loadTotal = 0;
+        loadDisplay = 'Bodyweight · no added load';
+      }
+      instruction =
+          'Lift the hips only through a comfortable range; do not arch at the top. '
+          'Any dumbbell must be padded and securely controlled. Stop if back symptoms worsen during or afterward.';
+    } else if (state.trackKey == alternativeHamstringCurl.trackKey) {
+      instruction =
+          'Use sliders or towels on a compatible surface. Keep the trunk comfortable and shorten the range if needed. Stop if symptoms worsen during or afterward.';
+    }
     return PlannedExercise(
       trackKey: state.trackKey,
       pattern: state.pattern,
@@ -2378,19 +2531,18 @@ class DecisionEngine {
       allowsUnevenPair: allowsUnevenPair,
       rirTarget: rirFloor,
       substitutedFrom: substitutedFrom,
-      instruction: instruction ??
+      instruction:
+          instruction ??
           _microProgressionInstruction(
             state,
             metric,
-            enabled:
-                progressionEligible && microProgressionCueEligible,
+            enabled: progressionEligible && microProgressionCueEligible,
           ),
       suggestedValue: suggestedValue,
       progressionFraction: showProgression ? progression.fraction : null,
       progressionLabel: showProgression ? progression.label : null,
       nextProgressionLabel: showProgression ? progression.nextLabel : null,
-      prescriptionChange:
-          showProgression ? state.lastPrescriptionChange : null,
+      prescriptionChange: showProgression ? state.lastPrescriptionChange : null,
       persistLoadOnCompletion: persistLoadOnCompletion,
       progressionEligible: progressionEligible,
       isCompoundWork: isCompoundWork,
@@ -2453,9 +2605,13 @@ class DecisionEngine {
   }
 
   ReadinessBucket? _bucketForDate(DecisionEngineInput input, DateTime date) {
-    final checkin = input.checkinHistory.where((c) => _isSameDate(c.date, date)).toList();
+    final checkin = input.checkinHistory
+        .where((c) => _isSameDate(c.date, date))
+        .toList();
     if (checkin.isEmpty) return null;
-    final snapshot = input.recoveryHistory.where((s) => _isSameDate(s.date, date)).toList();
+    final snapshot = input.recoveryHistory
+        .where((s) => _isSameDate(s.date, date))
+        .toList();
     return readinessEngine
         .compute(
           subjective: checkin.first.subjective,
@@ -2466,14 +2622,11 @@ class DecisionEngine {
         .bucket;
   }
 
-  bool _isSameDate(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-typedef _TemplateSlot = (
-  MovementPattern,
-  bool,
-  SubstituteExercise?,
-);
+typedef _TemplateSlot = (MovementPattern, bool, SubstituteExercise?);
 
 class _PainAdjustedStrengthProjection {
   final bool hasPainSafeWork;
@@ -2489,10 +2642,7 @@ class _PainAdjustedSlotResolution {
   final bool hasWork;
   final _TemplateSlot? stimulusSlot;
 
-  const _PainAdjustedSlotResolution({
-    required this.hasWork,
-    this.stimulusSlot,
-  });
+  const _PainAdjustedSlotResolution({required this.hasWork, this.stimulusSlot});
 }
 
 class _Scored {

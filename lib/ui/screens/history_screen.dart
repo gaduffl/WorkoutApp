@@ -21,9 +21,8 @@ import '../widgets/anatomical_muscle_map.dart';
 
 /// §11.4 History: personal dose targets, calendar heat, per-pattern
 /// progression sparklines, HRV overlay, and session list.
-typedef HistoryDataLoader = Future<HistoryData> Function(
-  AppController controller,
-);
+typedef HistoryDataLoader =
+    Future<HistoryData> Function(AppController controller);
 
 class HistoryScreen extends StatefulWidget {
   final HistoryDataLoader? loadData;
@@ -157,7 +156,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   padding: EdgeInsets.all(16),
                   child: Text('No activity logged yet.'),
                 ),
-              ...boulderingLogs.reversed.take(30).map(
+              ...boulderingLogs.reversed
+                  .take(30)
+                  .map(
                     (log) => Card(
                       child: ListTile(
                         dense: true,
@@ -172,19 +173,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                   ),
-              ...logs.reversed.take(30).map((l) => Card(
-                    child: ListTile(
-                      dense: true,
-                      leading: l.travelMode ? const Icon(Icons.luggage_outlined) : null,
-                      title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'
+              ...logs.reversed
+                  .take(30)
+                  .map(
+                    (l) => Card(
+                      child: ListTile(
+                        dense: true,
+                        leading: l.travelMode
+                            ? const Icon(Icons.luggage_outlined)
+                            : null,
+                        title: Text(
+                          '${l.templateId.name.toUpperCase()} - ${l.tier.name}'
                           '${l.travelMode ? ' · travel' : ''}'
-                          '${_sessionOriginSuffix(l)}'),
-                      subtitle: Text(
-                        '${_d(l.date)} - ${historySessionDoseSummary(l)}'
-                        '${_sessionCompletionSuffix(l)}',
+                          '${_sessionOriginSuffix(l)}',
+                        ),
+                        subtitle: Text(
+                          '${_d(l.date)} - ${historySessionDoseSummary(l)}'
+                          '${_sessionCompletionSuffix(l)}',
+                        ),
                       ),
                     ),
-                  )),
+                  ),
             ],
           );
         },
@@ -200,23 +209,23 @@ class _HistoryLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.history_toggle_off_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                'Could not load history.',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.history_toggle_off_outlined, size: 40),
+          const SizedBox(height: 12),
+          Text(
+            'Could not load history.',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        ),
-      );
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Personal stimulus/target feedback. This is intentionally read-only; the
@@ -224,19 +233,16 @@ class _HistoryLoadError extends StatelessWidget {
 class TrainingTargetDashboard extends StatelessWidget {
   final HistoryFeedbackViewModel viewModel;
 
-  const TrainingTargetDashboard({
-    super.key,
-    required this.viewModel,
-  });
+  const TrainingTargetDashboard({super.key, required this.viewModel});
 
   @override
   Widget build(BuildContext context) => Column(
-        children: [
-          _MuscleTargetsCard(rows: viewModel.muscles),
-          const SizedBox(height: 12),
-          _CardioTargetsCard(rows: viewModel.cardio),
-        ],
-      );
+    children: [
+      _MuscleTargetsCard(rows: viewModel.muscles),
+      const SizedBox(height: 12),
+      _CardioTargetsCard(rows: viewModel.cardio),
+    ],
+  );
 }
 
 class _MuscleTargetsCard extends StatelessWidget {
@@ -246,28 +252,28 @@ class _MuscleTargetsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Muscle targets',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Targets: 8–12/week (center 10) · 32–48/28d (center 40)',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              const _MuscleHeaderRow(),
-              const Divider(height: 12),
-              for (final row in rows) _MuscleTargetRow(row: row),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Muscle targets',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        ),
-      );
+          const SizedBox(height: 4),
+          Text(
+            'Targets: 8–12/week (center 10) · 32–48/28d (center 40)',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          const _MuscleHeaderRow(),
+          const Divider(height: 12),
+          for (final row in rows) _MuscleTargetRow(row: row),
+        ],
+      ),
+    ),
+  );
 }
 
 class _MuscleHeaderRow extends StatelessWidget {
@@ -281,11 +287,7 @@ class _MuscleHeaderRow extends StatelessWidget {
         Expanded(flex: 3, child: Text('Muscle', style: style)),
         Expanded(
           flex: 2,
-          child: Text(
-            '7d\n8–12',
-            textAlign: TextAlign.end,
-            style: style,
-          ),
+          child: Text('7d\n8–12', textAlign: TextAlign.end, style: style),
         ),
         Expanded(
           flex: 3,
@@ -307,35 +309,34 @@ class _MuscleTargetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(flex: 3, child: Text(row.label)),
-            Expanded(
-              flex: 2,
-              child: _TargetDoseCell(
-                muscle: row.label,
-                horizon: '7 days',
-                value: row.effectiveSets7d,
-                bandState: row.bandState7d,
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Tooltip(
-                message:
-                    '${_sets(row.weeklyEquivalent28d)} sets/week equivalent',
-                child: _TargetDoseCell(
-                  muscle: row.label,
-                  horizon: '28 days',
-                  value: row.effectiveSets28d,
-                  bandState: row.bandState28d,
-                ),
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(flex: 3, child: Text(row.label)),
+        Expanded(
+          flex: 2,
+          child: _TargetDoseCell(
+            muscle: row.label,
+            horizon: '7 days',
+            value: row.effectiveSets7d,
+            bandState: row.bandState7d,
+          ),
         ),
-      );
+        Expanded(
+          flex: 3,
+          child: Tooltip(
+            message: '${_sets(row.weeklyEquivalent28d)} sets/week equivalent',
+            child: _TargetDoseCell(
+              muscle: row.label,
+              horizon: '28 days',
+              value: row.effectiveSets28d,
+              bandState: row.bandState28d,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _TargetDoseCell extends StatelessWidget {
@@ -356,20 +357,20 @@ class _TargetDoseCell extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final (label, color, foreground) = switch (bandState) {
       MuscleTargetBandState.belowMinimum => (
-          'Below',
-          scheme.errorContainer,
-          scheme.onErrorContainer,
-        ),
+        'Below',
+        scheme.errorContainer,
+        scheme.onErrorContainer,
+      ),
       MuscleTargetBandState.inBand => (
-          'In band',
-          scheme.primaryContainer,
-          scheme.onPrimaryContainer,
-        ),
+        'In band',
+        scheme.primaryContainer,
+        scheme.onPrimaryContainer,
+      ),
       MuscleTargetBandState.aboveMaximum => (
-          'Above',
-          scheme.tertiaryContainer,
-          scheme.onTertiaryContainer,
-        ),
+        'Above',
+        scheme.tertiaryContainer,
+        scheme.onTertiaryContainer,
+      ),
     };
     return Semantics(
       label: '$muscle, $horizon: ${_sets(value)} sets, $label target band',
@@ -388,15 +389,15 @@ class _TargetDoseCell extends StatelessWidget {
             children: [
               Text(
                 _sets(value),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: foreground,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: foreground),
               ),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: foreground,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: foreground),
               ),
             ],
           ),
@@ -413,26 +414,30 @@ class _CardioTargetsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Cardio targets',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Trailing windows · high-intensity days can be Norwegian 4×4 or REHIT',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
-              for (final row in rows) _CardioTargetRow(row: row),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cardio targets',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        ),
-      );
+          if (context.watch<AppController>().stationaryBikePaused)
+            const Text(
+              'Temporarily paused for recovery. Values below are actual history, not catch-up recommendations.',
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Trailing windows · high-intensity days can be Norwegian 4×4 or REHIT',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          for (final row in rows) _CardioTargetRow(row: row),
+        ],
+      ),
+    ),
+  );
 }
 
 class _CardioTargetRow extends StatelessWidget {
@@ -451,17 +456,20 @@ class _CardioTargetRow extends StatelessWidget {
         '${row.completedExposures}/${row.targetExposures} in trailing ${row.rollingWindowDays}d',
     };
     final note = switch (row.target) {
-      AerobicTargetKind.highIntensityDistinctDays => row.met
-          ? 'Met — Norwegian 4×4 and REHIT each count once per calendar day'
-          : '${row.distinctDayDeficit} distinct high-intensity day${row.distinctDayDeficit == 1 ? '' : 's'} remaining',
-      AerobicTargetKind.norwegian4x4Preference => row.met
-          ? 'Preference met'
-          : row.completedDistinctDays >= 3
-              ? 'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.'
-              : 'At least one 4×4 is preferred when a 35/60 min slot is available',
-      AerobicTargetKind.longBaseExposure => row.met
-          ? 'Exposure met'
-          : '${row.exposureDeficit} exposure remaining · secondary to strength deficits',
+      AerobicTargetKind.highIntensityDistinctDays =>
+        row.met
+            ? 'Met — Norwegian 4×4 and REHIT each count once per calendar day'
+            : '${row.distinctDayDeficit} distinct high-intensity day${row.distinctDayDeficit == 1 ? '' : 's'} remaining',
+      AerobicTargetKind.norwegian4x4Preference =>
+        row.met
+            ? 'Preference met'
+            : row.completedDistinctDays >= 3
+            ? 'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.'
+            : 'At least one 4×4 is preferred when a 35/60 min slot is available',
+      AerobicTargetKind.longBaseExposure =>
+        row.met
+            ? 'Exposure met'
+            : '${row.exposureDeficit} exposure remaining · secondary to strength deficits',
     };
     final icon = switch (row.state) {
       CardioTargetState.notNeeded => Icons.remove_circle_outline,
@@ -484,12 +492,12 @@ class _CardioTargetRow extends StatelessWidget {
   }
 }
 
-String _sets(double value) =>
-    (value - value.roundToDouble()).abs() < 0.001
-        ? value.toStringAsFixed(0)
-        : value.toStringAsFixed(1);
+String _sets(double value) => (value - value.roundToDouble()).abs() < 0.001
+    ? value.toStringAsFixed(0)
+    : value.toStringAsFixed(1);
 
-String _d(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _d(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 String _sessionOriginSuffix(SessionLog log) {
   if (log.isUnplanned) return ' · unplanned';
@@ -510,7 +518,8 @@ String _sessionCompletionSuffix(SessionLog log) {
   return complete ? '' : ' (partial)';
 }
 
-bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 // ---------- calendar heat (12 weeks, strength + cardio categories) ----------
 
@@ -530,10 +539,7 @@ class HistoryHeatDay {
     required List<_CardioHeatDose> cardio,
   }) : _cardio = cardio;
 
-  static const empty = HistoryHeatDay._(
-    strengthSets: 0,
-    cardio: [],
-  );
+  static const empty = HistoryHeatDay._(strengthSets: 0, cardio: []);
 
   bool get hasZone2 =>
       _cardio.any((dose) => dose.category == HistoryHeatCategory.zone2);
@@ -545,23 +551,30 @@ class HistoryHeatDay {
   HistoryHeatCategory get category => hasVo2Rehit
       ? HistoryHeatCategory.vo2Rehit
       : hasZone2
-          ? HistoryHeatCategory.zone2
-          : strengthSets > 0
-              ? HistoryHeatCategory.strength
-              : HistoryHeatCategory.none;
+      ? HistoryHeatCategory.zone2
+      : strengthSets > 0
+      ? HistoryHeatCategory.strength
+      : HistoryHeatCategory.none;
 
   String tooltip(DateTime date) {
     final parts = <String>[];
-    if (strengthSets > 0) parts.add('$strengthSets strength ${strengthSets == 1 ? 'set' : 'sets'}');
+    if (strengthSets > 0) {
+      parts.add('$strengthSets strength ${strengthSets == 1 ? 'set' : 'sets'}');
+    }
     final byCategory = <HistoryHeatCategory, int>{};
     for (final dose in _cardio) {
-      byCategory[dose.category] = (byCategory[dose.category] ?? 0) + dose.seconds;
+      byCategory[dose.category] =
+          (byCategory[dose.category] ?? 0) + dose.seconds;
     }
     if (byCategory.containsKey(HistoryHeatCategory.zone2)) {
-      parts.add('Zone 2 ${_heatDuration(byCategory[HistoryHeatCategory.zone2]!)}');
+      parts.add(
+        'Zone 2 ${_heatDuration(byCategory[HistoryHeatCategory.zone2]!)}',
+      );
     }
     if (byCategory.containsKey(HistoryHeatCategory.vo2Rehit)) {
-      parts.add('VO₂/REHIT ${_heatDuration(byCategory[HistoryHeatCategory.vo2Rehit]!)}');
+      parts.add(
+        'VO₂/REHIT ${_heatDuration(byCategory[HistoryHeatCategory.vo2Rehit]!)}',
+      );
     }
     return '${_d(date)}: ${parts.isEmpty ? 'No logged training' : parts.join(' · ')}';
   }
@@ -589,7 +602,8 @@ class HistoryHeatDay {
 
   static _CardioHeatDose? _cardioDoseFor(SessionLog log) {
     final protocol = log.cardioCompletion?.protocol.type;
-    final isHighIntensity = log.rehitFinisherCompleted ||
+    final isHighIntensity =
+        log.rehitFinisherCompleted ||
         log.templateId == SessionTypeId.s3 ||
         log.templateId == SessionTypeId.s7 ||
         protocol == CardioProtocolType.norwegian4x4 ||
@@ -597,13 +611,14 @@ class HistoryHeatDay {
     final category = isHighIntensity
         ? HistoryHeatCategory.vo2Rehit
         : (log.templateId == SessionTypeId.s6 ||
-                protocol == CardioProtocolType.zone2Base)
-            ? HistoryHeatCategory.zone2
-            : null;
+              protocol == CardioProtocolType.zone2Base)
+        ? HistoryHeatCategory.zone2
+        : null;
     if (category == null) return null;
     // A structured partial is still a genuine logged attempt. Legacy cardio
     // rows have no seconds detail, so their logged duration remains honest.
-    final seconds = log.cardioCompletion?.completedDurationSeconds ??
+    final seconds =
+        log.cardioCompletion?.completedDurationSeconds ??
         log.durationMinutes * 60;
     return _CardioHeatDose(category, seconds);
   }
@@ -638,8 +653,8 @@ class HistoryActivityDay {
     required this.elapsedSeconds,
     required List<SessionLog> logs,
     required List<BoulderingLog> boulderingLogs,
-  })  : logs = List<SessionLog>.unmodifiable(logs),
-        boulderingLogs = List<BoulderingLog>.unmodifiable(boulderingLogs);
+  }) : logs = List<SessionLog>.unmodifiable(logs),
+       boulderingLogs = List<BoulderingLog>.unmodifiable(boulderingLogs);
 
   static final empty = HistoryActivityDay(
     elapsedSeconds: 0,
@@ -676,10 +691,11 @@ class HistoryActivityDay {
     return {
       for (final key in keys)
         key: HistoryActivityDay(
-          elapsedSeconds: (grouped[key] ?? const []).fold<int>(
-            0,
-            (sum, log) => sum + log.elapsedSecondsOrEstimate,
-          ) +
+          elapsedSeconds:
+              (grouped[key] ?? const []).fold<int>(
+                0,
+                (sum, log) => sum + log.elapsedSecondsOrEstimate,
+              ) +
               (groupedBouldering[key] ?? const []).fold<int>(
                 0,
                 (sum, log) => sum + log.durationMinutes * 60,
@@ -740,14 +756,20 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final today = DateTime(widget.today.year, widget.today.month, widget.today.day);
+    final today = DateTime(
+      widget.today.year,
+      widget.today.month,
+      widget.today.day,
+    );
     final gridEnd = today.add(Duration(days: 7 - today.weekday));
     final gridStart = gridEnd.subtract(const Duration(days: 370));
     final days = HistoryActivityDay.project(
       widget.logs,
       boulderingLogs: widget.boulderingLogs,
     );
-    final trainedDays = days.values.where((day) => day.elapsedSeconds > 0).length;
+    final trainedDays = days.values
+        .where((day) => day.elapsedSeconds > 0)
+        .length;
     final activeWeeks = <String>{
       for (final log in widget.logs)
         '${log.date.subtract(Duration(days: log.date.weekday - 1)).year}-${log.date.subtract(Duration(days: log.date.weekday - 1)).month}-${log.date.subtract(Duration(days: log.date.weekday - 1)).day}',
@@ -798,9 +820,7 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
                         SizedBox(
                           height: 18,
                           width: 53 * (_cell + _gap),
-                          child: Stack(
-                            children: _monthLabels(gridStart),
-                          ),
+                          child: Stack(children: _monthLabels(gridStart)),
                         ),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,9 +833,8 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
                                     Duration(days: week * 7 + weekday),
                                   );
                                   final future = date.isAfter(today);
-                                  final evidence = days[
-                                        '${date.year}-${date.month}-${date.day}'
-                                      ] ??
+                                  final evidence =
+                                      days['${date.year}-${date.month}-${date.day}'] ??
                                       HistoryActivityDay.empty;
                                   final cell = Container(
                                     key: ValueKey('activity-day-${_d(date)}'),
@@ -838,22 +857,28 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
                                     ),
                                   );
                                   return Padding(
-                                    padding: const EdgeInsets.only(bottom: _gap),
+                                    padding: const EdgeInsets.only(
+                                      bottom: _gap,
+                                    ),
                                     child: Semantics(
                                       label: evidence.tooltip(date),
-                                      button: evidence.logs.isNotEmpty ||
+                                      button:
+                                          evidence.logs.isNotEmpty ||
                                           evidence.boulderingLogs.isNotEmpty,
                                       child: Tooltip(
                                         message: evidence.tooltip(date),
                                         child: GestureDetector(
-                                          onTap: evidence.logs.isEmpty &&
-                                                  evidence.boulderingLogs.isEmpty
+                                          onTap:
+                                              evidence.logs.isEmpty &&
+                                                  evidence
+                                                      .boulderingLogs
+                                                      .isEmpty
                                               ? null
                                               : () => _showDay(
-                                                    context,
-                                                    date,
-                                                    evidence,
-                                                  ),
+                                                  context,
+                                                  date,
+                                                  evidence,
+                                                ),
                                           child: cell,
                                         ),
                                       ),
@@ -908,16 +933,28 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
       final date = gridStart.add(Duration(days: week * 7));
       if (date.month == previousMonth) continue;
       previousMonth = date.month;
-      labels.add(Positioned(
-        left: week * (_cell + _gap),
-        child: Text(
-          const [
-            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-          ][date.month - 1],
-          style: const TextStyle(fontSize: 10),
+      labels.add(
+        Positioned(
+          left: week * (_cell + _gap),
+          child: Text(
+            const [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
+            ][date.month - 1],
+            style: const TextStyle(fontSize: 10),
+          ),
         ),
-      ));
+      );
     }
     return labels;
   }
@@ -931,11 +968,7 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
     )!;
   }
 
-  void _showDay(
-    BuildContext context,
-    DateTime date,
-    HistoryActivityDay day,
-  ) {
+  void _showDay(BuildContext context, DateTime date, HistoryActivityDay day) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -977,10 +1010,10 @@ class _YearActivityHeatCardState extends State<_YearActivityHeatCard> {
 }
 
 String _boulderingEffortLabel(BoulderingEffort effort) => switch (effort) {
-      BoulderingEffort.easy => 'Easy',
-      BoulderingEffort.moderate => 'Moderate',
-      BoulderingEffort.hard => 'Hard',
-    };
+  BoulderingEffort.easy => 'Easy',
+  BoulderingEffort.moderate => 'Moderate',
+  BoulderingEffort.hard => 'Hard',
+};
 
 // ---------- muscle map (rendering of existing ledger only) ----------
 
@@ -1010,8 +1043,10 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
     final values = _values();
     final title = switch (_mode) {
       _MuscleMapMode.dose => 'Completed effective sets in the trailing 28 days',
-      _MuscleMapMode.recency => 'Days since last qualifying stimulus — not a fatigue score',
-      _MuscleMapMode.today => 'Expected qualifying set contribution in today’s plan',
+      _MuscleMapMode.recency =>
+        'Days since last qualifying stimulus — not a fatigue score',
+      _MuscleMapMode.today =>
+        'Expected qualifying set contribution in today’s plan',
     };
     return Card(
       child: Padding(
@@ -1079,9 +1114,8 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
         for (final row in widget.status.muscle)
           row.muscleGroup: row.maximumTargetEffectiveSets <= 0
               ? 0
-              : (row.completedEffectiveSets /
-                      row.maximumTargetEffectiveSets)
-                  .clamp(0.0, 1.0),
+              : (row.completedEffectiveSets / row.maximumTargetEffectiveSets)
+                    .clamp(0.0, 1.0),
       };
     }
     if (_mode == _MuscleMapMode.recency) {
@@ -1131,16 +1165,16 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
 }
 
 String _muscleLabel(MajorMuscleGroup muscle) => switch (muscle) {
-      MajorMuscleGroup.quads => 'Quads',
-      MajorMuscleGroup.glutes => 'Glutes',
-      MajorMuscleGroup.hamstrings => 'Hamstrings',
-      MajorMuscleGroup.chest => 'Chest',
-      MajorMuscleGroup.back => 'Back',
-      MajorMuscleGroup.delts => 'Delts',
-      MajorMuscleGroup.biceps => 'Biceps',
-      MajorMuscleGroup.triceps => 'Triceps',
-      MajorMuscleGroup.coreGrip => 'Core/grip',
-    };
+  MajorMuscleGroup.quads => 'Quads',
+  MajorMuscleGroup.glutes => 'Glutes',
+  MajorMuscleGroup.hamstrings => 'Hamstrings',
+  MajorMuscleGroup.chest => 'Chest',
+  MajorMuscleGroup.back => 'Back',
+  MajorMuscleGroup.delts => 'Delts',
+  MajorMuscleGroup.biceps => 'Biceps',
+  MajorMuscleGroup.triceps => 'Triceps',
+  MajorMuscleGroup.coreGrip => 'Core/grip',
+};
 
 class _ClassicCalendarHeatCard extends StatelessWidget {
   final List<SessionLog> logs;
@@ -1165,7 +1199,10 @@ class _ClassicCalendarHeatCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Last 12 weeks', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Last 12 weeks',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1175,9 +1212,12 @@ class _ClassicCalendarHeatCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 1.5),
                     child: Column(
                       children: List.generate(7, (d) {
-                        final day = gridEnd.subtract(Duration(days: (11 - w) * 7 + (6 - d)));
+                        final day = gridEnd.subtract(
+                          Duration(days: (11 - w) * 7 + (6 - d)),
+                        );
                         final future = day.isAfter(today);
-                        final evidence = days['${day.year}-${day.month}-${day.day}'] ??
+                        final evidence =
+                            days['${day.year}-${day.month}-${day.day}'] ??
                             HistoryHeatDay.empty;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 1.5),
@@ -1192,7 +1232,10 @@ class _ClassicCalendarHeatCard extends StatelessWidget {
                                       ? Colors.transparent
                                       : _heatColor(evidence, scheme, maxSets),
                                   border: _sameDay(day, today)
-                                      ? Border.all(color: scheme.onSurface, width: 1)
+                                      ? Border.all(
+                                          color: scheme.onSurface,
+                                          width: 1,
+                                        )
                                       : null,
                                 ),
                               ),
@@ -1238,15 +1281,12 @@ class _ClassicCalendarHeatCard extends StatelessWidget {
     );
   }
 
-  Color _heatColor(
-    HistoryHeatDay day,
-    ColorScheme scheme,
-    int maxSets,
-  ) => switch (day.category) {
+  Color _heatColor(HistoryHeatDay day, ColorScheme scheme, int maxSets) =>
+      switch (day.category) {
         HistoryHeatCategory.none => scheme.surfaceContainerHighest,
         HistoryHeatCategory.strength => scheme.error.withValues(
-            alpha: 0.35 + 0.65 * (day.strengthSets / maxSets),
-          ),
+          alpha: 0.35 + 0.65 * (day.strengthSets / maxSets),
+        ),
         HistoryHeatCategory.zone2 => scheme.secondary.withValues(alpha: 0.78),
         HistoryHeatCategory.vo2Rehit => scheme.tertiary.withValues(alpha: 0.86),
       };
@@ -1256,25 +1296,24 @@ class _HeatLegend extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _HeatLegend({
-    super.key,
-    required this.label,
-    required this.color,
-  });
+  const _HeatLegend({super.key, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-          ),
-          const SizedBox(width: 4),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+      const SizedBox(width: 4),
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+    ],
+  );
 }
 
 // ---------- per-pattern progression sparklines ----------
@@ -1303,12 +1342,14 @@ class _ProgressionCard extends StatelessWidget {
         final timedEntries = <({String name, int seconds})>[];
         for (final log in logs) {
           final sets = log.setLogs
-              .where((setLog) =>
-                  !setLog.isWarmup &&
-                  setLog.pattern == p &&
-                  setLog.trackKey == p.name &&
-                  setLog.metric == ExerciseMetric.seconds &&
-                  setLog.value > 0)
+              .where(
+                (setLog) =>
+                    !setLog.isWarmup &&
+                    setLog.pattern == p &&
+                    setLog.trackKey == p.name &&
+                    setLog.metric == ExerciseMetric.seconds &&
+                    setLog.value > 0,
+              )
               .toList();
           if (sets.isEmpty) continue;
           final name = sets.last.exerciseName;
@@ -1331,53 +1372,57 @@ class _ProgressionCard extends StatelessWidget {
             difficulties.add(entry.name);
           }
         }
-        rows.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 110,
-                child: Text(
-                  p.displayName,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              Expanded(
-                child: SizedBox(
-                  key: ValueKey(
-                    'progression-sparkline-${p.name}',
-                  ),
-                  height: 28,
-                  child: CustomPaint(
-                    painter: _SparklinePainter(points, scheme.primary),
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    p.displayName,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${timedEntries.last.seconds} s',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ));
-        if (latestName != p.displayName) {
-          rows.add(Padding(
-            padding: const EdgeInsets.only(left: 110, top: 2, bottom: 2),
-            child: Text(
-              'Latest: $latestName',
-              style: Theme.of(context).textTheme.bodySmall,
+                Expanded(
+                  child: SizedBox(
+                    key: ValueKey('progression-sparkline-${p.name}'),
+                    height: 28,
+                    child: CustomPaint(
+                      painter: _SparklinePainter(points, scheme.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${timedEntries.last.seconds} s',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ),
-          ));
+          ),
+        );
+        if (latestName != p.displayName) {
+          rows.add(
+            Padding(
+              padding: const EdgeInsets.only(left: 110, top: 2, bottom: 2),
+              child: Text(
+                'Latest: $latestName',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          );
         }
         if (difficulties.length > 1) {
-          rows.add(Padding(
-            padding: const EdgeInsets.only(left: 110, top: 2),
-            child: Text(
-              'Difficulty history: ${difficulties.join(' → ')}',
-              style: Theme.of(context).textTheme.bodySmall,
+          rows.add(
+            Padding(
+              padding: const EdgeInsets.only(left: 110, top: 2),
+              child: Text(
+                'Difficulty history: ${difficulties.join(' → ')}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
-          ));
+          );
         }
         continue;
       }
@@ -1392,26 +1437,43 @@ class _ProgressionCard extends StatelessWidget {
         if (top > 0) points.add(top);
       }
       if (points.isEmpty) continue;
-      rows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(width: 110, child: Text(p.displayName, style: Theme.of(context).textTheme.bodySmall)),
-            Expanded(
-              child: SizedBox(
-                height: 28,
-                child: CustomPaint(painter: _SparklinePainter(points, scheme.primary)),
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 110,
+                child: Text(
+                  p.displayName,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text('${points.last.toStringAsFixed(0)} lb', style: Theme.of(context).textTheme.bodyMedium),
-          ],
+              Expanded(
+                child: SizedBox(
+                  height: 28,
+                  child: CustomPaint(
+                    painter: _SparklinePainter(points, scheme.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${points.last.toStringAsFixed(0)} lb',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
         ),
-      ));
+      );
     }
     if (rows.isEmpty) {
-      rows.add(Text('Log a few sessions and the progression lines appear here.',
-          style: Theme.of(context).textTheme.bodySmall));
+      rows.add(
+        Text(
+          'Log a few sessions and the progression lines appear here.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
     }
     return Card(
       child: Padding(
@@ -1419,7 +1481,10 @@ class _ProgressionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Progression (top set, 12 weeks)', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Progression (top set, 12 weeks)',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             ...rows,
           ],
@@ -1450,22 +1515,32 @@ class _HrvCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('HRV, last 28 days', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'HRV, last 28 days',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             if (values.length < 2)
-              Text('Not enough HRV data yet — connect Oura or enter it at check-in.',
-                  style: Theme.of(context).textTheme.bodySmall)
+              Text(
+                'Not enough HRV data yet — connect Oura or enter it at check-in.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
             else
               Row(
                 children: [
                   Expanded(
                     child: SizedBox(
                       height: 40,
-                      child: CustomPaint(painter: _SparklinePainter(values, scheme.tertiary)),
+                      child: CustomPaint(
+                        painter: _SparklinePainter(values, scheme.tertiary),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('${values.last.toStringAsFixed(0)} ms', style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    '${values.last.toStringAsFixed(0)} ms',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               ),
           ],
@@ -1491,7 +1566,8 @@ class _SparklinePainter extends CustomPainter {
     final path = Path();
     for (var i = 0; i < points.length; i++) {
       final x = i * dx;
-      final y = size.height - ((points[i] - min) / range) * (size.height - 4) - 2;
+      final y =
+          size.height - ((points[i] - min) / range) * (size.height - 4) - 2;
       i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
     }
     canvas.drawPath(
@@ -1504,10 +1580,12 @@ class _SparklinePainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
     // end-point marker
-    final lastY = size.height - ((points.last - min) / range) * (size.height - 4) - 2;
+    final lastY =
+        size.height - ((points.last - min) / range) * (size.height - 4) - 2;
     canvas.drawCircle(Offset(size.width, lastY), 3, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(covariant _SparklinePainter old) => old.points != points || old.color != color;
+  bool shouldRepaint(covariant _SparklinePainter old) =>
+      old.points != points || old.color != color;
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/cardio_engine.dart';
-import '../../models/lower_back_recovery.dart';
+import '../widgets/recovery_widgets.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
 import '../widgets/bouldering_widgets.dart';
@@ -101,9 +101,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final message = updatedToday
           ? 'Bouldering logged — today’s plan updated'
           : 'Bouldering logged — the next plan will account for it';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,21 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       if (mounted) setState(() => _loggingBouldering = false);
     }
-  }
-
-  Future<void> _recordLowerBackMorningResponse(
-    LowerBackSymptomResponse response,
-  ) async {
-    await context
-        .read<AppController>()
-        .recordLowerBackNextMorningResponse(response);
-    if (!mounted) return;
-    final message = response == LowerBackSymptomResponse.worse
-        ? 'Dose stepped back. Stop and seek care for new spreading pain, numbness, tingling, weakness, or bladder/bowel changes.'
-        : 'Next-morning response saved.';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   Future<void> _logUnplannedRehit() async {
@@ -177,9 +162,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final message = completion.meetsCreditableDose
           ? 'Unplanned CAROL REHIT logged — full intensity credit ✓'
           : 'Unplanned CAROL REHIT attempt saved — below the qualifying intensity dose';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,41 +191,62 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Icon(
-                    controller.settings.travelMode ? Icons.luggage : Icons.luggage_outlined,
-                    color: controller.settings.travelMode ? Theme.of(context).colorScheme.primary : null,
+                    controller.settings.travelMode
+                        ? Icons.luggage
+                        : Icons.luggage_outlined,
+                    color: controller.settings.travelMode
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
                   ),
-            tooltip: controller.settings.travelMode ? 'End travel mode' : 'Start travel mode',
-            onPressed: controller.travelModeChanging ? null : () async {
-              final enabled = !controller.settings.travelMode;
-              try {
-                await controller.setTravelMode(enabled);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(enabled ? 'Travel mode enabled' : 'Travel mode disabled')),
-                );
-              } catch (error) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Could not change travel mode: $error')),
-                );
-              }
-            },
+            tooltip: controller.settings.travelMode
+                ? 'End travel mode'
+                : 'Start travel mode',
+            onPressed: controller.travelModeChanging
+                ? null
+                : () async {
+                    final enabled = !controller.settings.travelMode;
+                    try {
+                      await controller.setTravelMode(enabled);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            enabled
+                                ? 'Travel mode enabled'
+                                : 'Travel mode disabled',
+                          ),
+                        ),
+                      );
+                    } catch (error) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Could not change travel mode: $error'),
+                        ),
+                      );
+                    }
+                  },
           ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'History',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
           ),
           IconButton(
             key: const Key('home-open-insights'),
             icon: const Icon(Icons.query_stats),
             tooltip: 'Training insights',
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const InsightsScreen())),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const InsightsScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ],
       ),
@@ -250,7 +256,9 @@ class _HomeScreenState extends State<HomeScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) => SingleChildScrollView(
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Center(
@@ -258,86 +266,31 @@ class _HomeScreenState extends State<HomeScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (controller.lowerBackRecovery.active) ...[
-                              Card(
-                                key: const Key('home-lower-back-recovery'),
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .secondaryContainer,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.health_and_safety),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'Lower-back recovery mode',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(controller
-                                          .lowerBackRecovery.stageLabel),
-                                      Text(controller
-                                          .lowerBackRecovery.targetLabel),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'High lumbar-load strength work is replaced by unweighted pull-ups, supported upper-body work, and ATG 1 pump work.',
-                                      ),
-                                      if (controller
-                                          .lowerBackMorningResponseDue) ...[
-                                        const SizedBox(height: 12),
-                                        const Text(
-                                          'Compared with before yesterday\'s recovery work, how does your lower back feel this morning?',
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 8,
-                                          children: [
-                                            OutlinedButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse.worse,
-                                              ),
-                                              child: const Text('Worse'),
-                                            ),
-                                            OutlinedButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse
-                                                    .unchanged,
-                                              ),
-                                              child: const Text('Same'),
-                                            ),
-                                            FilledButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse.better,
-                                              ),
-                                              child: const Text('Better'),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
+                              const RecoveryControls(
+                                key: Key('home-lower-back-recovery'),
                               ),
                               const SizedBox(height: 12),
                             ],
+                            if (controller.stationaryBikePaused &&
+                                !controller.lowerBackRecovery.active)
+                              const Card(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'Stationary cycling and cardio catch-up prompts are paused for recovery.',
+                                  ),
+                                ),
+                              ),
                             if (controller.settings.travelMode) ...[
                               Card(
-                                color: Theme.of(context).colorScheme.tertiaryContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.tertiaryContainer,
                                 child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -350,7 +303,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 12),
                             ],
-                            if (controller.sessionDoneToday || controller.sessionLoggedToday)
+                            if (controller.sessionDoneToday ||
+                                controller.sessionLoggedToday)
                               Icon(
                                 controller.sessionDoneToday
                                     ? Icons.check_circle
@@ -396,8 +350,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               key: const Key('home-log-bouldering'),
-                              onPressed:
-                                  _loggingBouldering ? null : _logBouldering,
+                              onPressed: _loggingBouldering
+                                  ? null
+                                  : _logBouldering,
                               icon: _loggingBouldering
                                   ? const SizedBox(
                                       width: 16,

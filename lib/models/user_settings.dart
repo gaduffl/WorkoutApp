@@ -39,6 +39,8 @@ class UserSettings {
   /// fixed-scale 12-month activity view; true restores the compact 12-week
   /// strength/cardio category heatmap.
   final bool classicHeatmap;
+  final bool deadliftAlternative;
+  final bool stationaryBikePaused;
 
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
@@ -78,7 +80,10 @@ class UserSettings {
 
   const UserSettings({
     this.equipment = const EquipmentConfig(),
-    this.weeklyFloor = const {FloorCategory.strength: 2, FloorCategory.intensity: 1},
+    this.weeklyFloor = const {
+      FloorCategory.strength: 2,
+      FloorCategory.intensity: 1,
+    },
     this.units = Units.lb,
     this.storageUnit = Units.lb,
     this.language = AppLanguage.en,
@@ -93,6 +98,8 @@ class UserSettings {
     this.checkInCutoffHour = 10,
     this.travelMode = false,
     this.classicHeatmap = false,
+    this.deadliftAlternative = false,
+    this.stationaryBikePaused = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeEnabled = false,
     this.secondRehitNudgeScheduledDay,
@@ -103,10 +110,13 @@ class UserSettings {
     this.restDayRehitNudgeEarliestHour = 8,
     this.restDayRehitNudgeLatestHour = 20,
     this.lowerBackRecovery = const LowerBackRecoveryState(),
-  })  : assert(restDayRehitNudgeEarliestHour >= 0 &&
-            restDayRehitNudgeEarliestHour <= 23),
-        assert(restDayRehitNudgeLatestHour >= 1 &&
-            restDayRehitNudgeLatestHour <= 24);
+  }) : assert(
+         restDayRehitNudgeEarliestHour >= 0 &&
+             restDayRehitNudgeEarliestHour <= 23,
+       ),
+       assert(
+         restDayRehitNudgeLatestHour >= 1 && restDayRehitNudgeLatestHour <= 24,
+       );
 
   /// §2.5: HRmax default = 208 - 0.7 x age; user-overridable.
   double get hrMax => hrMaxOverride ?? (208 - 0.7 * age);
@@ -129,6 +139,8 @@ class UserSettings {
     int? checkInCutoffHour,
     bool? travelMode,
     bool? classicHeatmap,
+    bool? deadliftAlternative,
+    bool? stationaryBikePaused,
     bool? notificationsEnabled,
     bool? secondRehitNudgeEnabled,
     String? secondRehitNudgeScheduledDay,
@@ -151,19 +163,23 @@ class UserSettings {
       storageUnit: storageUnit,
       language: language ?? this.language,
       age: age ?? this.age,
-      hrMaxOverride:
-          clearHrMaxOverride ? null : hrMaxOverride ?? this.hrMaxOverride,
+      hrMaxOverride: clearHrMaxOverride
+          ? null
+          : hrMaxOverride ?? this.hrMaxOverride,
       oura: oura ?? this.oura,
       oneDrive: oneDrive ?? this.oneDrive,
       anthropicApiKey: clearAnthropicApiKey
           ? null
           : anthropicApiKey ?? this.anthropicApiKey,
-      aiExplanationsEnabled: aiExplanationsEnabled ?? this.aiExplanationsEnabled,
+      aiExplanationsEnabled:
+          aiExplanationsEnabled ?? this.aiExplanationsEnabled,
       aiTone: aiTone ?? this.aiTone,
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
+      deadliftAlternative: deadliftAlternative ?? this.deadliftAlternative,
+      stationaryBikePaused: stationaryBikePaused ?? this.stationaryBikePaused,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       secondRehitNudgeEnabled:
           secondRehitNudgeEnabled ?? this.secondRehitNudgeEnabled,

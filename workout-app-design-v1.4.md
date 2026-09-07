@@ -309,71 +309,64 @@ Lowering weight after a break or a twinge is a **first-class engine event**, not
 - **Mild** flags: decay automatically after 1 pain-free session on the pattern.
 - **Escalation rule (hard-coded, deterministic, not AI):** sharp flag persisting > 7 days, OR user tags "radiating / numbness / tingling" → app displays a fixed medical-advice notice and stops recommending the pattern until the user clears the flag manually. The AI layer is prohibited from softening or overriding this text.
 
-### 7.3 Dedicated lower-back recovery mode
+### 7.3 Dedicated lower-back recovery mode (v2)
 
-This is a conservative training modification, not a diagnosis of disc injury
-and not a promise of healing. Activation explicitly screens for spreading leg
-pain, numbness/tingling, weakness, saddle sensory change, bladder/bowel change,
-fever, major trauma, and rapid worsening. Emergency neurological signs direct
-the user to urgent care; persistent symptoms direct the user to a qualified
-clinical assessment.
+Recovery is a symptom-informed training modification, not a diagnosis or a cure.
+The current four phases replace the legacy mandatory back-extension ladder:
 
-While active, the normal hinge `ExerciseState` is snapshotted and frozen:
-loaded deadlifts and their load progression cannot appear. A scheduled hinge
-slot becomes either the due recovery exposure or a deliberately light bridge
-hamstring-curl substitute. The self-built stool/block/PowerBlock setup is never
-described as inspected or certified.
+1. **Settle the flare-up:** optional gentle abdominal activation, a small dose and
+   comfortable non-impact preparation. No walking workouts or forced backbends.
+2. **Rebuild tolerance:** individually selected supported upper-body movements,
+   assisted pull-ups, bodyweight dips, floor bridges and short sliding curls.
+3. **Hinge or alternatives return:** only an explicitly chosen load and range;
+   assessment is recorded before loaded hip work or deadlift re-entry.
+4. **Gradual return:** maintain symptom tracking and explicitly review ending mode.
+   Ending mode does not undo the separate cycling pause or deadlift preference.
 
-The mode also replaces the normal strength catalogue rather than filtering
-only the hinge slot. No saved ladder position may reintroduce weighted squats,
-unsupported rows or presses, externally loaded pull-ups, L-sits, weighted
-hangs, or weighted dips. Strength sessions retain their original session IDs
-and queue credit but display as `Lower-back recovery · Pull + ATG 1` and use:
+Home, Settings and Check-in expose pain (0–10), comfortable sitting duration,
+everyday function, delayed/next-morning worsening, provoking exercises and all
+neurological symptoms, including symptoms that resolved. Neurological reports
+block training pending assessment; urgent signs receive urgent guidance.
+A New flare-up action resets phase, progression and cycling availability.
 
-- assisted-as-needed bodyweight pull-ups at 4+ RIR with normal pull-up
-  progression frozen;
-- floor press and chest-supported dumbbell row for supported upper-body work;
-- alternating curls, lateral raises, and bodyweight-only dips for ATG 1 / pump
-  work at 3+ RIR;
-- the existing low-load ATG/knee-health preparation where the template owns
-  it; and
-- the symptom-gated back-extension or bridge-hamstring-curl hinge dose.
+One small session is possible per flare-up day; rebuilding uses at most two
+sessions per rolling seven days and at least two calendar days between them.
+Reps/seconds start at five. Selection and dose are explicit. Two complete,
+easy, tolerated exposures with subsequent-morning feedback and improving function
+permit review of a single small increase. Completion alone never advances phase.
+Incomplete work, missing feedback, worsening or higher effort do not earn increases.
+Provoking movements pause even at the minimum dose; retry is explicit.
+These numeric thresholds are conservative app heuristics, not clinical evidence
+that a disc is healed. Recovery work grants no normal hard-set or queue credit.
 
-Compressed 20-minute sessions keep only the first safe pair. A 60-to-35-minute
-compression removes the pump accessories before supported primary work. Cardio
-sessions remain governed by their existing readiness and pain gates because
-they do not use the strength-exercise ladder.
+Supported dumbbell movements require the user to explicitly choose the smallest
+achievable initial load before prescription. Subsequent increases need tolerance
+credit. Reduced sitting tolerance also counts as worsening. Changing exercises
+retains pending symptom feedback. Exiting recovery requires the return movements
+to be selected and tolerated; deadlifts additionally need a full comfortable range.
+Normal hinge/bridge work starts from the reviewed dose, never the pre-injury load.
 
-1. Start with `3 × 30 s` static back-extension holds, neutral-to-near-neutral,
-   at least 4 RIR and no failure. Progress by 10 s only after two tolerated
-   exposures, capped at `3 × 60 s`.
-2. Continue with `2 × 6` slow, unloaded repetitions through a comfortable
-   range. Progress by 2 reps after two tolerated exposures, capped at
-   `2 × 12`.
-3. Re-enter with `1 × 8` elevated-start deadlifts at the nearest achievable
-   total no higher than 50% of the snapshotted load, at least 4 RIR and no
-   increase that day. Two tolerated re-entry exposures complete the mode; the
-   re-entry load becomes the new hinge baseline.
+Back-extension holds remain optional, near neutral and assessment-gated. The app
+does not certify a homemade setup. No automatic extension repetitions, weight
+addition or percentage-of-old-deadlift restart is prescribed.
 
-Recovery exposures are capped at two per rolling seven days with at least 48
-hours between them. Completion alone never advances the dose: the logger
-requires an immediate better/same/worse response and Home requires the same
-comparison the following morning. Any worse response regresses one dose step;
-the pending morning response blocks another exposure.
+Stationary bike recommendations, finishers and catch-up nudges remain paused,
+including Zone 2. Historical and retrospective actual rides remain recorded.
+There is no new outdoor-bike logger and no automatic cycling restart.
 
-Evidence boundary: NICE NG59 supports self-management, continued normal
-activity, and exercise selected around the person's needs and capabilities;
-the WHO 2023 guideline supports structured exercise as one component of care
-for chronic primary low-back pain. Neither establishes one back-extension
-protocol as a cure or a way to diagnose a herniated disc. NHS cauda-equina
-guidance supplies the emergency bladder/bowel, saddle-sensation, and weakness
-warning signs used by the activation gate.
+**Deadlift alternative** is an independent persisted Settings toggle: every normal
+canonical deadlift slot becomes floor glute bridge plus sliding hamstring curl.
+They use distinct progression tracks and glute/hamstring ledger contributions;
+previous deadlift loads never initialize them. The bridge starts bodyweight.
+Travel uses bodyweight bridge and heel-dig hold. These are alternatives for the
+hip/hamstring training role, not identical lifts or exercises with zero injury risk.
+Recovery restrictions and pain flags remain higher priority.
 
-Sources: https://www.nice.org.uk/guidance/ng59/chapter/recommendations ·
-https://www.who.int/publications/i/item/9789240081789 ·
-https://www.buckshealthcare.nhs.uk/pifs/cauda-equina-syndrome/
-
----
+Evidence boundaries: [NHS slipped-disc advice](https://www.nhs.uk/conditions/slipped-disc/)
+supports symptom escalation and avoiding exercises that worsen pain.
+[IQWiG non-operative treatment](https://www.gesundheitsinformation.de/bandscheibenvorfall-nicht-operative-behandlungsmoeglichkeiten.html)
+describes conservative management as usually sufficient. Neither source validates
+this app's phase thresholds or an unsupervised cure protocol.
 
 ## 8. Abort & Partial-Session Handling
 

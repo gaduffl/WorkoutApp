@@ -7,9 +7,8 @@ import '../models/plan.dart';
 import '../models/set_log.dart';
 import 'equipment_engine.dart';
 
-/// Pure, symptom-response-gated progression for lower-back recovery mode.
-/// Completion never advances the dose by itself: a next-morning response is
-/// required, and two tolerated exposures are needed for every small step.
+/// Legacy compatibility rules. Current prescriptions and symptom feedback use
+/// RecoveryProgramEngine; only activation/deactivation are called in production.
 class LowerBackRecoveryEngine {
   const LowerBackRecoveryEngine();
 
@@ -32,7 +31,6 @@ class LowerBackRecoveryEngine {
         active: true,
         activatedAt: _day(now),
         symptomOnsetDate: _day(symptomOnsetDate),
-        neurologicalSymptomsAbsentConfirmedAt: now,
         preRecoveryHingeLoad: hingeState?.currentLoad,
         preRecoveryHingeLadderStepIndex: hingeState?.ladderStepIndex,
       );
