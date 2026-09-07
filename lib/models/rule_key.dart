@@ -59,18 +59,17 @@ enum RuleKey {
 extension RuleKeyCode on RuleKey {
   /// Whether this key takes a `<pattern>` insertion (e.g. RECENCY_BOOST_SQUAT).
   bool get isPatternParameterized => switch (this) {
-        RuleKey.recencyBoost ||
-        RuleKey.painSubMild ||
-        RuleKey.painSubSharp ||
-        RuleKey.painFreeze ||
-        RuleKey.painMedicalEscalation ||
-        RuleKey.painReentryTest ||
-        RuleKey.deloadActive ||
-        RuleKey.detrainAdjust ||
-        RuleKey.capLadderJump =>
-          true,
-        _ => false,
-      };
+    RuleKey.recencyBoost ||
+    RuleKey.painSubMild ||
+    RuleKey.painSubSharp ||
+    RuleKey.painFreeze ||
+    RuleKey.painMedicalEscalation ||
+    RuleKey.painReentryTest ||
+    RuleKey.deloadActive ||
+    RuleKey.detrainAdjust ||
+    RuleKey.capLadderJump => true,
+    _ => false,
+  };
 
   /// Renders the exact closed-enum wire string, e.g. `PAIN_SUB_HINGE_SHARP`.
   String code({String? pattern}) {

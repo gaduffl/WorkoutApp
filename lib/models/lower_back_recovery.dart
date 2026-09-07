@@ -3,19 +3,11 @@
 import 'dart:convert';
 import 'recovery_program.dart';
 
-enum LowerBackRecoveryStage {
-  isometricHold,
-  dynamicUnloaded,
-  deadliftReentry,
-}
-enum LowerBackSymptomResponse {
-  better,
-  unchanged,
-  worse,
-}
+enum LowerBackRecoveryStage { isometricHold, dynamicUnloaded, deadliftReentry }
 
-const lowerBackRecoveryTrackKey =
-    'recovery:lower_back:back_extension';
+enum LowerBackSymptomResponse { better, unchanged, worse }
+
+const lowerBackRecoveryTrackKey = 'recovery:lower_back:back_extension';
 
 class LowerBackRecoveryState {
   final RecoveryProgram program;
@@ -66,8 +58,7 @@ class LowerBackRecoveryState {
     this.lastReentryLoad,
   });
 
-  bool get awaitingNextMorningResponse =>
-      pendingNextMorningSessionDate != null;
+  bool get awaitingNextMorningResponse => pendingNextMorningSessionDate != null;
 
   String get stageLabel => program.phaseLabel;
 
@@ -97,44 +88,37 @@ class LowerBackRecoveryState {
     bool clearPendingResponse = false,
     bool clearLastNextMorningResponse = false,
     bool clearLastReentryLoad = false,
-  }) =>
-      LowerBackRecoveryState(
-        program: program ?? this.program,
-        active: active ?? this.active,
-        activatedAt: activatedAt ?? this.activatedAt,
-        completedAt: clearCompletedAt
-            ? null
-            : completedAt ?? this.completedAt,
-        symptomOnsetDate: symptomOnsetDate ?? this.symptomOnsetDate,
-        neurologicalSymptomsAbsentConfirmedAt:
-            neurologicalSymptomsAbsentConfirmedAt ??
-                this.neurologicalSymptomsAbsentConfirmedAt,
-        stage: stage ?? this.stage,
-        targetHoldSeconds: targetHoldSeconds ?? this.targetHoldSeconds,
-        targetDynamicReps: targetDynamicReps ?? this.targetDynamicReps,
-        consecutiveToleratedSessions: consecutiveToleratedSessions ??
-            this.consecutiveToleratedSessions,
-        recoverySessionDates:
-            recoverySessionDates ?? this.recoverySessionDates,
-        pendingNextMorningSessionDate: clearPendingResponse
-            ? null
-            : pendingNextMorningSessionDate ??
-                this.pendingNextMorningSessionDate,
-        pendingSameDayResponse: clearPendingResponse
-            ? null
-            : pendingSameDayResponse ?? this.pendingSameDayResponse,
-        lastNextMorningResponse: clearLastNextMorningResponse
-            ? null
-            : lastNextMorningResponse ?? this.lastNextMorningResponse,
-        preRecoveryHingeLoad:
-            preRecoveryHingeLoad ?? this.preRecoveryHingeLoad,
-        preRecoveryHingeLadderStepIndex:
-            preRecoveryHingeLadderStepIndex ??
-                this.preRecoveryHingeLadderStepIndex,
-        lastReentryLoad: clearLastReentryLoad
-            ? null
-            : lastReentryLoad ?? this.lastReentryLoad,
-      );
+  }) => LowerBackRecoveryState(
+    program: program ?? this.program,
+    active: active ?? this.active,
+    activatedAt: activatedAt ?? this.activatedAt,
+    completedAt: clearCompletedAt ? null : completedAt ?? this.completedAt,
+    symptomOnsetDate: symptomOnsetDate ?? this.symptomOnsetDate,
+    neurologicalSymptomsAbsentConfirmedAt:
+        neurologicalSymptomsAbsentConfirmedAt ??
+        this.neurologicalSymptomsAbsentConfirmedAt,
+    stage: stage ?? this.stage,
+    targetHoldSeconds: targetHoldSeconds ?? this.targetHoldSeconds,
+    targetDynamicReps: targetDynamicReps ?? this.targetDynamicReps,
+    consecutiveToleratedSessions:
+        consecutiveToleratedSessions ?? this.consecutiveToleratedSessions,
+    recoverySessionDates: recoverySessionDates ?? this.recoverySessionDates,
+    pendingNextMorningSessionDate: clearPendingResponse
+        ? null
+        : pendingNextMorningSessionDate ?? this.pendingNextMorningSessionDate,
+    pendingSameDayResponse: clearPendingResponse
+        ? null
+        : pendingSameDayResponse ?? this.pendingSameDayResponse,
+    lastNextMorningResponse: clearLastNextMorningResponse
+        ? null
+        : lastNextMorningResponse ?? this.lastNextMorningResponse,
+    preRecoveryHingeLoad: preRecoveryHingeLoad ?? this.preRecoveryHingeLoad,
+    preRecoveryHingeLadderStepIndex:
+        preRecoveryHingeLadderStepIndex ?? this.preRecoveryHingeLadderStepIndex,
+    lastReentryLoad: clearLastReentryLoad
+        ? null
+        : lastReentryLoad ?? this.lastReentryLoad,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -150,8 +134,7 @@ class LowerBackRecoveryState {
           other.stage == stage &&
           other.targetHoldSeconds == targetHoldSeconds &&
           other.targetDynamicReps == targetDynamicReps &&
-          other.consecutiveToleratedSessions ==
-              consecutiveToleratedSessions &&
+          other.consecutiveToleratedSessions == consecutiveToleratedSessions &&
           _sameDates(other.recoverySessionDates, recoverySessionDates) &&
           other.pendingNextMorningSessionDate ==
               pendingNextMorningSessionDate &&
@@ -164,24 +147,24 @@ class LowerBackRecoveryState {
 
   @override
   int get hashCode => Object.hashAll([
-        jsonEncode(program.toJson()),
-        active,
-        activatedAt,
-        completedAt,
-        symptomOnsetDate,
-        neurologicalSymptomsAbsentConfirmedAt,
-        stage,
-        targetHoldSeconds,
-        targetDynamicReps,
-        consecutiveToleratedSessions,
-        ...recoverySessionDates,
-        pendingNextMorningSessionDate,
-        pendingSameDayResponse,
-        lastNextMorningResponse,
-        preRecoveryHingeLoad,
-        preRecoveryHingeLadderStepIndex,
-        lastReentryLoad,
-      ]);
+    jsonEncode(program.toJson()),
+    active,
+    activatedAt,
+    completedAt,
+    symptomOnsetDate,
+    neurologicalSymptomsAbsentConfirmedAt,
+    stage,
+    targetHoldSeconds,
+    targetDynamicReps,
+    consecutiveToleratedSessions,
+    ...recoverySessionDates,
+    pendingNextMorningSessionDate,
+    pendingSameDayResponse,
+    lastNextMorningResponse,
+    preRecoveryHingeLoad,
+    preRecoveryHingeLadderStepIndex,
+    lastReentryLoad,
+  ]);
 
   static bool _sameDates(List<DateTime> a, List<DateTime> b) {
     if (a.length != b.length) return false;

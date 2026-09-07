@@ -48,9 +48,7 @@ class ExerciseMuscleMap {
       primary: {MajorMuscleGroup.triceps},
       secondary: {MajorMuscleGroup.chest, MajorMuscleGroup.delts},
     ),
-    'sub:coreGrip:db_curl': _MuscleProfile(
-      primary: {MajorMuscleGroup.biceps},
-    ),
+    'sub:coreGrip:db_curl': _MuscleProfile(primary: {MajorMuscleGroup.biceps}),
     'sub:pushVertical:lateral_raise': _MuscleProfile(
       primary: {MajorMuscleGroup.delts},
     ),
@@ -60,9 +58,7 @@ class ExerciseMuscleMap {
     // Dips occupy the triceps-pump slot in S5; credited as triceps to keep
     // the per-slot stimulus accounting clean (they also hit chest/delts, but
     // those are covered by the horizontal-push and lateral-raise slots).
-    'sub:pushVertical:dip': _MuscleProfile(
-      primary: {MajorMuscleGroup.triceps},
-    ),
+    'sub:pushVertical:dip': _MuscleProfile(primary: {MajorMuscleGroup.triceps}),
   };
 
   /// Exact-name fallbacks preserve legacy/imported named-exercise history
@@ -85,17 +81,13 @@ class ExerciseMuscleMap {
       secondary: {MajorMuscleGroup.delts, MajorMuscleGroup.triceps},
     ),
     'db curl': _MuscleProfile(primary: {MajorMuscleGroup.biceps}),
-    'self-resisted curl': _MuscleProfile(
-      primary: {MajorMuscleGroup.biceps},
-    ),
+    'self-resisted curl': _MuscleProfile(primary: {MajorMuscleGroup.biceps}),
     'lateral raise': _MuscleProfile(primary: {MajorMuscleGroup.delts}),
     'prone y-raise': _MuscleProfile(primary: {MajorMuscleGroup.delts}),
     'overhead triceps extension': _MuscleProfile(
       primary: {MajorMuscleGroup.triceps},
     ),
-    'diamond push-up': _MuscleProfile(
-      primary: {MajorMuscleGroup.triceps},
-    ),
+    'diamond push-up': _MuscleProfile(primary: {MajorMuscleGroup.triceps}),
   };
 
   static const Map<MovementPattern, _MuscleProfile> _patterns = {
@@ -150,13 +142,12 @@ class ExerciseMuscleMap {
     }
     // Easy, symptom-limited recovery work is recorded but is not a hard
     // hypertrophy set for the broad underlying movement pattern.
-    if (trackKey.startsWith('recovery:')) return const {};
+    if (trackKey.startsWith('recovery:v2:')) return const {};
 
     final normalizedName = exerciseName?.trim().toLowerCase();
-    final named = _namedTracks[trackKey] ??
-        (normalizedName == null
-            ? null
-            : _legacyNamedExercises[normalizedName]);
+    final named =
+        _namedTracks[trackKey] ??
+        (normalizedName == null ? null : _legacyNamedExercises[normalizedName]);
     if (named != null) return named.effectiveSets;
 
     // An unknown named/substitute track is safer left uncredited than treated
@@ -174,10 +165,10 @@ class _MuscleProfile {
   const _MuscleProfile({this.primary = const {}, this.secondary = const {}});
 
   Map<MajorMuscleGroup, double> get effectiveSets => {
-        for (final muscle in primary) muscle: 1.0,
-        for (final muscle in secondary)
-          if (!primary.contains(muscle)) muscle: 0.5,
-      };
+    for (final muscle in primary) muscle: 1.0,
+    for (final muscle in secondary)
+      if (!primary.contains(muscle)) muscle: 0.5,
+  };
 }
 
 /// Only completed work at RIR 0 through the inclusive RIR 3+ boundary counts
@@ -187,12 +178,7 @@ class TargetEffortPolicy {
   final Set<Rir> qualifyingRir;
 
   const TargetEffortPolicy({
-    this.qualifyingRir = const {
-      Rir.rir0,
-      Rir.rir1,
-      Rir.rir2,
-      Rir.rir3plus,
-    },
+    this.qualifyingRir = const {Rir.rir0, Rir.rir1, Rir.rir2, Rir.rir3plus},
   });
 
   bool qualifies(SetLog set) =>
@@ -285,9 +271,7 @@ class SessionLogStimulusAdapter {
     }
   }
 
-  Iterable<AerobicStimulusEvent> _legacyAerobicEvents(
-    SessionLog log,
-  ) sync* {
+  Iterable<AerobicStimulusEvent> _legacyAerobicEvents(SessionLog log) sync* {
     if (log.durationMinutes <= 0) return;
 
     switch (log.templateId) {
@@ -336,8 +320,7 @@ class SessionLogStimulusAdapter {
             performedAt: log.completedAt,
             // Legacy SessionLog stores only total strength-session duration.
             // Retain finisher credit without claiming all of it was REHIT.
-            durationMinutes:
-                sessionTypes[SessionTypeId.s7]!.fullDurationMin,
+            durationMinutes: sessionTypes[SessionTypeId.s7]!.fullDurationMin,
           );
         }
         break;
@@ -358,8 +341,7 @@ class BoulderingStimulusPolicy {
   const BoulderingStimulusPolicy();
 
   MuscleStimulusEvent eventFor(BoulderingLog log) {
-    final durationUnits =
-        (log.durationMinutes / 30).clamp(0.0, 3.0).toDouble();
+    final durationUnits = (log.durationMinutes / 30).clamp(0.0, 3.0).toDouble();
     final effortMultiplier = switch (log.effort) {
       BoulderingEffort.easy => 0.5,
       BoulderingEffort.moderate => 0.75,
@@ -413,13 +395,14 @@ class StimulusLedgerEngine {
     final eligibleMuscleEvents = muscleEvents
         .where((event) => !event.performedAt.isAfter(asOf))
         .toList();
-    final eligibleAerobicEvents = aerobicEvents
-        .where(
-          (event) =>
-              event.durationMinutes > 0 && !event.performedAt.isAfter(asOf),
-        )
-        .toList()
-      ..sort((a, b) => a.performedAt.compareTo(b.performedAt));
+    final eligibleAerobicEvents =
+        aerobicEvents
+            .where(
+              (event) =>
+                  event.durationMinutes > 0 && !event.performedAt.isAfter(asOf),
+            )
+            .toList()
+          ..sort((a, b) => a.performedAt.compareTo(b.performedAt));
 
     final muscles = <MajorMuscleGroup, MuscleStimulusStatus>{};
     for (final muscle in MajorMuscleGroup.values) {
@@ -452,37 +435,41 @@ class StimulusLedgerEngine {
         protocol: protocol,
         sessions7d: last7.length,
         sessions28d: last28.length,
-        separateDays7d: _distinctDays(
-          last7.map((event) => event.performedAt),
-        ),
+        separateDays7d: _distinctDays(last7.map((event) => event.performedAt)),
         separateDays28d: _distinctDays(
           last28.map((event) => event.performedAt),
         ),
-        durationMinutes7d:
-            last7.fold(0, (sum, event) => sum + event.durationMinutes),
-        durationMinutes28d:
-            last28.fold(0, (sum, event) => sum + event.durationMinutes),
+        durationMinutes7d: last7.fold(
+          0,
+          (sum, event) => sum + event.durationMinutes,
+        ),
+        durationMinutes28d: last28.fold(
+          0,
+          (sum, event) => sum + event.durationMinutes,
+        ),
         daysSinceLastStimulus: _daysSinceLast(
           events.map((event) => event.performedAt),
           asOf,
         ),
-        sessionDurations7d:
-            last7.map((event) => event.durationMinutes).toList(),
-        sessionDurations28d:
-            last28.map((event) => event.durationMinutes).toList(),
+        sessionDurations7d: last7
+            .map((event) => event.durationMinutes)
+            .toList(),
+        sessionDurations28d: last28
+            .map((event) => event.durationMinutes)
+            .toList(),
       );
     }
 
     int highIntensityDistinctDays(int days) => _distinctDays(
-          eligibleAerobicEvents
-              .where(
-                (event) =>
-                    (event.protocol == CardioProtocolType.norwegian4x4 ||
-                        event.protocol == CardioProtocolType.rehit) &&
-                    _inRollingWindow(event.performedAt, asOf, days),
-              )
-              .map((event) => event.performedAt),
-        );
+      eligibleAerobicEvents
+          .where(
+            (event) =>
+                (event.protocol == CardioProtocolType.norwegian4x4 ||
+                    event.protocol == CardioProtocolType.rehit) &&
+                _inRollingWindow(event.performedAt, asOf, days),
+          )
+          .map((event) => event.performedAt),
+    );
 
     return StimulusLedgerSnapshot(
       asOf: asOf,
@@ -498,13 +485,9 @@ class StimulusLedgerEngine {
     MajorMuscleGroup muscle,
     DateTime asOf,
     int days,
-  ) =>
-      events
-          .where((event) => _inRollingWindow(event.performedAt, asOf, days))
-          .fold(
-            0.0,
-            (sum, event) => sum + (event.effectiveSets[muscle] ?? 0),
-          );
+  ) => events
+      .where((event) => _inRollingWindow(event.performedAt, asOf, days))
+      .fold(0.0, (sum, event) => sum + (event.effectiveSets[muscle] ?? 0));
 
   int? _daysSinceLast(Iterable<DateTime> dates, DateTime asOf) {
     DateTime? latest;

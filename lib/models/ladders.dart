@@ -84,7 +84,11 @@ final Map<MovementPattern, MovementLadder> ladders = {
       LadderStep(name: 'Push-up', visualId: 'pushUp'),
       LadderStep(name: 'DB bench on bolster', dumbbells: 2),
       LadderStep(name: 'One-arm DB bench', dumbbells: 1, unilateral: true),
-      LadderStep(name: 'One-arm DB bench +3s eccentric', dumbbells: 1, unilateral: true),
+      LadderStep(
+        name: 'One-arm DB bench +3s eccentric',
+        dumbbells: 1,
+        unilateral: true,
+      ),
       LadderStep(name: 'Deficit push-up (blocks), weighted', dumbbells: 1),
     ],
   ),
@@ -97,8 +101,16 @@ final Map<MovementPattern, MovementLadder> ladders = {
         visualId: 'seatedDumbbellShoulderPress',
       ),
       LadderStep(name: 'Standing DB press', dumbbells: 2),
-      LadderStep(name: 'Single-arm standing press', dumbbells: 1, unilateral: true),
-      LadderStep(name: 'Single-arm standing press +pause/tempo', dumbbells: 1, unilateral: true),
+      LadderStep(
+        name: 'Single-arm standing press',
+        dumbbells: 1,
+        unilateral: true,
+      ),
+      LadderStep(
+        name: 'Single-arm standing press +pause/tempo',
+        dumbbells: 1,
+        unilateral: true,
+      ),
     ],
   ),
   MovementPattern.pullVertical: const MovementLadder(
@@ -186,11 +198,11 @@ class SubstituteExercise {
 
   /// The ladder step this named exercise resolves to.
   LadderStep get ladderStep => LadderStep(
-        name: name,
-        visualId: visualId,
-        dumbbells: dumbbells,
-        backpackLoaded: backpackLoaded,
-      );
+    name: name,
+    visualId: visualId,
+    dumbbells: dumbbells,
+    backpackLoaded: backpackLoaded,
+  );
 }
 
 const bridgeHamstringCurl = SubstituteExercise(
@@ -208,11 +220,14 @@ const lightSingleLegRdl = SubstituteExercise(
 
 // Independent alternative tracks: never inherit the normal hinge load.
 const alternativeGluteBridge = SubstituteExercise(
-  slug: 'alternative_glute_bridge', name: 'Floor glute bridge',
-  pattern: MovementPattern.hinge, dumbbells: 1,
+  slug: 'alternative_glute_bridge',
+  name: 'Floor glute bridge',
+  pattern: MovementPattern.hinge,
+  dumbbells: 1,
 );
 const alternativeHamstringCurl = SubstituteExercise(
-  slug: 'alternative_hamstring_curl', name: 'Sliding hamstring curl',
+  slug: 'alternative_hamstring_curl',
+  name: 'Sliding hamstring curl',
   pattern: MovementPattern.hinge,
 );
 
@@ -257,7 +272,10 @@ const Map<MovementPattern, LadderStep> travelSteps = {
     visualId: 'bodyweightSplitSquat',
   ),
   MovementPattern.hinge: LadderStep(name: 'Single-leg RDL (bodyweight)'),
-  MovementPattern.pushHorizontal: LadderStep(name: 'Push-up', visualId: 'pushUp'),
+  MovementPattern.pushHorizontal: LadderStep(
+    name: 'Push-up',
+    visualId: 'pushUp',
+  ),
   MovementPattern.pushVertical: LadderStep(name: 'Pike push-up'),
   MovementPattern.pullVertical: LadderStep(name: 'Prone lat pull-down'),
   MovementPattern.pullHorizontal: LadderStep(name: 'Prone W-row'),
@@ -313,24 +331,26 @@ const dip = SubstituteExercise(
 /// Named progression tracks that are part of a normal (non-pain) plan.
 /// Pain-only substitutes remain in [substituteRegistry], but are created only
 /// when their corresponding pain action is actually prescribed.
-const s5NamedAccessories = <SubstituteExercise>[
-  dbCurl,
-  lateralRaise,
-  dip,
-];
+const s5NamedAccessories = <SubstituteExercise>[dbCurl, lateralRaise, dip];
 
 /// No-equipment equivalents for S5's named dumbbell accessories. Keeping
 /// their normal track keys means the session still records recency for the
 /// intended slot while load-based progression remains frozen in travel mode.
 const Map<String, LadderStep> travelNamedSteps = {
   'sub:hinge:alternative_glute_bridge': LadderStep(name: 'Floor glute bridge'),
-  'sub:hinge:alternative_hamstring_curl': LadderStep(name: 'Hamstring heel-dig hold', metric: ExerciseMetric.seconds, targetRange: (10, 20)),
+  'sub:hinge:alternative_hamstring_curl': LadderStep(
+    name: 'Hamstring heel-dig hold',
+    metric: ExerciseMetric.seconds,
+    targetRange: (10, 20),
+  ),
   'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
   'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
   'sub:pushHorizontal:floor_press': LadderStep(
     name: 'Wall push-up (pain-free range)',
   ),
-  'sub:pullVertical:lower_back_pull_up': LadderStep(name: 'Prone lat pull-down'),
+  'sub:pullVertical:lower_back_pull_up': LadderStep(
+    name: 'Prone lat pull-down',
+  ),
   'sub:pullHorizontal:lower_back_chest_supported_row': LadderStep(
     name: 'Prone W-row',
   ),

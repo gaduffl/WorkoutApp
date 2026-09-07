@@ -67,9 +67,15 @@ class _CheckInScreenState extends State<CheckInScreen> {
         return;
       }
       _ouraPrefilled = true;
-      if (snapshot.hrvRmssd != null) _hrvController.text = snapshot.hrvRmssd!.toStringAsFixed(0);
-      if (snapshot.restingHr != null) _rhrController.text = snapshot.restingHr!.toStringAsFixed(0);
-      if (snapshot.sleepScore != null) _sleepController.text = snapshot.sleepScore!.toString();
+      if (snapshot.hrvRmssd != null) {
+        _hrvController.text = snapshot.hrvRmssd!.toStringAsFixed(0);
+      }
+      if (snapshot.restingHr != null) {
+        _rhrController.text = snapshot.restingHr!.toStringAsFixed(0);
+      }
+      if (snapshot.sleepScore != null) {
+        _sleepController.text = snapshot.sleepScore!.toString();
+      }
     });
   }
 
@@ -108,12 +114,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final controller = context.read<AppController>();
     final now = controller.today();
     final pain = _pain.entries
-        .map((e) => PainFlag(
-              region: e.key,
-              severity: e.value,
-              flaggedDate: now,
-              tags: Set.of(_painTags[e.key] ?? const <PainTag>{}),
-            ))
+        .map(
+          (e) => PainFlag(
+            region: e.key,
+            severity: e.value,
+            flaggedDate: now,
+            tags: Set.of(_painTags[e.key] ?? const <PainTag>{}),
+          ),
+        )
         .toList();
 
     RecoverySnapshot? recovery;
@@ -123,19 +131,27 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final hrv = hrvText.isEmpty ? null : double.tryParse(hrvText);
     final rhr = rhrText.isEmpty ? null : double.tryParse(rhrText);
     final sleep = sleepText.isEmpty ? null : int.tryParse(sleepText);
-    final invalidMessage = hrvText.isNotEmpty && (hrv == null || !hrv.isFinite || hrv <= 0)
+    final invalidMessage =
+        hrvText.isNotEmpty && (hrv == null || !hrv.isFinite || hrv <= 0)
         ? 'HRV must be a positive number.'
         : rhrText.isNotEmpty && (rhr == null || !rhr.isFinite || rhr <= 0)
-            ? 'Resting HR must be a positive number.'
-            : sleepText.isNotEmpty && (sleep == null || sleep < 0 || sleep > 100)
-                ? 'Sleep score must be a whole number from 0 to 100.'
-                : null;
+        ? 'Resting HR must be a positive number.'
+        : sleepText.isNotEmpty && (sleep == null || sleep < 0 || sleep > 100)
+        ? 'Sleep score must be a whole number from 0 to 100.'
+        : null;
     if (invalidMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(invalidMessage)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(invalidMessage)));
       return;
     }
     if (hrv != null || rhr != null || sleep != null) {
-      recovery = RecoverySnapshot(date: now, hrvRmssd: hrv, restingHr: rhr, sleepScore: sleep);
+      recovery = RecoverySnapshot(
+        date: now,
+        hrvRmssd: hrv,
+        restingHr: rhr,
+        sleepScore: sleep,
+      );
     }
 
     setState(() => _submitting = true);
@@ -149,7 +165,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
     if (!mounted) return;
     setState(() => _submitting = false);
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => TodayScreen(trace: trace)));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => TodayScreen(trace: trace)),
+    );
   }
 
   @override
@@ -162,7 +180,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Time available today', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Time available today',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -176,7 +197,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 24),
-              Text('How do you feel? (1 = wrecked, 5 = great)', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'How do you feel? (1 = wrecked, 5 = great)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               if (context.watch<AppController>().lowerBackRecovery.active)
                 const RecoveryControls(),
               Slider(
@@ -188,7 +212,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 onChanged: (v) => setState(() => _feel = v.round()),
               ),
               const SizedBox(height: 16),
-              Text('Pain anywhere? (tap: mild -> sharp -> clear)', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Pain anywhere? (tap: mild -> sharp -> clear)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -197,9 +224,15 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   final severity = _pain[e.key];
                   final color = severity == null
                       ? null
-                      : (severity == PainSeverity.mild ? Colors.orange.shade200 : Colors.red.shade300);
+                      : (severity == PainSeverity.mild
+                            ? Colors.orange.shade200
+                            : Colors.red.shade300);
                   return ActionChip(
-                    label: Text(severity == null ? e.value : '${e.value} (${severity.name})'),
+                    label: Text(
+                      severity == null
+                          ? e.value
+                          : '${e.value} (${severity.name})',
+                    ),
                     backgroundColor: color,
                     onPressed: () => _cycleRegion(e.key),
                   );
@@ -212,37 +245,50 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 4),
-                ..._pain.keys.map((region) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 92,
-                            child: Text(_regionLabels[region]!, style: Theme.of(context).textTheme.bodySmall),
+                ..._pain.keys.map(
+                  (region) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 92,
+                          child: Text(
+                            _regionLabels[region]!,
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          Expanded(
-                            child: Wrap(
-                              spacing: 6,
-                              children: _tagLabels.entries
-                                  .where(
-                                    (tag) =>
-                                        region == BodyRegion.lowerBack ||
-                                        (tag.key != PainTag.saddleNumbness &&
-                                            tag.key !=
-                                                PainTag.bladderBowelChange),
-                                  )
-                                  .map((tag) => FilterChip(
-                                        visualDensity: VisualDensity.compact,
-                                        label: Text(tag.value),
-                                        selected: _painTags[region]?.contains(tag.key) ?? false,
-                                        onSelected: (selected) => _togglePainTag(region, tag.key, selected),
-                                      ))
-                                  .toList(),
-                            ),
+                        ),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 6,
+                            children: _tagLabels.entries
+                                .where(
+                                  (tag) =>
+                                      region == BodyRegion.lowerBack ||
+                                      (tag.key != PainTag.saddleNumbness &&
+                                          tag.key !=
+                                              PainTag.bladderBowelChange),
+                                )
+                                .map(
+                                  (tag) => FilterChip(
+                                    visualDensity: VisualDensity.compact,
+                                    label: Text(tag.value),
+                                    selected:
+                                        _painTags[region]?.contains(tag.key) ??
+                                        false,
+                                    onSelected: (selected) => _togglePainTag(
+                                      region,
+                                      tag.key,
+                                      selected,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 if (_painTags.values.any(
                   (tags) => tags.any(
                     const {
@@ -264,44 +310,67 @@ class _CheckInScreenState extends State<CheckInScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Recovery (optional)', style: Theme.of(context).textTheme.titleMedium),
+                    child: Text(
+                      'Recovery (optional)',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                   if (_ouraSyncing)
-                    const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                 ],
               ),
               if (_ouraPrefilled)
-                Text('Pre-filled from Oura - edit any field if it looks off.',
-                    style: Theme.of(context).textTheme.bodySmall)
+                Text(
+                  'Pre-filled from Oura - edit any field if it looks off.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                )
               else if (_ouraSyncFailed)
-                Text('Oura data unavailable today - enter manually.',
-                    style: TextStyle(color: Theme.of(context).colorScheme.error))
+                Text(
+                  'Oura data unavailable today - enter manually.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                )
               else
-                Text('Manual entry (connect Oura in Settings to pre-fill this)',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Manual entry (connect Oura in Settings to pre-fill this)',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _hrvController,
-                      decoration: const InputDecoration(labelText: 'HRV (rMSSD)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'HRV (rMSSD)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _rhrController,
-                      decoration: const InputDecoration(labelText: 'Resting HR'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Resting HR',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _sleepController,
-                      decoration: const InputDecoration(labelText: 'Sleep score'),
+                      decoration: const InputDecoration(
+                        labelText: 'Sleep score',
+                      ),
                       keyboardType: TextInputType.number,
                     ),
                   ),
@@ -313,7 +382,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: FilledButton(
                   onPressed: (_time == null || _submitting) ? null : _submit,
                   child: _submitting
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Get my plan'),
                 ),
               ),

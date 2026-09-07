@@ -10,9 +10,13 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
 
   switch (rule.key) {
     case RuleKey.restTimeZero:
-      return lang == AppLanguage.de ? 'Ruhetag - heute kein Zeitfenster.' : 'Rest day - no time slot today.';
+      return lang == AppLanguage.de
+          ? 'Ruhetag - heute kein Zeitfenster.'
+          : 'Rest day - no time slot today.';
     case RuleKey.restDoubleRed:
-      if (p['recovery'] == 'true') return 'Two RED days in a row: rest. Recovery progression is paused.';
+      if (p['recovery'] == 'true') {
+        return 'Two RED days in a row: rest. Recovery progression is paused.';
+      }
       return lang == AppLanguage.de
           ? 'Zwei RED-Tage in Folge - volle Ruhe (oder ein lockerer 20-30 Min. Spaziergang) empfohlen.'
           : 'Two RED days in a row - full rest (or a light 20-30 min walk) recommended.';
@@ -81,7 +85,9 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           ? '${pat('pattern')} wurde seit über 5 Tagen nicht trainiert und hatte daher heute Vorrang.'
           : "The ${pat('pattern')} pattern hasn't been trained in over 5 days, so it got priority today.";
     case RuleKey.queueNext:
-      return lang == AppLanguage.de ? 'Als Nächstes in der Reihe: ${p['session'] ?? ''}.' : 'Next in queue: ${p['session'] ?? ''}.';
+      return lang == AppLanguage.de
+          ? 'Als Nächstes in der Reihe: ${p['session'] ?? ''}.'
+          : 'Next in queue: ${p['session'] ?? ''}.';
     case RuleKey.s6WeekendRule:
       return lang == AppLanguage.de
           ? 'Wochenende mit freiem 30+ Min. Fenster - Zone 2 steht daher oben.'
@@ -124,7 +130,8 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.lowerBackRecoveryActive:
     case RuleKey.recoveryProgram:
-      return rule.params['message'] ?? 'Recovery work is individually selected. No automatic stage or load increases. Record symptoms later today and next morning.';
+      return rule.params['message'] ??
+          'Recovery work is individually selected. No automatic stage or load increases. Record symptoms later today and next morning.';
     case RuleKey.stationaryBikePaused:
       return 'Stationary cycling is paused for recovery, including Zone 2, REHIT, 4×4, finishers and catch-up prompts. Actual history is retained.';
     case RuleKey.deadliftAlternative:

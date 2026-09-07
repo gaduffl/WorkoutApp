@@ -11,23 +11,34 @@ import 'package:morningcoach/ui/widgets/recovery_widgets.dart';
 
 class _Controller extends AppController {
   _Controller() : super(Repository(AppDatabase())) {
-    settings = settings.copyWith(lowerBackRecovery: const LowerBackRecoveryState(active: true));
+    settings = settings.copyWith(
+      lowerBackRecovery: const LowerBackRecoveryState(active: true),
+    );
   }
   RecoveryObservation? recorded;
   @override
-  Future<void> recordRecoveryObservation(RecoveryObservation observation) async {
+  Future<void> recordRecoveryObservation(
+    RecoveryObservation observation,
+  ) async {
     recorded = observation;
   }
 }
 
 void main() {
-  testWidgets('symptom form records resolved tingling and sitting tolerance', (tester) async {
+  testWidgets('symptom form records resolved tingling and sitting tolerance', (
+    tester,
+  ) async {
     final controller = _Controller();
-    await tester.pumpWidget(ChangeNotifierProvider<AppController>.value(
-      value: controller, child: const MaterialApp(home: Scaffold(
-        body: SingleChildScrollView(child: RecoveryControls()),
-      )),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: RecoveryControls()),
+          ),
+        ),
+      ),
+    );
     await tester.tap(find.byKey(const Key('recovery-symptom-check')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save symptoms'));
@@ -44,10 +55,15 @@ void main() {
     expect(controller.recorded!.symptoms, {PainTag.tingling});
   });
 
-  testWidgets('progression screen has no recursive manage button', (tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider<AppController>.value(
-      value: _Controller(), child: const MaterialApp(home: RecoveryProgramScreen()),
-    ));
+  testWidgets('progression screen has no recursive manage button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: _Controller(),
+        child: const MaterialApp(home: RecoveryProgramScreen()),
+      ),
+    );
     expect(find.byKey(const Key('recovery-manage')), findsNothing);
     expect(find.text('Record clinical assessment'), findsOneWidget);
   });

@@ -45,9 +45,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _hrMaxController = TextEditingController(
       text: _editableHrMax(_settings.hrMaxOverride),
     );
-    _ouraClientIdController = TextEditingController(text: _settings.oura.clientId ?? '');
-    _ouraClientSecretController = TextEditingController(text: _settings.oura.clientSecret ?? '');
-    _apiKeyController = TextEditingController(text: _settings.anthropicApiKey ?? '');
+    _ouraClientIdController = TextEditingController(
+      text: _settings.oura.clientId ?? '',
+    );
+    _ouraClientSecretController = TextEditingController(
+      text: _settings.oura.clientSecret ?? '',
+    );
+    _apiKeyController = TextEditingController(
+      text: _settings.anthropicApiKey ?? '',
+    );
   }
 
   @override
@@ -68,9 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ageText = _ageController.text.trim();
     final age = int.tryParse(ageText);
     if (age == null || age < 1 || age > 120) {
-      _showSaveValidationError(
-        'Age must be a whole number from 1 to 120.',
-      );
+      _showSaveValidationError('Age must be a whole number from 1 to 120.');
       return;
     }
 
@@ -106,7 +110,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       wakeWindow: _settings.wakeWindow,
     );
     await controller.saveSettings(newSettings);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Settings saved')));
+    }
   }
 
   /// The reminder's time is learned from history rather than configured, so
@@ -115,8 +123,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     const base =
         'On days with nothing logged yet, get one push nudge to fit a short '
         'CAROL REHIT in.';
-    final habits =
-        context.read<AppController>().scheduleHabitsAt(DateTime.now());
+    final habits = context.read<AppController>().scheduleHabitsAt(
+      DateTime.now(),
+    );
     final median = habits.medianStartMinuteOfDay;
     if (median == null ||
         habits.startSampleCount < ScheduleFitEngine.minOverallSamples) {
@@ -146,7 +155,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _connecting = false);
       if (!launched) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't open the browser to connect to Oura.")),
+          const SnackBar(
+            content: Text("Couldn't open the browser to connect to Oura."),
+          ),
         );
       }
     }
@@ -161,8 +172,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() => _odBusy = false);
     if (!launched) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Couldn't open the browser to connect to OneDrive.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't open the browser to connect to OneDrive."),
+        ),
+      );
     }
   }
 
@@ -172,7 +186,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await controller.backupToOneDrive();
-      messenger.showSnackBar(const SnackBar(content: Text('Backed up to OneDrive ✓')));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Backed up to OneDrive ✓')),
+      );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
     }
@@ -189,8 +205,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'latest OneDrive backup. Your current data on this device is overwritten.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restore')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore'),
+          ),
         ],
       ),
     );
@@ -200,7 +222,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final ok = await controller.restoreFromOneDrive();
-      messenger.showSnackBar(SnackBar(content: Text(ok ? 'Restored from OneDrive ✓' : 'No backup found yet.')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? 'Restored from OneDrive ✓' : 'No backup found yet.',
+          ),
+        ),
+      );
       if (ok && mounted) setState(() => _settings = controller.settings);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
@@ -228,7 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('I have none of these signs'),
+            child: const Text('No urgent signs — start symptom check'),
           ),
         ],
       ),
@@ -254,10 +282,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _stopLowerBackRecovery() async {
-    await Navigator.push(context, MaterialPageRoute<void>(
-      builder: (_) => const RecoveryProgramScreen(),
-    ));
-    if (mounted) setState(() => _settings = context.read<AppController>().settings);
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const RecoveryProgramScreen()),
+    );
+    if (mounted) {
+      setState(() => _settings = context.read<AppController>().settings);
+    }
   }
 
   String _fmtTime(DateTime t) {
@@ -273,8 +304,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ouraError = controller.ouraError;
     final od = controller.settings.oneDrive;
     final odError = controller.oneDriveError;
-    final frozenTracks = controller.exerciseStates.values.where((state) => state.painFrozen).toList()
-      ..sort((a, b) => a.pattern.displayName.compareTo(b.pattern.displayName));
+    final frozenTracks =
+        controller.exerciseStates.values
+            .where((state) => state.painFrozen)
+            .toList()
+          ..sort(
+            (a, b) => a.pattern.displayName.compareTo(b.pattern.displayName),
+          );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -287,22 +323,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ..._settings.equipment.blocks.map(
               (b) => ListTile(
                 title: Text('${b.label} PowerBlock'),
-                subtitle: Text('Steps: ${b.perDumbbellSteps.map((s) => s.toStringAsFixed(0)).join(', ')} lb'),
+                subtitle: Text(
+                  'Steps: ${b.perDumbbellSteps.map((s) => s.toStringAsFixed(0)).join(', ')} lb',
+                ),
               ),
             ),
             SwitchListTile(
               title: const Text('Uneven-pair mode'),
-              subtitle: const Text('Allows different weight per hand (max 5 lb diff), swap between sets'),
+              subtitle: const Text(
+                'Allows different weight per hand (max 5 lb diff), swap between sets',
+              ),
               value: _settings.equipment.unevenPairModeEnabled,
               onChanged: (v) => setState(() {
-                _settings = _settings.copyWith(equipment: _settings.equipment.copyWith(unevenPairModeEnabled: v));
+                _settings = _settings.copyWith(
+                  equipment: _settings.equipment.copyWith(
+                    unevenPairModeEnabled: v,
+                  ),
+                );
               }),
             ),
             SwitchListTile(
               secondary: const Icon(Icons.luggage_outlined),
               title: const Text('Travel mode (no equipment)'),
-              subtitle: const Text('Uses bodyweight and self-resisted variants. Load progression pauses, '
-                  'but completed work still contributes to your stimulus history.'),
+              subtitle: const Text(
+                'Uses bodyweight and self-resisted variants. Load progression pauses, '
+                'but completed work still contributes to your stimulus history.',
+              ),
               value: _settings.travelMode,
               onChanged: (v) => setState(() {
                 _settings = _settings.copyWith(travelMode: v);
@@ -331,31 +377,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
               key: const Key('settings-lower-back-recovery'),
               secondary: const Icon(Icons.health_and_safety_outlined),
               title: const Text('Recovery mode'),
-              subtitle: Text(controller.lowerBackRecovery.active
-                  ? controller.lowerBackRecovery.stageLabel
-                  : 'Start with a flare-up phase and individually selected exercises'),
+              subtitle: Text(
+                controller.lowerBackRecovery.active
+                    ? controller.lowerBackRecovery.stageLabel
+                    : 'Start with a flare-up phase and individually selected exercises',
+              ),
               value: controller.lowerBackRecovery.active,
-              onChanged: (enabled) => enabled ? _startLowerBackRecovery() : _stopLowerBackRecovery(),
+              onChanged: (enabled) => enabled
+                  ? _startLowerBackRecovery()
+                  : _stopLowerBackRecovery(),
             ),
             SwitchListTile(
               key: const Key('settings-deadlift-alternative'),
               title: const Text('Deadlift alternative'),
-              subtitle: const Text('Replace deadlifts with floor glute bridges and sliding hamstring curls. Separate progression; no transfer of your old deadlift load. Sliders or towels need a compatible surface.'),
+              subtitle: const Text(
+                'Replace deadlifts with floor glute bridges and sliding hamstring curls. Separate progression; no transfer of your old deadlift load. Sliders or towels need a compatible surface.',
+              ),
               value: _settings.deadliftAlternative,
               onChanged: (v) async {
-                setState(() => _settings = _settings.copyWith(deadliftAlternative: v));
+                setState(
+                  () => _settings = _settings.copyWith(deadliftAlternative: v),
+                );
                 await controller.saveSettings(_settings);
               },
             ),
             SwitchListTile(
               key: const Key('settings-stationary-bike-paused'),
               title: const Text('Cycling aggravates my back'),
-              subtitle: const Text('Pause stationary Zone 2, REHIT, 4×4, finishers and catch-up prompts. History stays intact; no automatic restart.'),
+              subtitle: const Text(
+                'Pause stationary Zone 2, REHIT, 4×4, finishers and catch-up prompts. History stays intact; no automatic restart.',
+              ),
               value: controller.stationaryBikePaused,
-              onChanged: controller.lowerBackRecovery.active ? null : (v) async {
-                setState(() => _settings = _settings.copyWith(stationaryBikePaused: v));
-                await controller.saveSettings(_settings);
-              },
+              onChanged: controller.lowerBackRecovery.active
+                  ? null
+                  : (v) async {
+                      setState(
+                        () => _settings = _settings.copyWith(
+                          stationaryBikePaused: v,
+                        ),
+                      );
+                      await controller.saveSettings(_settings);
+                    },
             ),
             if (controller.lowerBackRecovery.active) const RecoveryControls(),
 
@@ -368,11 +430,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             const Divider(height: 32),
-            Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Notifications',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             SwitchListTile(
               title: const Text('Morning check-in reminders'),
-              subtitle: Text('"Ready to plan today?" at ${_settings.wakeWindow}, plus a nudge at '
-                  '${_settings.checkInCutoffHour}:00 if no check-in happened yet'),
+              subtitle: Text(
+                '"Ready to plan today?" at ${_settings.wakeWindow}, plus a nudge at '
+                '${_settings.checkInCutoffHour}:00 if no check-in happened yet',
+              ),
               value: _settings.notificationsEnabled,
               onChanged: (v) async {
                 if (v) {
@@ -380,12 +447,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final granted = await NotificationService.requestPermission();
                   if (!granted) {
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('Notification permission was denied - reminders stay off.')),
+                      const SnackBar(
+                        content: Text(
+                          'Notification permission was denied - reminders stay off.',
+                        ),
+                      ),
                     );
                     return;
                   }
                 }
-                setState(() => _settings = _settings.copyWith(notificationsEnabled: v));
+                setState(
+                  () => _settings = _settings.copyWith(notificationsEnabled: v),
+                );
               },
             ),
             ListTile(
@@ -402,10 +475,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 if (picked != null) {
-                  setState(() => _settings = _settings.copyWith(
-                        wakeWindow:
-                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
-                      ));
+                  setState(
+                    () => _settings = _settings.copyWith(
+                      wakeWindow:
+                          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
+                    ),
+                  );
                 }
               },
             ),
@@ -422,12 +497,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final granted = await NotificationService.requestPermission();
                   if (!granted) {
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('Notification permission was denied - the REHIT reminder stays off.')),
+                      const SnackBar(
+                        content: Text(
+                          'Notification permission was denied - the REHIT reminder stays off.',
+                        ),
+                      ),
                     );
                     return;
                   }
                 }
-                setState(() => _settings = _settings.copyWith(secondRehitNudgeEnabled: v));
+                setState(
+                  () => _settings = _settings.copyWith(
+                    secondRehitNudgeEnabled: v,
+                  ),
+                );
               },
             ),
             SwitchListTile(
@@ -441,38 +524,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final granted = await NotificationService.requestPermission();
                   if (!granted) {
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('Notification permission was denied - the rest-day reminder stays off.')),
+                      const SnackBar(
+                        content: Text(
+                          'Notification permission was denied - the rest-day reminder stays off.',
+                        ),
+                      ),
                     );
                     return;
                   }
                 }
-                setState(() => _settings = _settings.copyWith(restDayRehitNudgeEnabled: v));
+                setState(
+                  () => _settings = _settings.copyWith(
+                    restDayRehitNudgeEnabled: v,
+                  ),
+                );
               },
             ),
             if (frozenTracks.isNotEmpty) ...[
               const Divider(height: 32),
-              Text('Pain progression freezes', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Pain progression freezes',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               Text(
                 'These tracks stay frozen while the pain protocol is active. Clear one only when the '
                 'flag is no longer relevant; its load and progression state are preserved.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 4),
-              ...frozenTracks.map((state) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(state.pattern.displayName),
-                    subtitle: Text(
-                      '${state.painSeverity?.name ?? 'Pain'}'
-                      '${state.painRegion == null ? '' : ' · ${_humanize(state.painRegion!.name)}'}'
-                      '${state.trackKey == state.pattern.name ? '' : '\n${state.trackKey}'}',
+              ...frozenTracks.map(
+                (state) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(state.pattern.displayName),
+                  subtitle: Text(
+                    '${state.painSeverity?.name ?? 'Pain'}'
+                    '${state.painRegion == null ? '' : ' · ${_humanize(state.painRegion!.name)}'}'
+                    '${state.trackKey == state.pattern.name ? '' : '\n${state.trackKey}'}',
+                  ),
+                  trailing: TextButton(
+                    onPressed: _clearingPainTrack == null
+                        ? () => _confirmClearPainFreeze(
+                            context,
+                            state.trackKey,
+                            state.pattern.displayName,
+                          )
+                        : null,
+                    child: Text(
+                      _clearingPainTrack == state.trackKey
+                          ? 'Clearing…'
+                          : 'Clear',
                     ),
-                    trailing: TextButton(
-                      onPressed: _clearingPainTrack == null
-                          ? () => _confirmClearPainFreeze(context, state.trackKey, state.pattern.displayName)
-                          : null,
-                      child: Text(_clearingPainTrack == state.trackKey ? 'Clearing…' : 'Clear'),
-                    ),
-                  )),
+                  ),
+                ),
+              ),
             ],
             const Divider(height: 32),
             Text('Profile', style: Theme.of(context).textTheme.titleMedium),
@@ -485,7 +589,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextField(
               key: const Key('settings-hr-max'),
               controller: _hrMaxController,
-              decoration: const InputDecoration(labelText: 'HRmax override (blank = 208 - 0.7 x age)'),
+              decoration: const InputDecoration(
+                labelText: 'HRmax override (blank = 208 - 0.7 x age)',
+              ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -498,7 +604,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ButtonSegment(value: AppLanguage.de, label: Text('Deutsch')),
               ],
               selected: {_settings.language},
-              onSelectionChanged: (s) => setState(() => _settings = _settings.copyWith(language: s.first)),
+              onSelectionChanged: (s) => setState(
+                () => _settings = _settings.copyWith(language: s.first),
+              ),
             ),
             const Divider(height: 32),
             Text('Oura', style: Theme.of(context).textTheme.titleMedium),
@@ -513,13 +621,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _OuraStatusChip(oura: oura),
             if (ouraError != null) ...[
               const SizedBox(height: 4),
-              Text(ouraError, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                ouraError,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
             const SizedBox(height: 8),
-            TextField(controller: _ouraClientIdController, decoration: const InputDecoration(labelText: 'Oura Client ID')),
+            TextField(
+              controller: _ouraClientIdController,
+              decoration: const InputDecoration(labelText: 'Oura Client ID'),
+            ),
             TextField(
               controller: _ouraClientSecretController,
-              decoration: const InputDecoration(labelText: 'Oura Client Secret'),
+              decoration: const InputDecoration(
+                labelText: 'Oura Client Secret',
+              ),
               obscureText: true,
             ),
             const SizedBox(height: 8),
@@ -529,21 +645,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: FilledButton(
                     onPressed: _connecting ? null : _connectOura,
                     child: _connecting
-                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(oura.isConnected ? 'Reconnect Oura' : 'Connect Oura'),
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            oura.isConnected
+                                ? 'Reconnect Oura'
+                                : 'Connect Oura',
+                          ),
                   ),
                 ),
                 if (oura.isConnected) ...[
                   const SizedBox(width: 8),
                   OutlinedButton(
-                    onPressed: () => context.read<AppController>().disconnectOura(),
+                    onPressed: () =>
+                        context.read<AppController>().disconnectOura(),
                     child: const Text('Disconnect'),
                   ),
                 ],
               ],
             ),
             const Divider(height: 32),
-            Text('Backup & sync (OneDrive)', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Backup & sync (OneDrive)',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             Text(
               'Backs up all your data to a private folder in your OneDrive so you can '
               'restore it on a new device. The app can only see its own folder.',
@@ -552,32 +680,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(od.isConnected ? Icons.cloud_done : Icons.cloud_off,
-                    color: od.isConnected ? Colors.green : Colors.grey),
+                Icon(
+                  od.isConnected ? Icons.cloud_done : Icons.cloud_off,
+                  color: od.isConnected ? Colors.green : Colors.grey,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(od.isConnected
-                      ? 'Connected${od.account != null ? ' · ${od.account}' : ''}'
-                      : 'Not connected'),
+                  child: Text(
+                    od.isConnected
+                        ? 'Connected${od.account != null ? ' · ${od.account}' : ''}'
+                        : 'Not connected',
+                  ),
                 ),
               ],
             ),
             if (od.lastBackupAt != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('Last backup: ${_fmtTime(od.lastBackupAt!)}',
-                    style: Theme.of(context).textTheme.bodySmall),
+                child: Text(
+                  'Last backup: ${_fmtTime(od.lastBackupAt!)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             if (odError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(odError, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                child: Text(
+                  odError,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
               ),
             const SizedBox(height: 8),
             if (!od.isConnected)
               FilledButton.icon(
                 icon: _odBusy
-                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.cloud),
                 onPressed: _odBusy ? null : _connectOneDrive,
                 label: const Text('Connect OneDrive'),
@@ -606,15 +750,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Auto-backup after each session'),
                 value: od.autoBackup,
-                onChanged: _odBusy ? null : (v) => context.read<AppController>().setOneDriveAutoBackup(v),
+                onChanged: _odBusy
+                    ? null
+                    : (v) => context
+                          .read<AppController>()
+                          .setOneDriveAutoBackup(v),
               ),
               TextButton(
-                onPressed: _odBusy ? null : () => context.read<AppController>().disconnectOneDrive(),
+                onPressed: _odBusy
+                    ? null
+                    : () => context.read<AppController>().disconnectOneDrive(),
                 child: const Text('Disconnect OneDrive'),
               ),
             ],
             const Divider(height: 32),
-            Text('Progression level', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Progression level',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             Text(
               'Jump a movement straight to the difficulty you actually train at — '
               'e.g. skip past push-ups if you are already well beyond them. '
@@ -638,40 +791,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text('Reset', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              icon: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
-              style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+              icon: Icon(
+                Icons.delete_forever,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
               onPressed: () => _confirmResetDay(context),
               label: const Text('Reset today'),
             ),
             const Divider(height: 32),
-            Text('Help & Rules', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Help & Rules',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.help_outline),
               title: const Text('Progression rules'),
-              subtitle: const Text('How Reps/Seconds and RIR determine weight and stage progression'),
+              subtitle: const Text(
+                'How Reps/Seconds and RIR determine weight and stage progression',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => showProgressionRulesDialog(context),
             ),
             const Divider(height: 32),
-            Text('AI layer (optional)', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'AI layer (optional)',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Use AI "why" text'),
               subtitle: Text(
                 _settings.aiExplanationsEnabled
                     ? "Off uses the app's fixed, deterministic explanation text instead (§9.1) - "
-                        'same rules, no API call.'
+                          'same rules, no API call.'
                     : "Using the fixed, deterministic explanation text - the engine's rules never change, "
-                        'only how the reasoning is worded.',
+                          'only how the reasoning is worded.',
               ),
               value: _settings.aiExplanationsEnabled,
-              onChanged: (v) => setState(() => _settings = _settings.copyWith(aiExplanationsEnabled: v)),
+              onChanged: (v) => setState(
+                () => _settings = _settings.copyWith(aiExplanationsEnabled: v),
+              ),
             ),
             TextField(
               key: const Key('settings-anthropic-api-key'),
               controller: _apiKeyController,
-              decoration: const InputDecoration(labelText: 'Anthropic API key (for AI "why" text)'),
+              decoration: const InputDecoration(
+                labelText: 'Anthropic API key (for AI "why" text)',
+              ),
               obscureText: true,
             ),
             const SizedBox(height: 24),
@@ -704,19 +874,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
   String _patternLabel(MovementPattern p) => switch (p) {
-        MovementPattern.squat => 'Squat',
-        MovementPattern.hinge => 'Hinge',
-        MovementPattern.pushHorizontal => 'Horizontal push',
-        MovementPattern.pushVertical => 'Vertical push',
-        MovementPattern.pullVertical => 'Vertical pull',
-        MovementPattern.pullHorizontal => 'Horizontal pull',
-        _ => p.name,
-      };
+    MovementPattern.squat => 'Squat',
+    MovementPattern.hinge => 'Hinge',
+    MovementPattern.pushHorizontal => 'Horizontal push',
+    MovementPattern.pushVertical => 'Vertical push',
+    MovementPattern.pullVertical => 'Vertical pull',
+    MovementPattern.pullHorizontal => 'Horizontal pull',
+    _ => p.name,
+  };
 
   Future<void> _editProgression(MovementPattern pattern) async {
     final controller = context.read<AppController>();
     final steps = ladders[pattern]!.steps;
-    var selected = controller.currentLadderIndex(pattern).clamp(0, steps.length - 1);
+    var selected = controller
+        .currentLadderIndex(pattern)
+        .clamp(0, steps.length - 1);
     final loadController = TextEditingController();
 
     final saved = await showDialog<bool>(
@@ -737,7 +909,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: selected,
                   items: [
                     for (var i = 0; i < steps.length; i++)
-                      DropdownMenuItem(value: i, child: Text('${i + 1}. ${steps[i].name}')),
+                      DropdownMenuItem(
+                        value: i,
+                        child: Text('${i + 1}. ${steps[i].name}'),
+                      ),
                   ],
                   onChanged: (v) => setLocal(() => selected = v ?? selected),
                 ),
@@ -747,7 +922,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: loadController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: step.backpackLoaded ? 'Added weight (lb, blank = bodyweight)' : 'Starting total load (lb, blank = auto)',
+                      labelText: step.backpackLoaded
+                          ? 'Added weight (lb, blank = bodyweight)'
+                          : 'Starting total load (lb, blank = auto)',
                       helperText: lastLoad != null
                           ? 'You last entered ${_formatLoad(lastLoad)} lb for this level'
                           : null,
@@ -758,8 +935,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Set level')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Set level'),
+              ),
             ],
           );
         },
@@ -769,8 +952,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final load = double.tryParse(loadController.text.trim());
     await controller.setPatternProgression(pattern, selected, startLoad: load);
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${_patternLabel(pattern)} set to step ${selected + 1}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${_patternLabel(pattern)} set to step ${selected + 1}',
+          ),
+        ),
+      );
     }
   }
 
@@ -786,9 +974,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'No other day is touched — your full history stays intact. This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(dialogContext).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Delete today'),
           ),
@@ -798,7 +991,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true || !context.mounted) return;
     await context.read<AppController>().resetDay();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Today reset ✓')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Today reset ✓')));
     }
   }
 
@@ -820,8 +1015,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'not for a single sore muscle or joint - use the pain flag on the check-in for that instead.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Deload everything')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Deload everything'),
+          ),
         ],
       ),
     );
@@ -829,7 +1030,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await context.read<AppController>().triggerManualDeload();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All patterns are now in a 2-session deload.')),
+        const SnackBar(
+          content: Text('All patterns are now in a 2-session deload.'),
+        ),
       );
     }
   }
@@ -849,8 +1052,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'load, ladder step, regression history, or deload state.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Clear freeze')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Clear freeze'),
+          ),
         ],
       ),
     );
@@ -860,7 +1069,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await context.read<AppController>().clearPainFreeze(trackKey);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$patternName pain freeze cleared.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$patternName pain freeze cleared.')),
+        );
       }
     } finally {
       if (mounted) setState(() => _clearingPainTrack = null);
@@ -868,10 +1079,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _humanize(String value) {
-    final spaced = value.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    final spaced = value.replaceAllMapped(
+      RegExp(r'([a-z])([A-Z])'),
+      (m) => '${m[1]} ${m[2]}',
+    );
     return '${spaced[0].toUpperCase()}${spaced.substring(1)}';
   }
-
 }
 
 class _OuraStatusChip extends StatelessWidget {
@@ -884,8 +1097,8 @@ class _OuraStatusChip extends StatelessWidget {
     final (label, color) = oura.isConnected
         ? ('Connected', Colors.green)
         : oura.isConfigured
-            ? ('Not connected', Colors.orange)
-            : ('Not configured', Colors.grey);
+        ? ('Not connected', Colors.orange)
+        : ('Not configured', Colors.grey);
     return Chip(
       avatar: Icon(Icons.circle, size: 12, color: color),
       label: Text(label),
