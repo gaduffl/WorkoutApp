@@ -139,6 +139,21 @@ class RecoveryProgramEngine {
     );
   }
 
+  void validateExit(RecoveryProgram state, DateTime date, {required bool alternative}) {
+    if (state.phase != RecoveryPhase.returnToTraining || !canAdvance(state, date) || state.assessedAt == null) {
+      throw StateError('Complete the gradual return phase with improving function and recorded assessment before ending recovery.');
+    }
+    final required = alternative
+        ? {RecoveryExercise.gluteBridge, RecoveryExercise.hamstringCurl}
+        : {RecoveryExercise.deadlift};
+    if (required.any((e) => !state.selected.contains(e) || state.pausedExercises.contains(e))) {
+      throw StateError('First include and tolerate the selected hinge alternative or deadlift in your gradual return work.');
+    }
+    if (!alternative && (state.dose(RecoveryExercise.deadlift).rangePercent < 100 || state.dose(RecoveryExercise.deadlift).load <= 0)) {
+      throw StateError('Normal deadlifts require a tolerated full comfortable range and individually chosen load. Keep recovery active or choose the deadlift alternatives.');
+    }
+  }
+
   bool due(RecoveryProgram state, DateTime date) {
     if (!state.checkedToday(date) || state.trainingBlocked || state.pendingSession != null) return false;
     final day = DateTime(date.year, date.month, date.day);

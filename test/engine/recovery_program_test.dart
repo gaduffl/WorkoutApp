@@ -118,4 +118,19 @@ void main() {
     expect(state.pausedExercises, isEmpty);
     expect(state.toleratedExposures, 0);
   });
+
+  test('exit cannot restore a deadlift before full-range tolerance', () {
+    var state = engine.observe(const RecoveryProgram(
+      phase: RecoveryPhase.returnToTraining, toleratedExposures: 2,
+      selected: {RecoveryExercise.deadlift},
+      doses: {RecoveryExercise.deadlift: RecoveryDose(load: 12)},
+    ), observation());
+    state = engine.recordAssessment(state, day);
+    expect(() => engine.validateExit(state, day, alternative: false), throwsStateError);
+    state = state.copyWith(doses: {RecoveryExercise.deadlift: const RecoveryDose(load: 12, rangePercent: 100)});
+    expect(() => engine.validateExit(state, day, alternative: false), returnsNormally);
+    expect(() => engine.validateExit(state, day, alternative: true), throwsStateError);
+    state = state.copyWith(selected: {RecoveryExercise.gluteBridge, RecoveryExercise.hamstringCurl});
+    expect(() => engine.validateExit(state, day, alternative: true), returnsNormally);
+  });
 }

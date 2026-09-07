@@ -1,7 +1,5 @@
-/// Persisted state for the dedicated lower-back recovery mode.
-///
-/// This describes training modifications and observed symptom response. It is
-/// deliberately not a diagnosis or a claim that a particular tissue healed.
+// Persisted state for the dedicated lower-back recovery mode.
+// This describes training modifications, not a diagnosis or tissue healing.
 import 'dart:convert';
 import 'recovery_program.dart';
 

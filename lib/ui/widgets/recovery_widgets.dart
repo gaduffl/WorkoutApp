@@ -110,7 +110,7 @@ class _SymptomDialogState extends State<_SymptomDialog> {
         TextField(controller: sitting, keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'Comfortable sitting (minutes)', helperText: 'Usual time before discomfort; no deliberate test')),
         DropdownButtonFormField<RecoveryFunction>(
-          value: function, decoration: const InputDecoration(labelText: 'Walking and everyday movement'),
+          initialValue: function, decoration: const InputDecoration(labelText: 'Everyday movement'),
           items: RecoveryFunction.values.map((v) => DropdownMenuItem(value: v, child: Text(v.name))).toList(),
           onChanged: (v) => setState(() => function = v!),
         ),

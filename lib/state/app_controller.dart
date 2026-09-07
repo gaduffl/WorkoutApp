@@ -1030,10 +1030,18 @@ class AppController extends ChangeNotifier {
   Future<void> deactivateLowerBackRecovery() async {
     if (!settings.lowerBackRecovery.active) return;
     final program = lowerBackRecovery.program;
-    if (program.phase != RecoveryPhase.returnToTraining ||
-        !const RecoveryProgramEngine().canAdvance(program, today()) || program.assessedAt == null) {
-      throw StateError('Complete the gradual return phase with improving function and recorded assessment before ending recovery.');
-    }
+    const RecoveryProgramEngine().validateExit(program, today(), alternative: settings.deadliftAlternative);
+    final key = settings.deadliftAlternative ? alternativeGluteBridge.trackKey : MovementPattern.hinge.name;
+    final dose = program.dose(settings.deadliftAlternative ? RecoveryExercise.gluteBridge : RecoveryExercise.deadlift);
+    final previous = exerciseStates[key];
+    // Preserve pain restrictions, but never restore a pre-injury load or rung.
+    exerciseStates[key] = ExerciseState(
+      trackKey: key, pattern: MovementPattern.hinge, currentLoad: dose.load,
+      lastTrainedDate: today(), painFrozen: previous?.painFrozen ?? false,
+      painRegion: previous?.painRegion, painSeverity: previous?.painSeverity,
+      painTags: previous?.painTags ?? {}, painFlaggedDate: previous?.painFlaggedDate,
+    );
+    await repo.saveExerciseStates(exerciseStates);
     settings = settings.copyWith(
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
         settings.lowerBackRecovery,
