@@ -17,7 +17,9 @@ class RecoveryProgramEngine {
     Set<RecoveryExercise> provoking = const {},
   }) => state.copyWith(
     phase: RecoveryPhase.flareUp, flareAt: date, bikePaused: true,
-    pausedExercises: {...state.pausedExercises, ...provoking},
+    pausedExercises: {...state.pausedExercises, ...provoking,
+      if (provoking.isEmpty) ...state.pendingExercises},
+    doses: const {},
     toleratedExposures: 0, clearPending: true, clearAssessment: true,
   );
 

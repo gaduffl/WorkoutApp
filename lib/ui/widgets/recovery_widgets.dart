@@ -205,7 +205,7 @@ class _RecoveryProgramScreenState extends State<RecoveryProgramScreen> {
             onChanged: busy || exercise == RecoveryExercise.deadlift && controller.settings.deadliftAlternative
                 ? null : (value) => run(() async {
               await controller.updateRecoveryProgram(engine.select(program, exercise, value!));
-            }),
+            })),
           if (program.selected.contains(exercise))
             Row(children: [
               Expanded(child: Text('${program.dose(exercise).reps} ${exercise.timed ? 'seconds' : 'reps'}'

@@ -24,7 +24,7 @@ jobs:
         run: |
           dart format lib/ai/ai_explainer.dart lib/data/serializers.dart lib/engine/decision_engine.dart lib/engine/fallback_templates.dart lib/engine/stimulus_ledger_engine.dart lib/models/ladders.dart lib/models/lower_back_recovery.dart lib/models/rule_key.dart lib/models/user_settings.dart lib/state/app_controller.dart lib/ui/screens/checkin_screen.dart lib/ui/screens/history_screen.dart lib/ui/screens/home_screen.dart lib/ui/screens/logger_screen.dart lib/ui/screens/settings_screen.dart test/engine/decision_engine_test.dart test/state/app_controller_settings_test.dart lib/engine/recovery_program_engine.dart lib/models/recovery_program.dart lib/ui/widgets/recovery_widgets.dart test/engine/recovery_program_test.dart
           echo FORMAT_PATCH_BEGIN
-          git diff --binary | gzip -c | base64 -w 0
+          git diff --binary -- '*.dart' | gzip -c | base64 -w 0
           echo
           echo FORMAT_PATCH_END
       - run: flutter analyze

@@ -124,7 +124,8 @@ class RecoveryProgram {
     RecoveryPhase.returnToTraining => 'Phase 4 · gradual return to training',
   };
   RecoveryDose dose(RecoveryExercise exercise) => doses[exercise] ?? const RecoveryDose();
-  bool checkedToday(DateTime date) => latest != null && sameRecoveryDay(latest!.date, date);
+  bool checkedToday(DateTime date) => latest != null && sameRecoveryDay(latest!.date, date) &&
+      (flareAt == null || !latest!.date.isBefore(flareAt!));
   bool get trainingBlocked => reviewRequired || latest?.symptoms.isNotEmpty == true;
 
   RecoveryProgram copyWith({
