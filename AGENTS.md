@@ -73,6 +73,8 @@ safety rules, validation, or delivery workflow changes.
 - Stationary cycling is paused on activation/flare: Zone 2, REHIT, 4×4, finishers
   and nudges must respect this at planning and action boundaries. Retrospective
   activity remains loggable; history is not rewritten. No automatic cardio restart.
+- Exiting recovery persists its effective cycling pause into the standalone setting,
+  including migrated v1 profiles whose standalone flag defaults to false.
 - The separate deadlift-alternative preference replaces canonical hinge work with
   floor glute bridges and sliding hamstring curls. Independent named tracks start
   without deadlift load transfer and cannot bypass existing pain flags. No exercise

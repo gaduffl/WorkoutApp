@@ -127,12 +127,18 @@ void main() {
           ],
         ),
       );
+      // A legacy recovery backup has no standalone cycling-pause setting.
+      controller.settings = controller.settings.copyWith(
+        stationaryBikePaused: false,
+      );
+      expect(controller.stationaryBikePaused, isTrue);
       await controller.deactivateLowerBackRecovery();
       expect(controller.lowerBackRecovery.active, isFalse);
       expect(controller.exerciseStates['hinge']!.currentLoad, 12);
       expect(controller.exerciseStates['hinge']!.ladderStepIndex, 0);
       expect(controller.lowerBackRecovery.preRecoveryHingeLoad, 90);
       expect(controller.stationaryBikePaused, isTrue);
+      expect((await controller.repo.loadSettings()).stationaryBikePaused, isTrue);
     },
   );
 

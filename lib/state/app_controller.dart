@@ -1162,6 +1162,7 @@ class AppController extends ChangeNotifier {
     );
     await repo.saveExerciseStates(exerciseStates);
     settings = settings.copyWith(
+      stationaryBikePaused: stationaryBikePaused,
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
         settings.lowerBackRecovery,
         now: today(),
