@@ -37,7 +37,8 @@ class RecoveryProgramEngine {
         observation.date.isAfter(state.pendingSession!);
     final baseline = state.latest;
     final worse = observation.worse || newSymptoms ||
-        (baseline != null && observation.pain > baseline.pain);
+        (baseline != null && (observation.pain > baseline.pain ||
+            observation.sittingMinutes < baseline.sittingMinutes));
     final records = [...state.observations, observation];
     var next = state.copyWith(
       observations: records.length > 60 ? records.sublist(records.length - 60) : records,
@@ -87,7 +88,7 @@ class RecoveryProgramEngine {
     final selected = {...state.selected};
     enabled ? selected.add(exercise) : selected.remove(exercise);
     if (selected.length > 4) throw StateError('Select up to four exercises for a consistent small session. Deselect one first.');
-    return state.copyWith(selected: selected, toleratedExposures: 0, clearPending: true);
+    return state.copyWith(selected: selected, toleratedExposures: 0, pendingCompleteDose: false);
   }
 
   RecoveryProgram retrial(RecoveryProgram state, RecoveryExercise exercise, DateTime date) {
@@ -108,7 +109,13 @@ class RecoveryProgramEngine {
     final changed = (dose.reps != old.reps ? 1 : 0) + (dose.load != old.load ? 1 : 0) + (dose.rangePercent != old.rangePercent ? 1 : 0);
     if (changed == 0) return state;
     if (changed > 1) throw ArgumentError('Change only one variable at a time.');
-    if ((dose.reps > old.reps || dose.load > old.load || dose.rangePercent > old.rangePercent) &&
+    final initialUpperLoad = const {RecoveryExercise.floorPress, RecoveryExercise.supportedRow,
+      RecoveryExercise.curl, RecoveryExercise.lateralRaise}.contains(exercise) &&
+        !state.doses.containsKey(exercise) && dose.load > 0 &&
+        state.phase != RecoveryPhase.flareUp && state.checkedToday(date) &&
+        !state.trainingBlocked && !state.latest!.worse && state.pendingSession == null &&
+        state.selected.contains(exercise) && !state.pausedExercises.contains(exercise);
+    if (!initialUpperLoad && (dose.reps > old.reps || dose.load > old.load || dose.rangePercent > old.rangePercent) &&
         (!canAdvance(state, date) || state.pausedExercises.contains(exercise))) {
       throw StateError('An increase needs two complete tolerated exposures, improving function and an unpaused exercise.');
     }
@@ -125,7 +132,7 @@ class RecoveryProgramEngine {
     if (dose.reps > old.reps + 1 || dose.rangePercent > old.rangePercent + 10 || dose.load > nextLoad) {
       throw ArgumentError('Use a small step: +1 rep/second, +10% range or one available load step.');
     }
-    return state.copyWith(doses: {...state.doses, exercise: dose}, toleratedExposures: 0, clearPending: true);
+    return state.copyWith(doses: {...state.doses, exercise: dose}, toleratedExposures: 0, pendingCompleteDose: false);
   }
 
   RecoveryProgram advance(RecoveryProgram state, DateTime date) {
@@ -168,6 +175,8 @@ class RecoveryProgramEngine {
     if (travel && (e.loaded || e == RecoveryExercise.extensionHold || e == RecoveryExercise.pullUp || e == RecoveryExercise.dip || e == RecoveryExercise.hamstringCurl)) return false;
     if (e == RecoveryExercise.deadlift && (alternative || state.phase.index < RecoveryPhase.hingeReturn.index)) return false;
     if (e.needsAssessment && state.assessedAt == null) return false;
+    if (const {RecoveryExercise.floorPress, RecoveryExercise.supportedRow,
+        RecoveryExercise.curl, RecoveryExercise.lateralRaise}.contains(e) && state.dose(e).load <= 0) return false;
     if (e == RecoveryExercise.gluteBridge && state.dose(e).load > 0 &&
         (state.assessedAt == null || state.phase.index < RecoveryPhase.hingeReturn.index)) return false;
     return true;

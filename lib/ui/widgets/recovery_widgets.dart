@@ -110,7 +110,7 @@ class _SymptomDialogState extends State<_SymptomDialog> {
         TextField(controller: sitting, keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'Comfortable sitting (minutes)', helperText: 'Usual time before discomfort; no deliberate test')),
         DropdownButtonFormField<RecoveryFunction>(
-          initialValue: function, decoration: const InputDecoration(labelText: 'Everyday movement'),
+          initialValue: function, decoration: const InputDecoration(labelText: 'Everyday movement vs. flare-up'),
           items: RecoveryFunction.values.map((v) => DropdownMenuItem(value: v, child: Text(v.name))).toList(),
           onChanged: (v) => setState(() => function = v!),
         ),
@@ -194,7 +194,7 @@ class _RecoveryProgramScreenState extends State<RecoveryProgramScreen> {
             }
           }), child: const Text('Record clinical assessment')),
         const SizedBox(height: 12),
-        const Text('Select exercises you tolerate, including setup and getting on/off equipment. Only abdominal activation is available during the flare-up phase. Paused movements require an explicit re-trial.'),
+        const Text('Select up to four exercises you tolerate, including setup and getting on/off equipment. Only abdominal activation is available during the flare-up phase. For supported DB exercises, use Adjust to choose the smallest available starting load before they are prescribed. Paused movements require an explicit re-trial.'),
         for (final exercise in RecoveryExercise.values) ...[
           CheckboxListTile(
             title: Text(exercise.label), value: program.selected.contains(exercise),

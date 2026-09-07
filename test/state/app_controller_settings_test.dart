@@ -45,6 +45,26 @@ void main() {
     expect(controller.isHighIntensityUsableNow(), isFalse);
   });
 
+  test('explicit recovery exit preserves the reviewed load, never the old deadlift', () async {
+    final controller = _SettingsController(Repository(_SettingsMemoryDatabase()))
+      ..exerciseStates = {'hinge': ExerciseState(trackKey: 'hinge',
+        pattern: MovementPattern.hinge, currentLoad: 90, ladderStepIndex: 2)};
+    await controller.activateLowerBackRecovery(symptomOnsetDate: controller.today(), confirmedNoRedFlags: true);
+    await controller.updateRecoveryProgram(RecoveryProgram(
+      phase: RecoveryPhase.returnToTraining, assessedAt: DateTime.now(),
+      toleratedExposures: 2, selected: {RecoveryExercise.deadlift},
+      doses: {RecoveryExercise.deadlift: const RecoveryDose(load: 12, rangePercent: 100)},
+      observations: [RecoveryObservation(date: DateTime.now(), pain: 0, sittingMinutes: 60,
+        function: RecoveryFunction.better)],
+    ));
+    await controller.deactivateLowerBackRecovery();
+    expect(controller.lowerBackRecovery.active, isFalse);
+    expect(controller.exerciseStates['hinge']!.currentLoad, 12);
+    expect(controller.exerciseStates['hinge']!.ladderStepIndex, 0);
+    expect(controller.lowerBackRecovery.preRecoveryHingeLoad, 90);
+    expect(controller.stationaryBikePaused, isTrue);
+  });
+
   test('controller persists explicitly cleared optional settings', () async {
     final db = _SettingsMemoryDatabase();
     final repository = Repository(db);

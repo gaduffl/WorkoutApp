@@ -167,8 +167,9 @@ void main() {
     Set<RecoveryExercise> selected = const {RecoveryExercise.abdominalActivation},
     List<DateTime> sessions = const [],
     bool reviewRequired = false,
+    Map<RecoveryExercise, RecoveryDose> doses = const {},
   }) => RecoveryProgram(
-    phase: phase, selected: selected, sessions: sessions, reviewRequired: reviewRequired,
+    phase: phase, selected: selected, sessions: sessions, reviewRequired: reviewRequired, doses: doses,
     observations: [RecoveryObservation(date: today, pain: 1, sittingMinutes: 30,
       function: RecoveryFunction.better)],
   );
@@ -199,6 +200,10 @@ void main() {
           program: checkedProgram(phase: RecoveryPhase.rebuild, selected: {
             RecoveryExercise.floorPress, RecoveryExercise.supportedRow,
             RecoveryExercise.pullUp, RecoveryExercise.curl,
+          }, doses: {
+            RecoveryExercise.floorPress: const RecoveryDose(load: 12),
+            RecoveryExercise.supportedRow: const RecoveryDose(load: 6),
+            RecoveryExercise.curl: const RecoveryDose(load: 6),
           }))),
         forcedSessionId: id,
       ));
@@ -206,7 +211,7 @@ void main() {
       expect(work, hasLength(4));
       expect(work.every((e) => e.trackKey.startsWith('recovery:v2:')), isTrue);
       expect(work.every((e) => e.rirTarget == Rir.rir4plus && !e.progressionEligible), isTrue);
-      expect(work.map((e) => e.loadTotal ?? 0), everyElement(0));
+      expect(work.map((e) => e.loadTotal ?? 0), everyElement(lessThanOrEqualTo(12)));
     }
   });
 

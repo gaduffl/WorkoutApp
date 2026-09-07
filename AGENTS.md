@@ -63,6 +63,11 @@ safety rules, validation, or delivery workflow changes.
 - Recovery plans use independent `recovery:v2:` doses at 4+ RIR. No ordinary loaded
   ladder, stimulus deficit, readiness upgrade, or manual session swap may bypass
   these restrictions. No automatic extension-to-deadlift progression.
+- Supported DB exercises require an explicit smallest achievable initial load;
+  do not prescribe fictional unloaded DB work to unlock initialization. Subsequent
+  increases need tolerance credit. Changing selections retains pending feedback.
+- Recovery exit needs tolerated return exercises. A normal hinge or bridge resumes
+  at the reviewed recovery load, never a pre-injury record or ladder rung.
 - Extensions are optional after assessment; loaded hip re-entry also requires
   assessment and the hinge-return phase. Exiting mode is an explicit reviewed step.
 - Stationary cycling is paused on activation/flare: Zone 2, REHIT, 4×4, finishers

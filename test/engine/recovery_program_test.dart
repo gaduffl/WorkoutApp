@@ -133,4 +133,30 @@ void main() {
     state = state.copyWith(selected: {RecoveryExercise.gluteBridge, RecoveryExercise.hamstringCurl});
     expect(() => engine.validateExit(state, day, alternative: true), returnsNormally);
   });
+
+  test('selection changes retain pending feedback and its provoking movements', () {
+    var state = engine.complete(engine.observe(const RecoveryProgram(), observation()),
+      date: day, completeDose: true, worse: false,
+      exercises: {RecoveryExercise.abdominalActivation});
+    state = engine.select(state, RecoveryExercise.floorPress, true);
+    expect(state.pendingSession, day);
+    expect(state.pendingCompleteDose, isFalse);
+    state = engine.observe(state, RecoveryObservation(date: day.add(const Duration(days: 1)),
+      pain: 1, sittingMinutes: 10, function: RecoveryFunction.unchanged));
+    expect(state.phase, RecoveryPhase.flareUp);
+    expect(state.pausedExercises, contains(RecoveryExercise.abdominalActivation));
+  });
+
+  test('supported DB work starts only with an explicitly chosen achievable small load', () {
+    final state = engine.observe(const RecoveryProgram(phase: RecoveryPhase.rebuild,
+      selected: {RecoveryExercise.floorPress}), observation());
+    expect(engine.allowed(state, RecoveryExercise.floorPress, alternative: false), isFalse);
+    expect(() => engine.adjustDose(state, RecoveryExercise.floorPress,
+      const RecoveryDose(load: 24), day), throwsArgumentError);
+    final chosen = engine.adjustDose(state, RecoveryExercise.floorPress,
+      const RecoveryDose(load: 12), day);
+    expect(engine.allowed(chosen, RecoveryExercise.floorPress, alternative: false), isTrue);
+    expect(() => engine.adjustDose(chosen, RecoveryExercise.floorPress,
+      const RecoveryDose(load: 18), day), throwsStateError);
+  });
 }

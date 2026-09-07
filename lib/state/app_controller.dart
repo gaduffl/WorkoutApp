@@ -987,7 +987,7 @@ class AppController extends ChangeNotifier {
       final program = lowerBackRecovery.program;
       settings = settings.copyWith(lowerBackRecovery: lowerBackRecovery.copyWith(program: program.copyWith(
         selected: {...program.selected}..remove(RecoveryExercise.deadlift)..addAll({RecoveryExercise.gluteBridge, RecoveryExercise.hamstringCurl}),
-        toleratedExposures: 0, clearPending: true,
+        toleratedExposures: 0, pendingCompleteDose: false,
       )));
     }
     await repo.saveSettings(settings);
@@ -1020,6 +1020,7 @@ class AppController extends ChangeNotifier {
       ),
     );
     await repo.saveSettings(settings);
+    unawaited(syncNotifications());
     if (todayTrace != null && !sessionLoggedToday) {
       await _refreshPendingPlanForSettings();
       return;

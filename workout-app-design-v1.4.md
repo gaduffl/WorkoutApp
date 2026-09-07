@@ -339,6 +339,13 @@ Provoking movements pause even at the minimum dose; retry is explicit.
 These numeric thresholds are conservative app heuristics, not clinical evidence
 that a disc is healed. Recovery work grants no normal hard-set or queue credit.
 
+Supported dumbbell movements require the user to explicitly choose the smallest
+achievable initial load before prescription. Subsequent increases need tolerance
+credit. Reduced sitting tolerance also counts as worsening. Changing exercises
+retains pending symptom feedback. Exiting recovery requires the return movements
+to be selected and tolerated; deadlifts additionally need a full comfortable range.
+Normal hinge/bridge work starts from the reviewed dose, never the pre-injury load.
+
 Back-extension holds remain optional, near neutral and assessment-gated. The app
 does not certify a homemade setup. No automatic extension repetitions, weight
 addition or percentage-of-old-deadlift restart is prescribed.

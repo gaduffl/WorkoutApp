@@ -21,9 +21,43 @@ import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/state/app_controller.dart';
+import 'package:morningcoach/engine/recovery_program_engine.dart';
+import 'package:morningcoach/models/recovery_program.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('recovery logs preserve work but partial dose earns no tolerance or queue credit', () async {
+    for (final full in [false, true]) {
+      final controller = AppController(Repository(_MemoryDatabase()));
+      final now = DateTime.now();
+      controller.settings = controller.settings.copyWith(lowerBackRecovery: LowerBackRecoveryState(
+        active: true, program: RecoveryProgram(observations: [RecoveryObservation(
+          date: now, pain: 1, sittingMinutes: 30, function: RecoveryFunction.better,
+        )]),
+      ));
+      final plan = const RecoveryProgramEngine().plan(controller.lowerBackRecovery.program,
+        date: now, minutes: 20, alternative: false, pain: [])!;
+      final exercise = plan.exercises.last;
+      final sets = List.generate(full ? exercise.sets : 1, (_) => SetLog(
+        trackKey: exercise.trackKey, pattern: exercise.pattern, exerciseName: exercise.name,
+        weight: 0, metric: exercise.metric, value: exercise.targetRange.$2,
+        rir: Rir.rir4plus, timestamp: now,
+      ));
+      final pointer = controller.queueState.pointer;
+      await controller.completeSession(plan, sets, durationMinutes: 5,
+        lowerBackSameDayResponse: LowerBackSymptomResponse.unchanged);
+      final logs = await controller.repo.loadSessionLogsSince(DateTime(2000));
+      expect(logs, hasLength(1));
+      expect(logs.single.setLogs, hasLength(sets.length));
+      expect(logs.single.countsAs, isEmpty);
+      expect(controller.queueState.pointer, pointer);
+      expect(controller.lowerBackRecovery.program.pendingCompleteDose, full);
+      expect(controller.lowerBackRecovery.program.toleratedExposures, 0);
+      expect(controller.lowerBackRecovery.program.pendingSession, isNotNull);
+    }
+  });
   const cardio = CardioEngine();
   const recoveryPolicy = IntensityRecoveryPolicy();
 
