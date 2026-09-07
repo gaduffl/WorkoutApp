@@ -2,6 +2,9 @@
 
 ## Recovery program v2
 
+- Recovery exit persists the effective cycling pause, including old profiles that
+  have no standalone pause flag. Ending recovery cannot implicitly resume cardio.
+
 - RecoveryProgramEngine is the deterministic source for symptom review, four
   manual phases, individual doses, pausing/re-trial and phase/increase gates.
   Versioned settings JSON preserves observations, selections, dose, pending feedback
