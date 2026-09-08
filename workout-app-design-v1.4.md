@@ -320,9 +320,11 @@ clinical assessment.
 
 While active, the normal hinge `ExerciseState` is snapshotted and frozen:
 loaded deadlifts and their load progression cannot appear. A scheduled hinge
-slot becomes either the due recovery exposure or a deliberately light bridge
-hamstring-curl substitute. The self-built stool/block/PowerBlock setup is never
-described as inspected or certified.
+slot becomes the due recovery exposure or stays empty when the recovery-spacing
+gate is closed. Lower and full-body plans separately prescribe bodyweight floor
+glute bridges and sliding hamstring curls to retain some glute and hamstring
+stimulus without reusing the deadlift track. The self-built
+stool/block/PowerBlock setup is never described as inspected or certified.
 
 The mode also replaces the normal strength catalogue rather than filtering
 only the hinge slot. No saved ladder position may reintroduce weighted squats,
@@ -337,12 +339,21 @@ and queue credit but display as `Lower-back recovery · Pull + ATG 1` and use:
   work at 3+ RIR;
 - the existing low-load ATG/knee-health preparation where the template owns
   it; and
-- the symptom-gated back-extension or bridge-hamstring-curl hinge dose.
+- the symptom-gated back-extension exposure plus bodyweight floor glute bridges
+  and sliding hamstring curls at 3+ RIR on lower/full-body days.
 
-Compressed 20-minute sessions keep only the first safe pair. A 60-to-35-minute
-compression removes the pump accessories before supported primary work. Cardio
-sessions remain governed by their existing readiness and pain gates because
-they do not use the strength-exercise ladder.
+Compressed 20-minute lower/full-body recovery sessions keep the recovery hinge
+slot, both posterior-chain accessories, and the unweighted pull-up when they fit
+the deterministic hard window; upper/pump sessions keep their first safe pair.
+A 60-to-35-minute compression removes pump accessories before the supported or
+posterior-chain work. Cardio sessions remain governed by their existing readiness
+and pain gates because they do not use the strength-exercise ladder.
+
+The bridge and curl use independent bodyweight tracks, are progression-frozen
+with the rest of the recovery hinge catalogue, and contribute one primary-muscle
+set per qualifying logged set: bridge to glutes, curl to hamstrings. Both are
+omitted when lower-back pain is marked sharp. They do not progress recovery
+stages, replace a due back-extension exposure, or advance the loaded hinge ladder.
 
 1. Start with `3 × 30 s` static back-extension holds, neutral-to-near-neutral,
    at least 4 RIR and no failure. Progress by 10 s only after two tolerated

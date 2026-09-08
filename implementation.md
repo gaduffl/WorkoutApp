@@ -613,3 +613,19 @@ treat filename as canonical version).
     aerobic credit and at least 60 minutes for the long Zone 2 target. Future plan
     generation reads that persisted dose. Unplanned activity has no prospective
     duration estimate, avoiding a synthetic sample in planner-accuracy reporting.
+
+## Session 2026-09-08 (recovery posterior-chain stimulus)
+
+75. **Recovery lower/full-body days use two explicit posterior-chain tracks.**
+    `Floor glute bridge` and `Sliding hamstring curl` are bodyweight named
+    exercises inside the closed recovery catalogue, including the compressed
+    lower/full-body plan when the duration budget permits. They supplement a due
+    back-extension exposure and replace the old combined bridge-curl fallback on
+    recovery-spacing days; the general pain system keeps its existing combined
+    substitute outside dedicated recovery mode.
+76. **The added work is stimulus-bearing but cannot unlock loaded hinging.** Both
+    exercises use 3+ RIR, remain progression-frozen while recovery mode is active,
+    and own distinct state keys. The muscle ledger credits floor bridges only to
+    glutes and sliding curls only to hamstrings. Sharp lower-back pain removes both;
+    neither changes back-extension frequency/stage state nor the frozen deadlift
+    ladder.

@@ -296,6 +296,54 @@ void main() {
       expect(result.muscle(MajorMuscleGroup.coreGrip).effectiveSets7d, 0);
     });
 
+    test('recovery bridge and sliding curl keep distinct posterior credit',
+        () {
+      final bridgeOnly = engine.buildFromSessionLogs(
+        logs: [
+          strengthLog(
+            id: 'recovery-floor-bridge',
+            templateId: SessionTypeId.s1,
+            sets: [
+              set(
+                trackKey:
+                    'sub:hinge:lower_back_recovery_floor_glute_bridge',
+                pattern: MovementPattern.hinge,
+                name: 'Floor glute bridge',
+                rir: Rir.rir3plus,
+              ),
+            ],
+          ),
+        ],
+        asOf: asOf,
+      );
+      expect(bridgeOnly.muscle(MajorMuscleGroup.glutes).effectiveSets7d, 1);
+      expect(
+        bridgeOnly.muscle(MajorMuscleGroup.hamstrings).effectiveSets7d,
+        0,
+      );
+
+      final curlOnly = engine.buildFromSessionLogs(
+        logs: [
+          strengthLog(
+            id: 'recovery-sliding-curl',
+            templateId: SessionTypeId.s1,
+            sets: [
+              set(
+                trackKey:
+                    'sub:hinge:lower_back_recovery_sliding_hamstring_curl',
+                pattern: MovementPattern.hinge,
+                name: 'Sliding hamstring curl',
+                rir: Rir.rir3plus,
+              ),
+            ],
+          ),
+        ],
+        asOf: asOf,
+      );
+      expect(curlOnly.muscle(MajorMuscleGroup.hamstrings).effectiveSets7d, 1);
+      expect(curlOnly.muscle(MajorMuscleGroup.glutes).effectiveSets7d, 0);
+    });
+
     test('unknown substitute tracks do not inherit their broad pattern', () {
       final log = strengthLog(
         id: 'unknown-named',

@@ -203,7 +203,7 @@ void main() {
     );
   });
 
-  test('recovery spacing gate keeps loaded hinge out of the plan', () {
+  test('recovery spacing gate uses distinct bridge and curl stimulus', () {
     final output = decisionEngine.decide(buildInput(
       time: 35,
       subjective: 3,
@@ -237,16 +237,188 @@ void main() {
       plan.exercises.any((e) => e.trackKey == lowerBackRecoveryTrackKey),
       isFalse,
     );
+    final floorBridge = plan.exercises.firstWhere(
+      (exercise) =>
+          exercise.trackKey == lowerBackRecoveryFloorGluteBridge.trackKey,
+    );
+    final slidingCurl = plan.exercises.firstWhere(
+      (exercise) =>
+          exercise.trackKey == lowerBackRecoverySlidingHamstringCurl.trackKey,
+    );
+    expect(floorBridge.name, 'Floor glute bridge');
+    expect(slidingCurl.name, 'Sliding hamstring curl');
+    expect(floorBridge.rirTarget, Rir.rir3plus);
+    expect(slidingCurl.rirTarget, Rir.rir3plus);
+    expect(floorBridge.progressionEligible, isFalse);
+    expect(slidingCurl.progressionEligible, isFalse);
     expect(
       plan.exercises.any(
-        (e) => e.trackKey == bridgeHamstringCurl.trackKey,
+        (exercise) => exercise.trackKey == bridgeHamstringCurl.trackKey,
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       output.trace.firedRules.map((rule) => rule.key),
       contains(RuleKey.lowerBackRecoverySpacing),
     );
+  });
+
+  test('recovery bridge and curl supplement a due back-extension exposure',
+      () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s1,
+    ));
+
+    final work = output.trace.plan!.exercises
+        .where((exercise) => !exercise.isWarmup)
+        .toList();
+    expect(
+      work.map((exercise) => exercise.trackKey),
+      containsAll([
+        lowerBackRecoveryTrackKey,
+        lowerBackRecoveryFloorGluteBridge.trackKey,
+        lowerBackRecoverySlidingHamstringCurl.trackKey,
+      ]),
+    );
+    expect(
+      work.where((exercise) => exercise.trackKey == lowerBackRecoveryTrackKey),
+      hasLength(1),
+    );
+    expect(
+      work.any((exercise) => exercise.trackKey == MovementPattern.hinge.name),
+      isFalse,
+    );
+  });
+
+  test('compressed recovery lower work retains both posterior accessories',
+      () {
+    final output = decisionEngine.decide(buildInput(
+      time: 20,
+      subjective: 4,
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s1,
+    ));
+
+    final plan = output.trace.plan!;
+    final tracks = plan.exercises.map((exercise) => exercise.trackKey);
+    expect(
+      tracks,
+      contains(lowerBackRecoveryFloorGluteBridge.trackKey),
+    );
+    expect(
+      tracks,
+      contains(lowerBackRecoverySlidingHamstringCurl.trackKey),
+    );
+    expect(plan.estimatedDurationMin, lessThanOrEqualTo(20));
+  });
+
+  test('sharp lower-back pain suppresses the posterior accessories', () {
+    final output = decisionEngine.decide(buildInput(
+      time: 35,
+      subjective: 4,
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+      todaySnapshot: RecoverySnapshot(
+        date: today,
+        hrvRmssd: 50,
+        restingHr: 60,
+        sleepScore: 90,
+      ),
+      recoveryHistory: normalHrvHistory(),
+      sessionLogs: floorSatisfiedLogs(),
+      settings: UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: today.subtract(const Duration(days: 2)),
+          symptomOnsetDate: today.subtract(const Duration(days: 21)),
+          neurologicalSymptomsAbsentConfirmedAt: today,
+          preRecoveryHingeLoad: 90,
+        ),
+      ),
+      forcedSessionId: SessionTypeId.s1,
+    ));
+
+    final tracks = output.trace.plan!.exercises
+        .map((exercise) => exercise.trackKey);
+    expect(
+      tracks,
+      isNot(contains(lowerBackRecoveryFloorGluteBridge.trackKey)),
+    );
+    expect(
+      tracks,
+      isNot(contains(lowerBackRecoverySlidingHamstringCurl.trackKey)),
+    );
+  });
+
+  test('normal training does not add recovery bridge or sliding curl', () {
+    for (final sessionId in const [SessionTypeId.s1, SessionTypeId.s4]) {
+      final output = decisionEngine.decide(buildInput(
+        time: 60,
+        subjective: 4,
+        todaySnapshot: RecoverySnapshot(
+          date: today,
+          hrvRmssd: 50,
+          restingHr: 60,
+          sleepScore: 90,
+        ),
+        recoveryHistory: normalHrvHistory(),
+        sessionLogs: floorSatisfiedLogs(),
+        forcedSessionId: sessionId,
+      ));
+
+      final tracks = output.trace.plan!.exercises
+          .map((exercise) => exercise.trackKey);
+      expect(
+        tracks,
+        isNot(contains(lowerBackRecoveryFloorGluteBridge.trackKey)),
+        reason: sessionId.name,
+      );
+      expect(
+        tracks,
+        isNot(contains(lowerBackRecoverySlidingHamstringCurl.trackKey)),
+        reason: sessionId.name,
+      );
+    }
   });
 
   test(
