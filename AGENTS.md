@@ -40,49 +40,44 @@ safety rules, validation, or delivery workflow changes.
   preserve the release Android `INTERNET` permission. Never guess by name or let a
   substitution inherit a demo for different equipment or motion; unsupported variants
   display no graphic.
-- Normal strength preparation includes jumping jacks with a pain-aware fallback.
-  Recovery v2 has its own comfortable, non-impact preparation: no jumping,
-  walking workout entries, forced bending, or end-range backbends.
-- Prefer existing repositories and pure engines. New fields must have safe defaults.
+- Every app-authored strength preparation block includes jumping jacks inside its
+  existing time allocation. Pain-aware and lower-back-recovery plans must retain
+  the low-impact step-jack or marching fallback when jumping or impact reproduces
+  symptoms. Cardio-owned preset warm-ups remain unchanged.
+- Prefer existing models, repositories, and engines over parallel state or duplicate
+  rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
 
 ## Medical and pain-safety invariants
 
-- The app does not diagnose a disc injury or certify healing or equipment safety.
-  Assessment is a user-reported event, not an app-issued clearance.
-- Recovery v2 is authoritative. Legacy extension-stage fields remain readable for
-  backups and history but must never prescribe or advance current recovery work.
-- Four phases advance only explicitly. Complete small exposures, subsequent-morning
-  feedback and improving daily function are required for increases. These are
-  conservative product rules, not validated clinical milestones.
-- New or resolved neurological symptoms block training until a current symptom
-  check and explicitly recorded clinical assessment. New weakness, saddle numbness
-  or bladder/bowel changes display urgent assessment guidance.
-- Worsening resets to flare-up and pauses provoking movements, even at minimum dose.
-  Missing feedback, incomplete work, higher effort or an unchanged functional
-  trend cannot automatically increase loads. Change only one variable at a time.
-- Recovery plans use independent `recovery:v2:` doses at 4+ RIR. No ordinary loaded
-  ladder, stimulus deficit, readiness upgrade, or manual session swap may bypass
-  these restrictions. No automatic extension-to-deadlift progression.
-- Supported DB exercises require an explicit smallest achievable initial load;
-  do not prescribe fictional unloaded DB work to unlock initialization. Subsequent
-  increases need tolerance credit. Changing selections retains pending feedback.
-- Recovery exit needs tolerated return exercises. A normal hinge or bridge resumes
-  at the reviewed recovery load, never a pre-injury record or ladder rung.
-- Extensions are optional after assessment; loaded hip re-entry also requires
-  assessment and the hinge-return phase. Exiting mode is an explicit reviewed step.
-- Stationary cycling is paused on activation/flare: Zone 2, REHIT, 4×4, finishers
-  and nudges must respect this at planning and action boundaries. Retrospective
-  activity remains loggable; history is not rewritten. No automatic cardio restart.
-- Exiting recovery persists its effective cycling pause into the standalone setting,
-  including migrated v1 profiles whose standalone flag defaults to false.
-- The separate deadlift-alternative preference replaces canonical hinge work with
-  floor glute bridges and sliding hamstring curls. Independent named tracks start
-  without deadlift load transfer and cannot bypass existing pain flags. No exercise
-  is described as risk-free. Travel uses bodyweight bridge/heel-dig variants.
-- Preserve ordinary pain-freeze, detraining and substitution behavior outside recovery.
-  Display comeback adjustments using the actual emitted load.
-- A continuous Zone 2 completion may exceed prescription up to the existing
-  24-hour input bound; interval protocols retain their dose cap.
+- The app does not diagnose an injury, a herniated disc, or tissue healing. UI copy
+  must describe symptoms, training modifications, and escalation actions without cure
+  claims or medical certainty.
+- Deterministic safety gates outrank readiness, weekly targets, manual session swaps,
+  progression, and AI-generated explanations. The AI layer may never weaken them.
+- While lower-back recovery mode is active, loaded hinge work and hinge progression
+  stay blocked. Preserve the pre-recovery state for a graded return; merely completing
+  a session must never unlock or advance it.
+- Every strength plan in lower-back recovery mode must come from the closed
+  low-lumbar-load catalogue. Normal weighted squat, unsupported row/press, loaded
+  pull-up, L-sit, weighted-hang, and weighted-dip ladder state must never leak into
+  the plan. Use the dedicated unweighted/assisted pull-up, supported press/row, ATG 1
+  accessories, and symptom-gated hinge tracks instead.
+- Recovery pull-ups carry no added load, stay at 4+ RIR, and cannot advance the normal
+  pull-up ladder. Bodyweight recovery dips likewise cannot unlock loaded dip work.
+- Back-extension recovery work advances only after recorded same-day and next-morning
+  symptom tolerance. New/increasing radiating pain, numbness, tingling, weakness,
+  saddle/genital sensory change, or bladder/bowel dysfunction blocks training and
+  displays the fixed medical escalation guidance.
+- A comeback prescription after a training pause must describe the currently
+  emitted reduced load/target or easier difficulty. Never carry a stale
+  `Load increased` milestone into a detraining-adjusted plan.
+- Recovery exercises use conservative, pain-tolerated prescriptions and never train
+  to failure. Do not represent a self-built apparatus as inspected or certified.
+- Keep the existing pain-freeze, substitution, and escalation behavior working for
+  users who do not activate the dedicated recovery mode.
+- A continuous Zone 2 completion may exceed its prescribed duration and must retain
+  the full actual dose, subject to the existing 24-hour input bound. Interval cardio
+  protocols remain capped at their prescribed work dose.
 - Home-screen retrospective Zone 2 rides are unplanned, supplemental records:
   preserve actual dose and normal aerobic credit, without completing/replacing the
   primary plan or advancing the queue. No prospective duration estimate is recorded

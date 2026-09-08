@@ -1,32 +1,4 @@
-# Implementation notes
-
-## Recovery program v2
-
-- Recovery exit persists the effective cycling pause, including old profiles that
-  have no standalone pause flag. Ending recovery cannot implicitly resume cardio.
-
-- RecoveryProgramEngine is the deterministic source for symptom review, four
-  manual phases, individual doses, pausing/re-trial and phase/increase gates.
-  Versioned settings JSON preserves observations, selections, dose, pending feedback
-  and assessment. Legacy recovery data defaults to the flare-up phase, paused bike,
-  no credited exposures and no inherited deadlift load.
-- Active recovery returns before ordinary template assembly, so readiness, deficits,
-  force-selection and normal loaded ladder state cannot inject exercises.
-  The controller revalidates cached plans and suppresses prospective cardio nudges.
-  Completed primary work is retained; subsequent recommendations read new settings.
-- Exact complete dose at prescribed easy effort plus same-day and next-morning
-  reports earns tolerance credit. No queue or hypertrophy hard-set credit is invented.
-  Dose changes consume tolerance credit and alter one variable; PowerBlock loads
-  are validated against actual equipment steps.
-- Deadlift alternatives are independent named bridge/curl tracks. Normal bridge
-  starts at bodyweight, uses one padded DB if progressed, and curl stays unweighted.
-  They retain pain restrictions and have explicit glute/hamstring stimulus mappings.
-  Unsupported demonstrations are omitted rather than reusing deadlift graphics.
-- The original LowerBackRecoveryEngine remains only for activation/deactivation and
-  legacy compatibility fixtures; current prescriptions and feedback use v2.
-- Flutter is absent in the local workspace; GitHub Actions runs the analyzer,
-  complete tests and APK build before squash merge. The resulting main run publishes
-  the APK; verify that release asset before reporting delivery.
+# implementation.md — decision log
 
 Short-form log of non-obvious decisions, newest last. Spec references are to
 `workout-app-design-v1.4.md` (content header says v1.2 — the §-numbering matches;

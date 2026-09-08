@@ -1,16 +1,22 @@
-// Persisted state for the dedicated lower-back recovery mode.
-// This describes training modifications, not a diagnosis or tissue healing.
-import 'dart:convert';
-import 'recovery_program.dart';
+/// Persisted state for the dedicated lower-back recovery mode.
+///
+/// This describes training modifications and observed symptom response. It is
+/// deliberately not a diagnosis or a claim that a particular tissue healed.
+enum LowerBackRecoveryStage {
+  isometricHold,
+  dynamicUnloaded,
+  deadliftReentry,
+}
+enum LowerBackSymptomResponse {
+  better,
+  unchanged,
+  worse,
+}
 
-enum LowerBackRecoveryStage { isometricHold, dynamicUnloaded, deadliftReentry }
-
-enum LowerBackSymptomResponse { better, unchanged, worse }
-
-const lowerBackRecoveryTrackKey = 'recovery:lower_back:back_extension';
+const lowerBackRecoveryTrackKey =
+    'recovery:lower_back:back_extension';
 
 class LowerBackRecoveryState {
-  final RecoveryProgram program;
   final bool active;
   final DateTime? activatedAt;
   final DateTime? completedAt;
@@ -39,7 +45,6 @@ class LowerBackRecoveryState {
   final double? lastReentryLoad;
 
   const LowerBackRecoveryState({
-    this.program = const RecoveryProgram(),
     this.active = false,
     this.activatedAt,
     this.completedAt,
@@ -58,16 +63,28 @@ class LowerBackRecoveryState {
     this.lastReentryLoad,
   });
 
-  bool get awaitingNextMorningResponse => pendingNextMorningSessionDate != null;
+  bool get awaitingNextMorningResponse =>
+      pendingNextMorningSessionDate != null;
 
-  String get stageLabel => program.phaseLabel;
+  String get stageLabel => switch (stage) {
+        LowerBackRecoveryStage.isometricHold =>
+          'Stage 1 · static back-extension holds',
+        LowerBackRecoveryStage.dynamicUnloaded =>
+          'Stage 2 · controlled unweighted back extensions',
+        LowerBackRecoveryStage.deadliftReentry =>
+          'Stage 3 · graded deadlift re-entry',
+      };
 
-  String get targetLabel => program.trainingBlocked
-      ? 'Training paused · assessment needed'
-      : 'Individually selected work · no automatic progression';
+  String get targetLabel => switch (stage) {
+        LowerBackRecoveryStage.isometricHold =>
+          '3 × $targetHoldSeconds-second holds',
+        LowerBackRecoveryStage.dynamicUnloaded =>
+          '2 × $targetDynamicReps controlled repetitions',
+        LowerBackRecoveryStage.deadliftReentry =>
+          '1 × 8 elevated-start deadlift at 50%',
+      };
 
   LowerBackRecoveryState copyWith({
-    RecoveryProgram? program,
     bool? active,
     DateTime? activatedAt,
     DateTime? completedAt,
@@ -88,43 +105,48 @@ class LowerBackRecoveryState {
     bool clearPendingResponse = false,
     bool clearLastNextMorningResponse = false,
     bool clearLastReentryLoad = false,
-  }) => LowerBackRecoveryState(
-    program: program ?? this.program,
-    active: active ?? this.active,
-    activatedAt: activatedAt ?? this.activatedAt,
-    completedAt: clearCompletedAt ? null : completedAt ?? this.completedAt,
-    symptomOnsetDate: symptomOnsetDate ?? this.symptomOnsetDate,
-    neurologicalSymptomsAbsentConfirmedAt:
-        neurologicalSymptomsAbsentConfirmedAt ??
-        this.neurologicalSymptomsAbsentConfirmedAt,
-    stage: stage ?? this.stage,
-    targetHoldSeconds: targetHoldSeconds ?? this.targetHoldSeconds,
-    targetDynamicReps: targetDynamicReps ?? this.targetDynamicReps,
-    consecutiveToleratedSessions:
-        consecutiveToleratedSessions ?? this.consecutiveToleratedSessions,
-    recoverySessionDates: recoverySessionDates ?? this.recoverySessionDates,
-    pendingNextMorningSessionDate: clearPendingResponse
-        ? null
-        : pendingNextMorningSessionDate ?? this.pendingNextMorningSessionDate,
-    pendingSameDayResponse: clearPendingResponse
-        ? null
-        : pendingSameDayResponse ?? this.pendingSameDayResponse,
-    lastNextMorningResponse: clearLastNextMorningResponse
-        ? null
-        : lastNextMorningResponse ?? this.lastNextMorningResponse,
-    preRecoveryHingeLoad: preRecoveryHingeLoad ?? this.preRecoveryHingeLoad,
-    preRecoveryHingeLadderStepIndex:
-        preRecoveryHingeLadderStepIndex ?? this.preRecoveryHingeLadderStepIndex,
-    lastReentryLoad: clearLastReentryLoad
-        ? null
-        : lastReentryLoad ?? this.lastReentryLoad,
-  );
+  }) =>
+      LowerBackRecoveryState(
+        active: active ?? this.active,
+        activatedAt: activatedAt ?? this.activatedAt,
+        completedAt: clearCompletedAt
+            ? null
+            : completedAt ?? this.completedAt,
+        symptomOnsetDate: symptomOnsetDate ?? this.symptomOnsetDate,
+        neurologicalSymptomsAbsentConfirmedAt:
+            neurologicalSymptomsAbsentConfirmedAt ??
+                this.neurologicalSymptomsAbsentConfirmedAt,
+        stage: stage ?? this.stage,
+        targetHoldSeconds: targetHoldSeconds ?? this.targetHoldSeconds,
+        targetDynamicReps: targetDynamicReps ?? this.targetDynamicReps,
+        consecutiveToleratedSessions: consecutiveToleratedSessions ??
+            this.consecutiveToleratedSessions,
+        recoverySessionDates:
+            recoverySessionDates ?? this.recoverySessionDates,
+        pendingNextMorningSessionDate: clearPendingResponse
+            ? null
+            : pendingNextMorningSessionDate ??
+                this.pendingNextMorningSessionDate,
+        pendingSameDayResponse: clearPendingResponse
+            ? null
+            : pendingSameDayResponse ?? this.pendingSameDayResponse,
+        lastNextMorningResponse: clearLastNextMorningResponse
+            ? null
+            : lastNextMorningResponse ?? this.lastNextMorningResponse,
+        preRecoveryHingeLoad:
+            preRecoveryHingeLoad ?? this.preRecoveryHingeLoad,
+        preRecoveryHingeLadderStepIndex:
+            preRecoveryHingeLadderStepIndex ??
+                this.preRecoveryHingeLadderStepIndex,
+        lastReentryLoad: clearLastReentryLoad
+            ? null
+            : lastReentryLoad ?? this.lastReentryLoad,
+      );
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is LowerBackRecoveryState &&
-          jsonEncode(other.program.toJson()) == jsonEncode(program.toJson()) &&
           other.active == active &&
           other.activatedAt == activatedAt &&
           other.completedAt == completedAt &&
@@ -134,7 +156,8 @@ class LowerBackRecoveryState {
           other.stage == stage &&
           other.targetHoldSeconds == targetHoldSeconds &&
           other.targetDynamicReps == targetDynamicReps &&
-          other.consecutiveToleratedSessions == consecutiveToleratedSessions &&
+          other.consecutiveToleratedSessions ==
+              consecutiveToleratedSessions &&
           _sameDates(other.recoverySessionDates, recoverySessionDates) &&
           other.pendingNextMorningSessionDate ==
               pendingNextMorningSessionDate &&
@@ -147,24 +170,23 @@ class LowerBackRecoveryState {
 
   @override
   int get hashCode => Object.hashAll([
-    jsonEncode(program.toJson()),
-    active,
-    activatedAt,
-    completedAt,
-    symptomOnsetDate,
-    neurologicalSymptomsAbsentConfirmedAt,
-    stage,
-    targetHoldSeconds,
-    targetDynamicReps,
-    consecutiveToleratedSessions,
-    ...recoverySessionDates,
-    pendingNextMorningSessionDate,
-    pendingSameDayResponse,
-    lastNextMorningResponse,
-    preRecoveryHingeLoad,
-    preRecoveryHingeLadderStepIndex,
-    lastReentryLoad,
-  ]);
+        active,
+        activatedAt,
+        completedAt,
+        symptomOnsetDate,
+        neurologicalSymptomsAbsentConfirmedAt,
+        stage,
+        targetHoldSeconds,
+        targetDynamicReps,
+        consecutiveToleratedSessions,
+        ...recoverySessionDates,
+        pendingNextMorningSessionDate,
+        pendingSameDayResponse,
+        lastNextMorningResponse,
+        preRecoveryHingeLoad,
+        preRecoveryHingeLadderStepIndex,
+        lastReentryLoad,
+      ]);
 
   static bool _sameDates(List<DateTime> a, List<DateTime> b) {
     if (a.length != b.length) return false;

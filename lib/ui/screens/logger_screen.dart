@@ -50,8 +50,7 @@ class _LoggerScreenState extends State<LoggerScreen>
 
   final List<SetLog> _logged = [];
   final Set<String> _loggedKeys = {}; // 'exIdx:setNumber' of completed steps
-  final Map<int, double> _weightByExercise =
-      {}; // per plan-exercise working weight
+  final Map<int, double> _weightByExercise = {}; // per plan-exercise working weight
   int _value = 8;
   Rir _rir = Rir.rir2;
   bool _painFlag = false;
@@ -84,8 +83,7 @@ class _LoggerScreenState extends State<LoggerScreen>
 
   List<PlannedExercise> get _ex => widget.plan.exercises;
   PlannedExercise get _exercise => _ex[_steps[_current].exIdx];
-  bool get _hasSupersets =>
-      _ex.any((e) => !e.isWarmup && e.supersetGroup != null);
+  bool get _hasSupersets => _ex.any((e) => !e.isWarmup && e.supersetGroup != null);
 
   @override
   void initState() {
@@ -142,11 +140,7 @@ class _LoggerScreenState extends State<LoggerScreen>
       if (_ex[i].isWarmup) {
         pending.add(i);
       } else {
-        units.add((
-          workIdx: i,
-          warmups: List.of(pending),
-          group: _ex[i].supersetGroup,
-        ));
+        units.add((workIdx: i, warmups: List.of(pending), group: _ex[i].supersetGroup));
         pending.clear();
       }
     }
@@ -167,14 +161,9 @@ class _LoggerScreenState extends State<LoggerScreen>
             steps.add(_Step(w, 1));
           }
         }
-        final maxSets = group
-            .map((m) => _ex[m.workIdx].sets)
-            .fold(0, (a, b) => a > b ? a : b);
+        final maxSets = group.map((m) => _ex[m.workIdx].sets).fold(0, (a, b) => a > b ? a : b);
         for (var s = 1; s <= maxSets; s++) {
-          final round = [
-            for (final m in group)
-              if (s <= _ex[m.workIdx].sets) m.workIdx,
-          ];
+          final round = [for (final m in group) if (s <= _ex[m.workIdx].sets) m.workIdx];
           for (var k = 0; k < round.length; k++) {
             // rest after the last exercise of the round (superset partner fills the gap)
             steps.add(_Step(round[k], s, restAfter: k == round.length - 1));
@@ -186,9 +175,7 @@ class _LoggerScreenState extends State<LoggerScreen>
           steps.add(_Step(w, 1));
         }
         for (var s = 1; s <= _ex[unit.workIdx].sets; s++) {
-          steps.add(
-            _Step(unit.workIdx, s, restAfter: true),
-          ); // straight sets rest after each
+          steps.add(_Step(unit.workIdx, s, restAfter: true)); // straight sets rest after each
         }
         u++;
       }
@@ -207,9 +194,7 @@ class _LoggerScreenState extends State<LoggerScreen>
       // Rebuild remaining steps; keep already-logged sets. Jump to the first
       // step that hasn't been logged yet.
       _steps = _buildSteps(on);
-      _current = _steps.indexWhere(
-        (st) => !_loggedKeys.contains('${st.exIdx}:${st.setNumber}'),
-      );
+      _current = _steps.indexWhere((st) => !_loggedKeys.contains('${st.exIdx}:${st.setNumber}'));
       if (_current < 0) _current = _steps.length - 1;
       _restTimer?.cancel();
       _restSecondsLeft = 0;
@@ -502,7 +487,8 @@ class _LoggerScreenState extends State<LoggerScreen>
       if (offersFinisher && mounted) {
         final prescription = const CardioEngine().prescriptionFor(
           sessionId: SessionTypeId.s7,
-          durationMinutes: sessionTypes[SessionTypeId.s7]!.fullDurationMin,
+          durationMinutes:
+              sessionTypes[SessionTypeId.s7]!.fullDurationMin,
           heartRateMaxBpm: controller.settings.hrMax,
         );
         rehitCompletion = await showCardioCompletionDialog(
@@ -518,8 +504,7 @@ class _LoggerScreenState extends State<LoggerScreen>
         (setLog) =>
             !setLog.isWarmup &&
             setLog.value > 0 &&
-            (setLog.trackKey == lowerBackRecoveryTrackKey ||
-                setLog.trackKey.startsWith('recovery:v2:')),
+            setLog.trackKey == lowerBackRecoveryTrackKey,
       );
       if (completedRecoveryWork) {
         lowerBackResponse = await _askLowerBackSameDayResponse();
@@ -560,8 +545,10 @@ class _LoggerScreenState extends State<LoggerScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, LowerBackSymptomResponse.worse),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              LowerBackSymptomResponse.worse,
+            ),
             child: const Text('Worse'),
           ),
           TextButton(
@@ -572,8 +559,10 @@ class _LoggerScreenState extends State<LoggerScreen>
             child: const Text('Same'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, LowerBackSymptomResponse.better),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              LowerBackSymptomResponse.better,
+            ),
             child: const Text('Better'),
           ),
         ],
@@ -615,9 +604,7 @@ class _LoggerScreenState extends State<LoggerScreen>
       appBar: AppBar(
         title: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Text(
-            '${e.name}${e.isWarmup ? '' : ' - set ${step.setNumber}/${e.sets}'}',
-          ),
+          child: Text('${e.name}${e.isWarmup ? '' : ' - set ${step.setNumber}/${e.sets}'}'),
         ),
         actions: [
           TextButton(
@@ -656,11 +643,9 @@ class _LoggerScreenState extends State<LoggerScreen>
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text('Superset mode'),
-                                subtitle: Text(
-                                  _superset
-                                      ? 'Alternate the paired exercises, rest after each pair'
-                                      : 'Run every exercise as straight sets',
-                                ),
+                                subtitle: Text(_superset
+                                    ? 'Alternate the paired exercises, rest after each pair'
+                                    : 'Run every exercise as straight sets'),
                                 value: _superset,
                                 onChanged: _toggleSuperset,
                               ),
@@ -719,15 +704,13 @@ class _LoggerScreenState extends State<LoggerScreen>
                             // detail) follows below.
                             const SizedBox(height: 16),
                             if (e.loadTotal != null || e.loadSteps != null)
-                              _weightStepper(currentLoadDisplay)
+                              _weightStepper(
+                                currentLoadDisplay,
+                              )
                             else if (!e.isWarmup)
-                              const Text(
-                                'Bodyweight',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
+                              const Text('Bodyweight', style: TextStyle(fontWeight: FontWeight.bold)),
                             _valueStepper(),
-                            if (e.metric == ExerciseMetric.seconds)
-                              _holdCountdown(),
+                            if (e.metric == ExerciseMetric.seconds) _holdCountdown(),
                             if (_isMinuteWarmup) _warmupCountdown(),
                             const SizedBox(height: 16),
                             if (!e.isWarmup)
@@ -735,29 +718,22 @@ class _LoggerScreenState extends State<LoggerScreen>
                                 spacing: 8,
                                 alignment: WrapAlignment.center,
                                 children: Rir.values
-                                    .map(
-                                      (r) => ChoiceChip(
-                                        label: Text(_rirLabel(r)),
-                                        selected: _rir == r,
-                                        onSelected: (_) =>
-                                            setState(() => _rir = r),
-                                      ),
-                                    )
+                                    .map((r) => ChoiceChip(
+                                          label: Text(_rirLabel(r)),
+                                          selected: _rir == r,
+                                          onSelected: (_) => setState(() => _rir = r),
+                                        ))
                                     .toList(),
                               ),
                             if (!e.isWarmup) const SizedBox(height: 12),
                             if (!e.isWarmup)
                               Tooltip(
-                                message:
-                                    'Stops progression for this exercise today. '
+                                message: 'Stops progression for this exercise today. '
                                     'Identify persistent pain at your next check-in.',
                                 child: FilterChip(
-                                  label: const Text(
-                                    'Pain — stop progression today',
-                                  ),
+                                  label: const Text('Pain — stop progression today'),
                                   selected: _painFlag,
-                                  onSelected: (v) =>
-                                      setState(() => _painFlag = v),
+                                  onSelected: (v) => setState(() => _painFlag = v),
                                 ),
                               ),
                             if (_painFlag)
@@ -768,12 +744,7 @@ class _LoggerScreenState extends State<LoggerScreen>
                               ),
                             if (_restSecondsLeft > 0) ...[
                               const SizedBox(height: 16),
-                              Text(
-                                'Rest: $_restSecondsLeft s',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
+                              Text('Rest: $_restSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
                             ],
                             if (e.instruction != null) ...[
                               const SizedBox(height: 16),
@@ -796,9 +767,8 @@ class _LoggerScreenState extends State<LoggerScreen>
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _finishing || _loggedValue <= 0
-                            ? null
-                            : _logSet,
+                        onPressed:
+                            _finishing || _loggedValue <= 0 ? null : _logSet,
                         child: Text(_logButtonLabel(e, isLast)),
                       ),
                     ),
@@ -870,9 +840,9 @@ class _LoggerScreenState extends State<LoggerScreen>
             FilledButton.tonalIcon(
               onPressed: _warmupTotalSeconds <= 0 ? null : _toggleWarmupTimer,
               icon: Icon(_warmupRunning ? Icons.pause : Icons.play_arrow),
-              label: Text(
-                _warmupRunning ? 'Pause' : (done ? 'Done' : 'Start warm-up'),
-              ),
+              label: Text(_warmupRunning
+                  ? 'Pause'
+                  : (done ? 'Done' : 'Start warm-up')),
             ),
             IconButton(
               tooltip: 'Reset warm-up timer',
@@ -891,8 +861,7 @@ class _LoggerScreenState extends State<LoggerScreen>
     // find the next step in a different exercise sharing the group
     for (var i = _current + 1; i < _steps.length; i++) {
       final other = _steps[i];
-      if (other.exIdx != step.exIdx &&
-          _ex[other.exIdx].supersetGroup == group) {
+      if (other.exIdx != step.exIdx && _ex[other.exIdx].supersetGroup == group) {
         return _ex[other.exIdx].name;
       }
     }
@@ -984,21 +953,15 @@ class _LoggerScreenState extends State<LoggerScreen>
       children: [
         SizedBox(width: 90, child: Text(_exercise.metric.inputLabel)),
         IconButton.filledTonal(
-          onPressed: () => _stepValue(-1),
-          icon: const Icon(Icons.remove),
-        ),
+            onPressed: () => _stepValue(-1),
+            icon: const Icon(Icons.remove)),
         SizedBox(
           width: 96,
-          child: Text(
-            '$_value',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          child: Text('$_value', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
         ),
         IconButton.filledTonal(
-          onPressed: () => _stepValue(1),
-          icon: const Icon(Icons.add),
-        ),
+            onPressed: () => _stepValue(1),
+            icon: const Icon(Icons.add)),
       ],
     );
   }
@@ -1011,10 +974,7 @@ class _LoggerScreenState extends State<LoggerScreen>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              '$_holdSecondsLeft s',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
+            Text('$_holdSecondsLeft s', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(width: 12),
             FilledButton.tonalIcon(
               onPressed: _value <= 0 ? null : _toggleHoldTimer,
@@ -1036,16 +996,16 @@ class _LoggerScreenState extends State<LoggerScreen>
     final action = exercise.isWarmup
         ? 'Log warm-up'
         : exercise.metric == ExerciseMetric.seconds
-        ? 'Log hold'
-        : 'Log set';
+            ? 'Log hold'
+            : 'Log set';
     return isLast ? '$action & finish' : action;
   }
 
   String _rirLabel(Rir r) => switch (r) {
-    Rir.rir0 => 'RIR 0',
-    Rir.rir1 => 'RIR 1',
-    Rir.rir2 => 'RIR 2',
-    Rir.rir3plus => 'RIR 3+',
-    Rir.rir4plus => 'RIR 4+',
-  };
+        Rir.rir0 => 'RIR 0',
+        Rir.rir1 => 'RIR 1',
+        Rir.rir2 => 'RIR 2',
+        Rir.rir3plus => 'RIR 3+',
+        Rir.rir4plus => 'RIR 4+',
+      };
 }
