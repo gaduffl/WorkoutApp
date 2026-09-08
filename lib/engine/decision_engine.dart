@@ -902,9 +902,19 @@ class DecisionEngine {
           continue;
         }
 
+        final lowerBackRecoveryPosteriorAccessory =
+            input.settings.lowerBackRecovery.active &&
+                (trackKey == lowerBackRecoveryFloorGluteBridge.trackKey ||
+                    trackKey ==
+                        lowerBackRecoverySlidingHamstringCurl.trackKey);
         final lowerBackRecoveryActive =
             input.settings.lowerBackRecovery.active &&
-                pattern == MovementPattern.hinge;
+                pattern == MovementPattern.hinge &&
+                namedExercise == null;
+        if (lowerBackRecoveryPosteriorAccessory &&
+            flag?.severity == PainSeverity.sharp) {
+          continue;
+        }
         if (lowerBackRecoveryActive &&
             !input.settings.travelMode &&
             flag?.severity != PainSeverity.sharp) {
@@ -928,12 +938,11 @@ class DecisionEngine {
 
         PainAction action = const PainAction(PainActionKind.none);
         if (lowerBackRecoveryActive) {
-          action = const PainAction(
-            PainActionKind.substituteNamed,
-            substitute: bridgeHamstringCurl,
-          );
           fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
-        } else if (flag != null && !reentryPending) {
+          continue;
+        } else if (flag != null &&
+            !reentryPending &&
+            !lowerBackRecoveryPosteriorAccessory) {
           action = painEngine.resolve(flag.region, flag.severity, pattern);
           if (action.kind != PainActionKind.none) {
             fired.add(FiredRule(
@@ -961,7 +970,8 @@ class DecisionEngine {
           exerciseRir = Rir.rir3plus;
         }
         if (lowerBackLoadMinimizedPlan &&
-            (pattern == MovementPattern.hinge ||
+            ((pattern == MovementPattern.hinge &&
+                    !lowerBackRecoveryPosteriorAccessory) ||
                 trackKey == lowerBackRecoveryPullUp.trackKey)) {
           exerciseRir = Rir.rir4plus;
         }
@@ -1520,6 +1530,10 @@ class DecisionEngine {
           'Bodyweight only. Keep a comfortable neutral trunk without a forced arch; stop if lower-back symptoms worsen or spread.',
         'sub:hinge:bridge_hamstring_curl' =>
           'Keep the range comfortable and the trunk quiet at 4+ RIR; stop if lower-back symptoms worsen or spread.',
+        'sub:hinge:lower_back_recovery_floor_glute_bridge' =>
+          'Use bodyweight only. Finish by squeezing the glutes without forcing the lower back into an arch. Keep at least 3 RIR; stop if symptoms worsen or spread.',
+        'sub:hinge:lower_back_recovery_sliding_hamstring_curl' =>
+          'Use sliders, towels, or socks on a suitable floor. Keep the trunk quiet and shorten the range as needed. Keep at least 3 RIR; stop if symptoms worsen or spread.',
         _ => null,
       };
 
@@ -1604,10 +1618,25 @@ class DecisionEngine {
       tier == SessionTier.compressed,
       lowerBackRecoveryDip as SubstituteExercise?,
     );
+    final floorGluteBridge = (
+      MovementPattern.hinge,
+      tier == SessionTier.compressed,
+      lowerBackRecoveryFloorGluteBridge as SubstituteExercise?,
+    );
+    final slidingHamstringCurl = (
+      MovementPattern.hinge,
+      tier == SessionTier.compressed,
+      lowerBackRecoverySlidingHamstringCurl as SubstituteExercise?,
+    );
 
     if (tier == SessionTier.compressed) {
       return switch (sessionId) {
-        SessionTypeId.s1 || SessionTypeId.s4 => [hinge, pullUp],
+        SessionTypeId.s1 || SessionTypeId.s4 => [
+            hinge,
+            floorGluteBridge,
+            slidingHamstringCurl,
+            pullUp,
+          ],
         SessionTypeId.s2 => [supportedPress, pullUp],
         SessionTypeId.s5 => [pullUp, curl],
         SessionTypeId.s3 ||
@@ -1620,6 +1649,8 @@ class DecisionEngine {
     return switch (sessionId) {
       SessionTypeId.s1 => [
           hinge,
+          floorGluteBridge,
+          slidingHamstringCurl,
           pullUp,
           curl,
           raise,
@@ -1637,6 +1668,8 @@ class DecisionEngine {
         ],
       SessionTypeId.s4 => [
           hinge,
+          floorGluteBridge,
+          slidingHamstringCurl,
           pullUp,
           if (!dropAccessories) ...[
             curl,

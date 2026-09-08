@@ -57,6 +57,10 @@ safety rules, validation, or delivery workflow changes.
 - While lower-back recovery mode is active, loaded hinge work and hinge progression
   stay blocked. Preserve the pre-recovery state for a graded return; merely completing
   a session must never unlock or advance it.
+- Recovery lower/full-body plans use separate bodyweight-only floor-glute-bridge and
+  sliding-hamstring-curl tracks at 3+ RIR. Credit them only to glutes and hamstrings,
+  respectively; never let either track advance the deadlift ladder or replace the
+  symptom-gated back-extension schedule. Suppress both when lower-back pain is sharp.
 - Every strength plan in lower-back recovery mode must come from the closed
   low-lumbar-load catalogue. Normal weighted squat, unsupported row/press, loaded
   pull-up, L-sit, weighted-hang, and weighted-dip ladder state must never leak into

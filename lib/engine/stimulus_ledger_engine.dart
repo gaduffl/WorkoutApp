@@ -42,6 +42,12 @@ class ExerciseMuscleMap {
       primary: {MajorMuscleGroup.triceps},
       secondary: {MajorMuscleGroup.chest, MajorMuscleGroup.delts},
     ),
+    'sub:hinge:lower_back_recovery_floor_glute_bridge': _MuscleProfile(
+      primary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:hinge:lower_back_recovery_sliding_hamstring_curl': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
+    ),
     'sub:coreGrip:db_curl': _MuscleProfile(
       primary: {MajorMuscleGroup.biceps},
     ),
@@ -73,6 +79,12 @@ class ExerciseMuscleMap {
     'floor press': _MuscleProfile(
       primary: {MajorMuscleGroup.chest},
       secondary: {MajorMuscleGroup.delts, MajorMuscleGroup.triceps},
+    ),
+    'floor glute bridge': _MuscleProfile(
+      primary: {MajorMuscleGroup.glutes},
+    ),
+    'sliding hamstring curl': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
     ),
     'wall push-up (pain-free range)': _MuscleProfile(
       primary: {MajorMuscleGroup.chest},

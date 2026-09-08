@@ -238,6 +238,20 @@ const lowerBackRecoveryDip = SubstituteExercise(
   visualId: 'parallelBarDip',
 );
 
+/// Recovery-only posterior-chain accessories. These have dedicated tracks so
+/// their bodyweight work cannot advance or overwrite the loaded hinge ladder.
+const lowerBackRecoveryFloorGluteBridge = SubstituteExercise(
+  slug: 'lower_back_recovery_floor_glute_bridge',
+  name: 'Floor glute bridge',
+  pattern: MovementPattern.hinge,
+);
+
+const lowerBackRecoverySlidingHamstringCurl = SubstituteExercise(
+  slug: 'lower_back_recovery_sliding_hamstring_curl',
+  name: 'Sliding hamstring curl',
+  pattern: MovementPattern.hinge,
+);
+
 /// §12 travel / no-equipment mode: each pattern's bodyweight resolution.
 /// Progression is by reps, hold duration, or ROM only — engine state is not advanced while
 /// travelling, but lastTrained still updates so §6.6 doesn't misfire later.
@@ -326,6 +340,12 @@ const Map<String, LadderStep> travelNamedSteps = {
     name: 'Bench / chair dip (bodyweight)',
     visualId: 'benchDip',
   ),
+  'sub:hinge:lower_back_recovery_floor_glute_bridge': LadderStep(
+    name: 'Floor glute bridge',
+  ),
+  'sub:hinge:lower_back_recovery_sliding_hamstring_curl': LadderStep(
+    name: 'Sliding hamstring curl',
+  ),
   'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
   'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
   'sub:pushVertical:overhead_triceps': LadderStep(name: 'Diamond push-up'),
@@ -346,6 +366,8 @@ final Map<String, SubstituteExercise> substituteRegistry = {
     lowerBackRecoveryPullUp,
     lowerBackRecoveryChestSupportedRow,
     lowerBackRecoveryDip,
+    lowerBackRecoveryFloorGluteBridge,
+    lowerBackRecoverySlidingHamstringCurl,
     ...s5NamedAccessories,
   ])
     s.trackKey: s,
