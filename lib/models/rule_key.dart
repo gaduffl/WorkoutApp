@@ -35,9 +35,6 @@ enum RuleKey {
   timeCompress35_20,
   travelModeActive,
   lowerBackRecoveryActive,
-  recoveryProgram,
-  stationaryBikePaused,
-  deadliftAlternative,
   lowerBackRecoveryLoadMinimized,
   lowerBackRecoverySpacing,
   lowerBackRecoveryReentry,
@@ -59,17 +56,18 @@ enum RuleKey {
 extension RuleKeyCode on RuleKey {
   /// Whether this key takes a `<pattern>` insertion (e.g. RECENCY_BOOST_SQUAT).
   bool get isPatternParameterized => switch (this) {
-    RuleKey.recencyBoost ||
-    RuleKey.painSubMild ||
-    RuleKey.painSubSharp ||
-    RuleKey.painFreeze ||
-    RuleKey.painMedicalEscalation ||
-    RuleKey.painReentryTest ||
-    RuleKey.deloadActive ||
-    RuleKey.detrainAdjust ||
-    RuleKey.capLadderJump => true,
-    _ => false,
-  };
+        RuleKey.recencyBoost ||
+        RuleKey.painSubMild ||
+        RuleKey.painSubSharp ||
+        RuleKey.painFreeze ||
+        RuleKey.painMedicalEscalation ||
+        RuleKey.painReentryTest ||
+        RuleKey.deloadActive ||
+        RuleKey.detrainAdjust ||
+        RuleKey.capLadderJump =>
+          true,
+        _ => false,
+      };
 
   /// Renders the exact closed-enum wire string, e.g. `PAIN_SUB_HINGE_SHARP`.
   String code({String? pattern}) {
@@ -135,12 +133,6 @@ extension RuleKeyCode on RuleKey {
         return 'TRAVEL_MODE_ACTIVE';
       case RuleKey.lowerBackRecoveryActive:
         return 'LOWER_BACK_RECOVERY_ACTIVE';
-      case RuleKey.recoveryProgram:
-        return 'RECOVERY_PROGRAM';
-      case RuleKey.stationaryBikePaused:
-        return 'STATIONARY_BIKE_PAUSED';
-      case RuleKey.deadliftAlternative:
-        return 'DEADLIFT_ALTERNATIVE';
       case RuleKey.lowerBackRecoveryLoadMinimized:
         return 'LOWER_BACK_RECOVERY_LOAD_MINIMIZED';
       case RuleKey.lowerBackRecoverySpacing:

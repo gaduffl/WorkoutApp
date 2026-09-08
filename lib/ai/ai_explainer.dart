@@ -79,9 +79,6 @@ class AiExplainer {
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.lowerBackRecoveryActive:
-      case RuleKey.recoveryProgram:
-      case RuleKey.stationaryBikePaused:
-      case RuleKey.deadliftAlternative:
         return 'dedicated lower-back recovery mode is active; loaded hinge work and load progression stay paused';
       case RuleKey.lowerBackRecoveryLoadMinimized:
         return 'lower-back recovery uses a load-minimized strength catalogue: symptom-gated back extensions, unweighted pull-ups, supported presses/rows, and ATG 1 pump work replace weighted squats, unsupported trunk loading, loaded pull-ups, and demanding core variants';
@@ -138,10 +135,7 @@ class AiExplainer {
         'please consult a medical professional before continuing to train the affected area.';
   }
 
-  Future<String> dailyExplanation(
-    DecisionTrace trace,
-    UserSettings settings,
-  ) async {
+  Future<String> dailyExplanation(DecisionTrace trace, UserSettings settings) async {
     // Safety escalation text is a fixed product rule, not narration. Return
     // it verbatim and never send it through the model where it could be
     // softened, paraphrased, or obscured by other rationale.
@@ -153,25 +147,13 @@ class AiExplainer {
     if (medicalEscalation.isNotEmpty) {
       return fallbackText(medicalEscalation.first, settings.language);
     }
-    final fallback =
-        _fallbackConcat(trace, settings.language) + _painAdvisory(trace);
-    if (trace.firedRules.any(
-      (r) =>
-          r.key == RuleKey.recoveryProgram ||
-          r.key == RuleKey.stationaryBikePaused,
-    )) {
-      return fallback;
-    }
+    final fallback = _fallbackConcat(trace, settings.language) + _painAdvisory(trace);
     if (!settings.aiExplanationsEnabled) return fallback;
     final apiKey = settings.anthropicApiKey;
     if (apiKey == null || apiKey.isEmpty) return fallback;
 
     try {
-      final text = await _callApi(
-        trace,
-        settings,
-        apiKey,
-      ).timeout(const Duration(seconds: 3));
+      final text = await _callApi(trace, settings, apiKey).timeout(const Duration(seconds: 3));
       if (text == null || text.trim().isEmpty) return fallback;
       return text.trim() + _painAdvisory(trace);
     } catch (_) {
@@ -179,11 +161,7 @@ class AiExplainer {
     }
   }
 
-  Future<String?> _callApi(
-    DecisionTrace trace,
-    UserSettings settings,
-    String apiKey,
-  ) async {
+  Future<String?> _callApi(DecisionTrace trace, UserSettings settings, String apiKey) async {
     final glossaryLines = trace.firedRules
         .map((rule) => '- ${rule.code}: ${_glossary(rule)}')
         .join('\n');
@@ -191,10 +169,9 @@ class AiExplainer {
     final planLine = trace.plan == null
         ? 'Outcome: ${trace.restReason ?? "rest day"}.'
         : 'Plan: ${trace.plan!.sessionName} (${trace.plan!.tier.name} tier), '
-              '${trace.plan!.exercises.map((e) => '${e.name} ${e.sets}x${e.targetLabel}').join(', ')}.';
+            '${trace.plan!.exercises.map((e) => '${e.name} ${e.sets}x${e.targetLabel}').join(', ')}.';
 
-    final prompt =
-        '''
+    final prompt = '''
 You are the "why" narrator for a deterministic workout-recommendation engine. You never decide anything - you only explain, in $langName, why today's plan is what it is.
 
 Readiness: bucket=${trace.recovery.bucket.name}, subjective=${trace.checkin.subjective}/5, composite=${trace.recovery.compositeScore.toStringAsFixed(0)}.
