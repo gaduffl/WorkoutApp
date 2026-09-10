@@ -2229,6 +2229,7 @@ class AppController extends ChangeNotifier {
       cardioCompletion: completion,
       isSupplemental: true,
       isUnplanned: true,
+      bypassProspectiveHighIntensityGate: true,
     );
   }
 
