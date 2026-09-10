@@ -101,6 +101,18 @@ void main() {
     );
   });
 
+  test('leg symptoms still block recovery even on green days', () {
+    for (final tag in PainTag.values) {
+      final output = plan(pain: [PainFlag(
+        region: BodyRegion.lowerBack,
+        severity: PainSeverity.mild,
+        flaggedDate: day,
+        tags: {tag},
+      )]);
+      expect(output.trace.plan, isNull, reason: tag.name);
+    }
+  });
+
   test('readiness restrictions still stop upper strength progression', () {
     final result = plan(id: SessionTypeId.s2, subjective: 1).trace.plan!;
     expect(
@@ -172,6 +184,10 @@ void main() {
         ),
       ],
     ).trace.plan!;
+    expect(
+      painful.exercises.where((e) => !e.isWarmup && e.trackKey == bridgeHamstringCurl.trackKey),
+      hasLength(1),
+    );
     expect(
       painful.exercises.any(
         (e) => e.trackKey == alternativeGluteBridge.trackKey,

@@ -1029,6 +1029,13 @@ class DecisionEngine {
             action.kind != PainActionKind.none;
         if (action.kind == PainActionKind.substituteNamed && action.substitute != null) {
           final sub = action.substitute!;
+          // Both deadlift alternatives can resolve to the same pain substitute.
+          // Prescribe that combined movement once rather than double its dose.
+          if ((namedExercise?.trackKey == alternativeGluteBridge.trackKey ||
+                  namedExercise?.trackKey == alternativeHamstringCurl.trackKey) &&
+              exercises.any((e) => !e.isWarmup && e.trackKey == sub.trackKey)) {
+            continue;
+          }
           substituteIsNew = !patchedStates.containsKey(sub.trackKey);
           final subState = patchedStates[sub.trackKey] ??
               ExerciseState(trackKey: sub.trackKey, pattern: sub.pattern);
@@ -1883,7 +1890,12 @@ class DecisionEngine {
       if (!resolution.hasWork) continue;
       hasPainSafeWork = true;
       final stimulusSlot = resolution.stimulusSlot;
-      if (stimulusSlot != null) stimulusSlots.add(stimulusSlot);
+      if (stimulusSlot != null && !stimulusSlots.any(
+        (existing) => existing.$1 == stimulusSlot.$1 &&
+            existing.$3?.trackKey == stimulusSlot.$3?.trackKey,
+      )) {
+        stimulusSlots.add(stimulusSlot);
+      }
     }
     return _PainAdjustedStrengthProjection(
       hasPainSafeWork: hasPainSafeWork,

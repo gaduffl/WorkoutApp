@@ -149,6 +149,27 @@ void main() {
     return controller;
   }
 
+  test('cycling pause blocks prescriptions but retains retrospective logging', () async {
+    final controller = AppController(Repository(_MemoryDatabase()))
+      ..settings = const UserSettings(stationaryBikePaused: true);
+    final plan = cardioPlan(SessionTypeId.s6, 35);
+    final completion = cardio.completionFromEntry(
+      prescription: plan.cardioPrescription!,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 35,
+      rpe: 4,
+    );
+    expect(controller.isPlanUsableNow(plan), isFalse);
+    expect(controller.isHighIntensityUsableNow(), isFalse);
+    expect(controller.restDayRehitEligibilityAt(DateTime.now()).eligible, isFalse);
+    await expectLater(controller.logCardioSession(SessionTypeId.s6,
+      completion: completion, plan: plan), throwsStateError);
+    await controller.logUnplannedZone2(completion: completion);
+    final logs = await controller.repo.loadSessionLogsSince(DateTime(2000));
+    expect(logs.single.isUnplanned, isTrue);
+    expect(controller.sessionLoggedToday, isFalse);
+  });
+
   test(
     'recovery completes and persists unaffected strength progression independently',
     () async {
