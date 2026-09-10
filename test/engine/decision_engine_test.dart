@@ -170,7 +170,8 @@ void main() {
         'hinge': originalHinge,
       },
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 1)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -216,7 +217,8 @@ void main() {
       recoveryHistory: normalHrvHistory(),
       sessionLogs: floorSatisfiedLogs(),
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -277,7 +279,8 @@ void main() {
       recoveryHistory: normalHrvHistory(),
       sessionLogs: floorSatisfiedLogs(),
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -323,7 +326,8 @@ void main() {
       recoveryHistory: normalHrvHistory(),
       sessionLogs: floorSatisfiedLogs(),
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -367,7 +371,8 @@ void main() {
       recoveryHistory: normalHrvHistory(),
       sessionLogs: floorSatisfiedLogs(),
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -477,7 +482,8 @@ void main() {
         sessionLogs: floorSatisfiedLogs(),
         exerciseStates: advancedStates,
         settings: UserSettings(
-          lowerBackRecovery: LowerBackRecoveryState(
+              recoveryBackExtensionsEnabled: true,
+              lowerBackRecovery: LowerBackRecoveryState(
             active: true,
             activatedAt: today.subtract(const Duration(days: 2)),
             symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -566,7 +572,8 @@ void main() {
       sessionLogs: floorSatisfiedLogs(),
       exerciseStates: advancedStates,
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
@@ -597,7 +604,7 @@ void main() {
     );
     expect(pullUp.loadTotal, isNull);
     expect(pullUp.rirTarget, Rir.rir4plus);
-    expect(pullUp.progressionEligible, isFalse);
+    expect(pullUp.progressionEligible, isTrue);
     expect(
       work.any(
         (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,
@@ -620,7 +627,8 @@ void main() {
       recoveryHistory: normalHrvHistory(),
       sessionLogs: floorSatisfiedLogs(),
       settings: UserSettings(
-        lowerBackRecovery: LowerBackRecoveryState(
+          recoveryBackExtensionsEnabled: true,
+          lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),

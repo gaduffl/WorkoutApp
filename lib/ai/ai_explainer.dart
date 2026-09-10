@@ -79,11 +79,11 @@ class AiExplainer {
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.lowerBackRecoveryActive:
-        return 'dedicated lower-back recovery mode is active; loaded hinge work and load progression stay paused';
+        return 'lower-back recovery mode is active; loaded hinge work stays paused while unaffected supported strength can progress';
       case RuleKey.lowerBackRecoveryLoadMinimized:
-        return 'lower-back recovery uses a load-minimized strength catalogue: symptom-gated back extensions, unweighted pull-ups, supported presses/rows, and ATG 1 pump work replace weighted squats, unsupported trunk loading, loaded pull-ups, and demanding core variants';
+        return 'lower-back recovery uses a load-minimized strength catalogue: floor bridges, sliding hamstring curls, gentle core work, unweighted pull-ups, supported presses/rows, and ATG 1 work; back extensions are optional and off by default. These exercises replace weighted squats, unsupported trunk loading, loaded pull-ups, and demanding core variants';
       case RuleKey.lowerBackRecoverySpacing:
-        return 'recovery exposure is not due under its spacing, frequency, and next-morning-response gates; hinge work remains replaced';
+        return 'optional back extensions are not due under their spacing, frequency, and next-morning-response gates; other supported strength remains available';
       case RuleKey.lowerBackRecoveryReentry:
         return 'symptom-gated graded elevated-start deadlift re-entry at 50% with no load increase';
       case RuleKey.painSubMild:

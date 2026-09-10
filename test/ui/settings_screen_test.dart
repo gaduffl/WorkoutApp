@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/models/user_settings.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/settings_screen.dart';
 
@@ -36,7 +37,7 @@ void main() {
         if (find.byKey(Key(controlKeys[index])).evaluate().isNotEmpty) index,
     ];
     final scrollDelta = materializedControlIndices.isNotEmpty &&
-            targetIndex < materializedControlIndices.first
+            targetIndex >= 0 && targetIndex < materializedControlIndices.first
         ? -400.0
         : 400.0;
 
@@ -68,6 +69,30 @@ void main() {
     await tester.tap(save);
     await tester.pump();
   }
+
+  testWidgets('recovery options start collapsed without phase or dose forms', (
+    tester,
+  ) async {
+    await pumpSettings(
+      tester,
+      settings: const UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(active: true),
+      ),
+    );
+    await scrollToControl(tester, 'recovery-options');
+    expect(find.byKey(const Key('settings-recovery-extensions')), findsNothing);
+    expect(find.textContaining('Phase 1'), findsNothing);
+    await tester.tap(find.byKey(const Key('recovery-options')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('settings-recovery-extensions')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('settings-stationary-bike-paused')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('blank HR override and API key explicitly clear saved values',
       (tester) async {

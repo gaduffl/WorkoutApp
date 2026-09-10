@@ -284,13 +284,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      Text(controller
-                                          .lowerBackRecovery.stageLabel),
-                                      Text(controller
-                                          .lowerBackRecovery.targetLabel),
+                                      const Text(
+                                        'Supported strength · glutes · hamstrings · gentle core',
+                                      ),
                                       const SizedBox(height: 4),
                                       const Text(
-                                        'High lumbar-load strength work is replaced by unweighted pull-ups, supported upper-body work, and ATG 1 pump work.',
+                                        'Your normal check-in chooses the workout. Unaffected strength exercises can progress; stationary cycling is paused.',
                                       ),
                                       if (controller
                                           .lowerBackMorningResponseDue) ...[

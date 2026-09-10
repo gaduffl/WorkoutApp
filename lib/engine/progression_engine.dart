@@ -139,6 +139,17 @@ class ProgressionEngine {
       );
     }
 
+    if (state.trackKey == lowerBackRecoveryPullUp.trackKey ||
+        state.trackKey == lowerBackRecoveryDip.trackKey) {
+      return ProgressionPresentation(
+        fraction: (stage / 2).clamp(0.0, 1.0),
+        label: step.name,
+        nextLabel: stage >= 2 ? 'Maintain controlled bodyweight reps; no added load'
+            : stage == 1 ? 'Next: controlled pause'
+            : 'Next: complete every set at the top of the range, then add tempo',
+      );
+    }
+
     final achievable = step.backpackLoaded
         ? equipment.allPerDumbbellSteps(cfg)
         : _achievableSet(step, cfg);
@@ -388,6 +399,11 @@ class ProgressionEngine {
   }
 
   void _advanceMicroOrLadder(ExerciseState s, EquipmentConfig cfg) {
+    if (s.trackKey == lowerBackRecoveryPullUp.trackKey ||
+        s.trackKey == lowerBackRecoveryDip.trackKey) {
+      s.microStepStage = math.min(2, s.microStepStage + 1);
+      return;
+    }
     if (s.microStepStage < 3) {
       s.microStepStage += 1; // tempo -> pause -> deficit
       return;

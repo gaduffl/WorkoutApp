@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/cardio_engine.dart';
+import 'package:morningcoach/engine/decision_engine.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
+import 'package:morningcoach/models/recovery_snapshot.dart';
 import 'package:morningcoach/engine/intensity_recovery_policy.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
@@ -145,6 +148,155 @@ void main() {
     );
     return controller;
   }
+
+  test('cycling pause blocks prescriptions but retains retrospective logging', () async {
+    final controller = AppController(Repository(_MemoryDatabase()))
+      ..settings = const UserSettings(stationaryBikePaused: true);
+    final plan = cardioPlan(SessionTypeId.s6, 35);
+    final completion = cardio.completionFromEntry(
+      prescription: plan.cardioPrescription!,
+      completedWorkIntervals: 1,
+      completedDurationMinutes: 35,
+      rpe: 4,
+    );
+    expect(controller.isPlanUsableNow(plan), isFalse);
+    expect(controller.isHighIntensityUsableNow(), isFalse);
+    expect(controller.restDayRehitEligibilityAt(DateTime.now()).eligible, isFalse);
+    await expectLater(controller.logCardioSession(SessionTypeId.s6,
+      completion: completion, plan: plan), throwsStateError);
+    await controller.logUnplannedZone2(completion: completion);
+    final logs = await controller.repo.loadSessionLogsSince(DateTime(2000));
+    expect(logs.single.isUnplanned, isTrue);
+    expect(controller.sessionLoggedToday, isFalse);
+  });
+
+  test(
+    'recovery completes and persists unaffected strength progression independently',
+    () async {
+      final now = DateTime.now();
+      final day = DateTime(now.year, now.month, now.day);
+      for (final id in [SessionTypeId.s2, SessionTypeId.s5]) {
+        final settings = UserSettings(
+          lowerBackRecovery: LowerBackRecoveryState(
+            active: true,
+            pendingNextMorningSessionDate: day.subtract(
+              const Duration(days: 1),
+            ),
+            pendingSameDayResponse: LowerBackSymptomResponse.unchanged,
+          ),
+        );
+        final originals = {
+          'hinge': ExerciseState(
+            trackKey: 'hinge',
+            pattern: MovementPattern.hinge,
+            currentLoad: 90,
+            ladderStepIndex: 2,
+          ),
+          for (final e in [
+            floorPress,
+            lowerBackRecoveryChestSupportedRow,
+            dbCurl,
+            lateralRaise,
+          ])
+            e.trackKey: ExerciseState(
+              trackKey: e.trackKey,
+              pattern: e.pattern,
+              currentLoad: 20,
+              lastTrainedDate: day.subtract(const Duration(days: 2)),
+            ),
+        };
+        final output = const DecisionEngine().decide(
+          DecisionEngineInput(
+      checkinHistory: const [],
+            checkin: CheckIn(
+              date: day,
+              timeMinutes: 60,
+              subjective: 4,
+              pain: [
+                PainFlag(
+                  region: BodyRegion.lowerBack,
+                  severity: PainSeverity.mild,
+                  flaggedDate: day,
+                ),
+              ],
+              timestamp: now,
+            ),
+            todaySnapshot: RecoverySnapshot(
+              date: day,
+              hrvRmssd: 50,
+              restingHr: 60,
+              sleepScore: 90,
+            ),
+            recoveryHistory: List.generate(
+              20,
+              (i) => RecoverySnapshot(
+                date: day.subtract(Duration(days: i + 1)),
+                hrvRmssd: 50,
+                restingHr: 60,
+                sleepScore: 90,
+              ),
+            ),
+            sessionLogs: const [],
+            exerciseStates: originals,
+            queueState: const QueueState(),
+            settings: settings,
+            today: day,
+            forcedSessionId: id,
+          ),
+        );
+        final plan = output.trace.plan!;
+        final controller = AppController(Repository(_MemoryDatabase()))
+          ..settings = settings
+          ..exerciseStates = output.patchedExerciseStates
+          ..todayTrace = output.trace;
+        final work = plan.exercises.where((e) => !e.isWarmup).toList();
+        final expectedTracks = id == SessionTypeId.s2
+            ? [
+                floorPress.trackKey,
+                lowerBackRecoveryChestSupportedRow.trackKey,
+                dbCurl.trackKey,
+                lateralRaise.trackKey,
+              ]
+            : [dbCurl.trackKey, lateralRaise.trackKey];
+        for (final key in expectedTracks) {
+          expect(
+            work.firstWhere((e) => e.trackKey == key).progressionEligible,
+            isTrue,
+          );
+        }
+        await controller.completeSession(plan, [
+          for (final e in work)
+            for (var i = 0; i < e.sets; i++)
+              SetLog(
+                trackKey: e.trackKey,
+                pattern: e.pattern,
+                exerciseName: e.name,
+                weight: e.loadTotal ?? 0,
+                value: e.targetRange.$2,
+                metric: e.metric,
+                rir: e.rirTarget,
+                timestamp: now,
+              ),
+        ], durationMinutes: plan.estimatedDurationMin);
+        final saved = await controller.repo.loadExerciseStates();
+        for (final key in expectedTracks) {
+          final next = saved[key]!;
+          expect(
+            next.currentLoad > 20 || next.microStepStage > 0,
+            isTrue,
+            reason: key,
+          );
+        }
+        expect(saved['hinge']!.currentLoad, 90);
+        expect(saved['hinge']!.ladderStepIndex, 2);
+        expect(
+          controller.lowerBackRecovery.pendingNextMorningSessionDate,
+          settings.lowerBackRecovery.pendingNextMorningSessionDate,
+        );
+        expect(controller.stationaryBikePaused, isTrue);
+      }
+    },
+  );
 
   test('manual swap records override but travel refresh preservation does not',
       () async {

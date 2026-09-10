@@ -499,6 +499,9 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'wakeWindow': u.wakeWindow,
       'checkInCutoffHour': u.checkInCutoffHour,
       'travelMode': u.travelMode,
+      'stationaryBikePaused': u.stationaryBikePaused,
+      'deadliftAlternative': u.deadliftAlternative,
+      'recoveryBackExtensionsEnabled': u.recoveryBackExtensionsEnabled,
       'classicHeatmap': u.classicHeatmap,
       'notificationsEnabled': u.notificationsEnabled,
       'secondRehitNudgeEnabled': u.secondRehitNudgeEnabled,
@@ -531,6 +534,12 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       wakeWindow: j['wakeWindow'] as String,
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
+  stationaryBikePaused:
+      j['stationaryBikePaused'] as bool? ??
+      ((j['lowerBackRecovery'] as Map?)?['active'] == true),
+  deadliftAlternative: j['deadliftAlternative'] as bool? ?? false,
+  recoveryBackExtensionsEnabled:
+      j['recoveryBackExtensionsEnabled'] as bool? ?? false,
       classicHeatmap: j['classicHeatmap'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
       secondRehitNudgeEnabled: j['secondRehitNudgeEnabled'] as bool? ?? false,
