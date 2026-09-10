@@ -132,22 +132,26 @@ class AppController extends ChangeNotifier {
                   s.painFrozen &&
                   s.painRegion == BodyRegion.lowerBack &&
                   s.painTags.isNotEmpty,
-            )))
+            ))) {
       return false;
+    }
     if (stationaryBikePaused &&
-        sessionTemplates[plan.sessionId]?.isCardioOnly == true)
+        sessionTemplates[plan.sessionId]?.isCardioOnly == true) {
       return false;
+    }
     if (settings.deadliftAlternative &&
-        plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name))
+        plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name)) {
       return false;
+    }
     if (lowerBackRecovery.active && !plan.lowerBackRecoveryMode) return false;
     if (lowerBackRecovery.active &&
         plan.exercises.any(
           (e) =>
               e.trackKey == lowerBackRecoveryTrackKey &&
               (!settings.recoveryBackExtensionsEnabled || e.loadTotal != null),
-        ))
+        )) {
       return false;
+    }
     return (plan.sessionId != SessionTypeId.s3 &&
           plan.sessionId != SessionTypeId.s7) ||
       isHighIntensityUsableNow(nowLocal: nowLocal);

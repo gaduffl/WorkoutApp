@@ -383,8 +383,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           recoveryBackExtensionsEnabled: v,
                         ),
                       );
-                      if (mounted)
+                      if (mounted) {
                         setState(() => _settings = controller.settings);
+                        }
                     },
                   ),
                 SwitchListTile(
@@ -404,8 +405,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               stationaryBikePaused: v,
                             ),
                           );
-                          if (mounted)
+                          if (mounted) {
                             setState(() => _settings = controller.settings);
+                            }
                         },
                 ),
                 SwitchListTile(
@@ -419,8 +421,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await controller.saveSettings(
                       controller.settings.copyWith(deadliftAlternative: v),
                     );
-                    if (mounted)
+                    if (mounted) {
                       setState(() => _settings = controller.settings);
+                      }
                   },
                 ),
               ],

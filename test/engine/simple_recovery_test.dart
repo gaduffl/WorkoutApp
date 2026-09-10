@@ -26,6 +26,7 @@ void main() {
     List<PainFlag> pain = const [],
   }) => const DecisionEngine().decide(
     DecisionEngineInput(
+      checkinHistory: const [],
       checkin: CheckIn(
         date: day,
         timeMinutes: minutes,

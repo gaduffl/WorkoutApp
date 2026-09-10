@@ -186,6 +186,7 @@ void main() {
         };
         final output = const DecisionEngine().decide(
           DecisionEngineInput(
+      checkinHistory: const [],
             checkin: CheckIn(
               date: day,
               timeMinutes: 60,
