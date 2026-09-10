@@ -629,3 +629,27 @@ treat filename as canonical version).
     glutes and sliding curls only to hamstrings. Sharp lower-back pain removes both;
     neither changes back-extension frequency/stage state nor the frozen deadlift
     ladder.
+
+
+## Session 2026-09-10 (simpler recovery, independent strength progression)
+
+77. **Reuse the existing planner instead of restoring the v2 takeover.** The supported
+    exercise selection from #50 runs through normal queue, duration and per-track
+    progression logic. No RecoveryProgram phase/dose dashboard is restored. Gentle
+    abdominal activation is a small fixed dose; the two bodyweight posterior tracks
+    remain separate, including S4 compressed from 60 to 35 minutes.
+78. **Unaffected progress is exercised through completion and persistence.** Floor
+    press, supported row, curls and raises keep normal progression eligibility.
+    Recovery pull-ups/dips progress tempo then pause, with a matching presentation
+    cap and no normal ladder/load advancement. Pending back-extension feedback does
+    not freeze these tracks; ordinary readiness, pain, deload and partial-set rules do.
+79. **Extensions and cycling have compact explicit controls.** Back extensions default
+    off and retain their own feedback when enabled. The controller caps their legacy
+    progression before deadlift re-entry/auto-exit. The cycling pause gates planning,
+    current actions, finishers and both reminder paths; exit persists the effective
+    flag as in #51. Retrospective logging stays available. Three boolean preferences
+    round-trip in settings; missing cycling flags on active legacy profiles default
+    paused, and missing extension flags default off.
+80. **The normal-training deadlift alternative has independent tracks.** It uses the
+    earlier #50 track keys, so saved alternative progression can be reused; it never
+    transfers a deadlift load. Recovery bodyweight variants retain their #53 keys.

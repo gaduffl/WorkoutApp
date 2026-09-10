@@ -18,6 +18,15 @@ class ExerciseMuscleMap {
   const ExerciseMuscleMap();
 
   static const Map<String, _MuscleProfile> _namedTracks = {
+    'sub:hinge:alternative_glute_bridge': _MuscleProfile(
+      primary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:hinge:alternative_hamstring_curl': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
+    ),
+    'sub:coreGrip:lower_back_abdominal_activation': _MuscleProfile(
+      primary: {MajorMuscleGroup.coreGrip},
+    ),
     'sub:hinge:bridge_hamstring_curl': _MuscleProfile(
       primary: {MajorMuscleGroup.hamstrings},
       secondary: {MajorMuscleGroup.glutes},

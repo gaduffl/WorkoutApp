@@ -311,66 +311,47 @@ Lowering weight after a break or a twinge is a **first-class engine event**, not
 
 ### 7.3 Dedicated lower-back recovery mode
 
-This is a conservative training modification, not a diagnosis of disc injury
-and not a promise of healing. Activation explicitly screens for spreading leg
-pain, numbness/tingling, weakness, saddle sensory change, bladder/bowel change,
-fever, major trauma, and rapid worsening. Emergency neurological signs direct
-the user to urgent care; persistent symptoms direct the user to a qualified
-clinical assessment.
+A training modification, not a diagnosis or healing claim. Activation retains the
+existing warning-sign confirmation. Current or persisted leg symptoms pause training;
+weakness, saddle sensory changes and bladder/bowel changes retain urgent guidance.
 
-While active, the normal hinge `ExerciseState` is snapshotted and frozen:
-loaded deadlifts and their load progression cannot appear. A scheduled hinge
-slot becomes the due recovery exposure or stays empty when the recovery-spacing
-gate is closed. Lower and full-body plans separately prescribe bodyweight floor
-glute bridges and sliding hamstring curls to retain some glute and hamstring
-stimulus without reusing the deadlift track. The self-built
-stool/block/PowerBlock setup is never described as inspected or certified.
+Recovery uses the normal morning check-in, queue, readiness, time budget, workout logger
+and muscle ledger. It has no mandatory phase dashboard, manual dose form, or daily
+exercise-selection task. Home shows a compact status; Settings keeps extra options in
+one collapsed section.
 
-The mode also replaces the normal strength catalogue rather than filtering
-only the hinge slot. No saved ladder position may reintroduce weighted squats,
-unsupported rows or presses, externally loaded pull-ups, L-sits, weighted
-hangs, or weighted dips. Strength sessions retain their original session IDs
-and queue credit but display as `Lower-back recovery · Pull + ATG 1` and use:
+The closed exercise catalogue restores the supported selection from PR #50:
+- supported floor press and chest-supported row;
+- curls and lateral raises, with torso support as needed;
+- assisted-as-needed unweighted pull-ups and bodyweight dips;
+- floor glute bridges and sliding hamstring curls on lower/full-body days;
+- a small gentle abdominal-activation dose on lower/full-body days when time permits.
 
-- assisted-as-needed bodyweight pull-ups at 4+ RIR with normal pull-up
-  progression frozen;
-- floor press and chest-supported dumbbell row for supported upper-body work;
-- alternating curls, lateral raises, and bodyweight-only dips for ATG 1 / pump
-  work at 3+ RIR;
-- the existing low-load ATG/knee-health preparation where the template owns
-  it; and
-- the symptom-gated back-extension exposure plus bodyweight floor glute bridges
-  and sliding hamstring curls at 3+ RIR on lower/full-body days.
+The last three posterior/core tracks remain conservative and progression-frozen.
+Supported upper-body load/tempo progression remains eligible on GREEN days, independently
+of pending back-extension feedback. Pull-ups and dips can progress tempo then pause on
+their dedicated bodyweight tracks, with no added load or normal ladder advancement.
+Every track retains pain, readiness, deload, travel and completed-set gates.
 
-Compressed 20-minute lower/full-body recovery sessions keep the recovery hinge
-slot, both posterior-chain accessories, and the unweighted pull-up when they fit
-the deterministic hard window; upper/pump sessions keep their first safe pair.
-A 60-to-35-minute compression removes pump accessories before the supported or
-posterior-chain work. Cardio sessions remain governed by their existing readiness
-and pain gates because they do not use the strength-exercise ladder.
+Normal loaded squat/deadlift ladders, unsupported rows/presses and demanding core
+ladders remain excluded. Both posterior accessories survive 60-to-35 compression;
+all work still obeys the hard duration budget. Bridges credit glutes and sliding curls
+credit hamstrings only through the existing logged-set ledger.
 
-The bridge and curl use independent bodyweight tracks, are progression-frozen
-with the rest of the recovery hinge catalogue, and contribute one primary-muscle
-set per qualifying logged set: bridge to glutes, curl to hamstrings. Both are
-omitted when lower-back pain is marked sharp. They do not progress recovery
-stages, replace a due back-extension exposure, or advance the loaded hinge ladder.
+Back extensions are optional and off by default. When explicitly enabled, the existing
+unloaded hold-to-controlled-repetition dose uses same-day/next-morning feedback, at
+most twice per rolling week and at least 48 hours apart. These constraints apply only
+to back extensions. Neither completing extensions nor reaching their dose ceiling
+ends recovery or restores deadlifts. The apparatus is not represented as certified.
 
-1. Start with `3 × 30 s` static back-extension holds, neutral-to-near-neutral,
-   at least 4 RIR and no failure. Progress by 10 s only after two tolerated
-   exposures, capped at `3 × 60 s`.
-2. Continue with `2 × 6` slow, unloaded repetitions through a comfortable
-   range. Progress by 2 reps after two tolerated exposures, capped at
-   `2 × 12`.
-3. Re-enter with `1 × 8` elevated-start deadlifts at the nearest achievable
-   total no higher than 50% of the snapshotted load, at least 4 RIR and no
-   increase that day. Two tolerated re-entry exposures complete the mode; the
-   re-entry load becomes the new hinge baseline.
+Stationary cycling (Zone 2, REHIT, 4×4, finishers and nudges) pauses during recovery.
+The effective pause persists on exit, including older profiles, as in PR #51. Settings
+allows explicit resumption afterwards. Already-performed activity remains loggable.
 
-Recovery exposures are capped at two per rolling seven days with at least 48
-hours between them. Completion alone never advances the dose: the logger
-requires an immediate better/same/worse response and Home requires the same
-comparison the following morning. Any worse response regresses one dose step;
-the pending morning response blocks another exposure.
+The separate `Keep deadlift alternatives` preference also replaces normal-training
+hinge slots with floor glute bridges and sliding hamstring curls. Their independent
+tracks start without transferring the old deadlift load and obey ordinary pain gates.
+Recovery itself always uses the bodyweight posterior variants.
 
 Evidence boundary: NICE NG59 supports self-management, continued normal
 activity, and exercise selected around the person's needs and capabilities;

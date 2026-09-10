@@ -80,6 +80,8 @@ class AppController extends ChangeNotifier {
   LowerBackRecoveryState get lowerBackRecovery =>
       settings.lowerBackRecovery;
 
+  bool get stationaryBikePaused => settings.stationaryBikePaused || lowerBackRecovery.active;
+
   bool get lowerBackMorningResponseDue {
     final sessionDate =
         settings.lowerBackRecovery.pendingNextMorningSessionDate;
@@ -93,6 +95,7 @@ class AppController extends ChangeNotifier {
   /// Today plan. Recheck every hard gate at the action/UI boundary so an old
   /// S3/S7 prescription cannot bypass recovery, pain, deload, or travel.
   bool isHighIntensityUsableNow({DateTime? nowLocal}) {
+    if (stationaryBikePaused) return false;
     final observedAt = nowLocal ?? DateTime.now();
     final trace = todayTrace;
     final currentTrace = trace != null && _isSameDate(trace.date, observedAt)
@@ -117,11 +120,38 @@ class AppController extends ChangeNotifier {
     return !safety.blocked;
   }
 
-  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) =>
-      plan == null ||
-      (plan.sessionId != SessionTypeId.s3 &&
+  bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) {
+    if (plan == null) return true;
+    if (lowerBackRecovery.active &&
+        ((todayTrace?.checkin.pain.any(
+                  (p) => p.region == BodyRegion.lowerBack && p.tags.isNotEmpty,
+                ) ??
+                false) ||
+            exerciseStates.values.any(
+              (s) =>
+                  s.painFrozen &&
+                  s.painRegion == BodyRegion.lowerBack &&
+                  s.painTags.isNotEmpty,
+            )))
+      return false;
+    if (stationaryBikePaused &&
+        sessionTemplates[plan.sessionId]?.isCardioOnly == true)
+      return false;
+    if (settings.deadliftAlternative &&
+        plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name))
+      return false;
+    if (lowerBackRecovery.active && !plan.lowerBackRecoveryMode) return false;
+    if (lowerBackRecovery.active &&
+        plan.exercises.any(
+          (e) =>
+              e.trackKey == lowerBackRecoveryTrackKey &&
+              (!settings.recoveryBackExtensionsEnabled || e.loadTotal != null),
+        ))
+      return false;
+    return (plan.sessionId != SessionTypeId.s3 &&
           plan.sessionId != SessionTypeId.s7) ||
       isHighIntensityUsableNow(nowLocal: nowLocal);
+  }
 
   /// Loaded from whole local calendar days so the shared recovery policy can
   /// apply its precision-aware trailing-48-hour filter and the rolling
@@ -386,7 +416,7 @@ class AppController extends ChangeNotifier {
             false,
         firstSession: firstSession,
         contraindicatingPainActive:
-            highIntensitySafety.contraindicatingPainActive,
+            highIntensitySafety.contraindicatingPainActive || stationaryBikePaused,
         painEscalationActive: painEscalationActive,
         globalDeloadActive: false,
         patternDeloadActive: patternDeloadActive,
@@ -723,6 +753,17 @@ class AppController extends ChangeNotifier {
   /// The rest-day REHIT reminder decision: is today going unused, is a short
   /// high-intensity exposure safe, and when would it fit?
   RestDayRehitResult restDayRehitEligibilityAt(DateTime nowLocal) {
+    if (stationaryBikePaused) {
+      return RestDayRehitResult(
+        closedReasons: const [
+          RestDayRehitClosedReason.contraindicatingPainActive,
+        ],
+        observedAt: nowLocal,
+        suggestedNudgeTime: null,
+        slotSource: null,
+        checkInMissing: todayTrace == null,
+      );
+    }
     final trace = todayTrace;
     final currentTrace =
         trace != null && _isSameDate(trace.date, nowLocal) ? trace : null;
@@ -944,10 +985,14 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveSettings(UserSettings newSettings) async {
-    final travelModeChanged = settings.travelMode != newSettings.travelMode;
+    final travelModeChanged = settings.travelMode != newSettings.travelMode ||
+        settings.stationaryBikePaused != newSettings.stationaryBikePaused ||
+        settings.deadliftAlternative != newSettings.deadliftAlternative ||
+        settings.recoveryBackExtensionsEnabled != newSettings.recoveryBackExtensionsEnabled;
     // The REHIT day marker is internal state, not an editable preference.
     // Preserve a marker written while a settings screen held an older copy.
     settings = newSettings.copyWith(
+      stationaryBikePaused: lowerBackRecovery.active || newSettings.stationaryBikePaused,
       secondRehitNudgeScheduledDay: settings.secondRehitNudgeScheduledDay,
       secondRehitNudgeScheduledFor: settings.secondRehitNudgeScheduledFor,
       restDayRehitNudgeScheduledDay: settings.restDayRehitNudgeScheduledDay,
@@ -976,6 +1021,8 @@ class AppController extends ChangeNotifier {
     }
     final now = today();
     settings = settings.copyWith(
+      stationaryBikePaused: true,
+      recoveryBackExtensionsEnabled: false,
       lowerBackRecovery: _lowerBackRecoveryEngine.activate(
         now: now,
         symptomOnsetDate: symptomOnsetDate,
@@ -983,6 +1030,7 @@ class AppController extends ChangeNotifier {
       ),
     );
     await repo.saveSettings(settings);
+    unawaited(syncNotifications());
     if (todayTrace != null && !sessionLoggedToday) {
       await _refreshPendingPlanForSettings();
       return;
@@ -993,12 +1041,15 @@ class AppController extends ChangeNotifier {
   Future<void> deactivateLowerBackRecovery() async {
     if (!settings.lowerBackRecovery.active) return;
     settings = settings.copyWith(
+      stationaryBikePaused: stationaryBikePaused,
+      recoveryBackExtensionsEnabled: false,
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
         settings.lowerBackRecovery,
         now: today(),
       ),
     );
     await repo.saveSettings(settings);
+    unawaited(syncNotifications());
     if (todayTrace != null && !sessionLoggedToday) {
       await _refreshPendingPlanForSettings();
       return;
@@ -1010,34 +1061,22 @@ class AppController extends ChangeNotifier {
     LowerBackSymptomResponse response,
   ) async {
     final previous = settings.lowerBackRecovery;
-    final next = _lowerBackRecoveryEngine.recordNextMorningResponse(
+    var next = _lowerBackRecoveryEngine.recordNextMorningResponse(
       previous,
       response: response,
       responseDate: today(),
     );
     if (identical(next, previous)) return;
-
-    settings = settings.copyWith(lowerBackRecovery: next);
-    if (previous.stage == LowerBackRecoveryStage.deadliftReentry &&
-        previous.active &&
-        !next.active &&
-        next.lastReentryLoad != null) {
-      final existing = exerciseStates[MovementPattern.hinge.name] ??
-          ExerciseState(
-            trackKey: MovementPattern.hinge.name,
-            pattern: MovementPattern.hinge,
-          );
-      final resumed = existing.clone()
-        ..currentLoad = next.lastReentryLoad!
-        ..status = ExerciseStatus.progress
-        ..lastTrainedDate = today()
-        ..consecutiveHoldCount = 0
-        ..microStepStage = 0
-        ..lastPrescriptionChange =
-            'Graded lower-back recovery re-entry baseline retained';
-      exerciseStates[resumed.trackKey] = resumed;
-      await repo.saveExerciseState(resumed);
+    if (previous.active && (!next.active || next.stage == LowerBackRecoveryStage.deadliftReentry)) {
+      next = next.copyWith(
+        active: true,
+        stage: LowerBackRecoveryStage.dynamicUnloaded,
+        consecutiveToleratedSessions: 0,
+        clearCompletedAt: true,
+        clearLastReentryLoad: true,
+      );
     }
+    settings = settings.copyWith(lowerBackRecovery: next);
     await repo.saveSettings(settings);
     if (todayTrace != null && !sessionLoggedToday) {
       await _refreshPendingPlanForSettings();
@@ -1639,7 +1678,7 @@ class AppController extends ChangeNotifier {
     }
     if (!bypassProspectiveHighIntensityGate && !isPlanUsableNow(plan)) {
       throw StateError(
-        'This high-intensity session does not pass the current recovery/safety gate.',
+        'This session no longer matches the current recovery/safety settings. Regenerate the plan.',
       );
     }
     final completedLowerBackRecovery = loggedSets.any(
@@ -2039,10 +2078,13 @@ class AppController extends ChangeNotifier {
     required CardioCompletion completion,
     SessionPlan? plan,
   }) async {
+    if (stationaryBikePaused) {
+      throw StateError('Stationary cycling is paused in Settings.');
+    }
     if ((id == SessionTypeId.s3 || id == SessionTypeId.s7) &&
         !isHighIntensityUsableNow()) {
       throw StateError(
-        'This high-intensity session does not pass the current recovery/safety gate.',
+        'This session no longer matches the current recovery/safety settings. Regenerate the plan.',
       );
     }
     final def = sessionTypes[id];

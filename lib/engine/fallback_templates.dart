@@ -123,16 +123,16 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.lowerBackRecoveryActive:
       return lang == AppLanguage.de
-          ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; heute gilt nur die konservative Recovery-Dosis.'
-          : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; only the conservative recovery dose applies today.';
+          ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; die konservative Dosis gilt nur für Rückenstrecker; unbelastete Bereiche können weiter Fortschritte machen.'
+          : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; the optional back-extension dose applies only to that exercise; unaffected strength work can progress.';
     case RuleKey.lowerBackRecoveryLoadMinimized:
       return lang == AppLanguage.de
           ? 'Der Rücken-Recovery-Modus minimiert die LWS-Last: keine belasteten Squats, ungestützten Rows oder Presses, Zusatzgewichte bei Pull-ups oder belastenden Core-Stufen. Stattdessen gelten gestützte Oberkörperarbeit, Pull-ups ohne Zusatzgewicht und ATG-1/Pump-Arbeit.'
           : 'Lower-back recovery minimizes lumbar loading: no weighted squats, unsupported rows or presses, added pull-up load, or demanding core steps. Supported upper-body work, unweighted pull-ups, and ATG 1 pump work are used instead.';
     case RuleKey.lowerBackRecoverySpacing:
       return lang == AppLanguage.de
-          ? 'Recovery-Arbeit ist heute wegen des 48-Stunden-Abstands, der Grenze von zwei Einheiten pro sieben Tage oder des noch offenen Morgen-Feedbacks nicht fällig; Heben bleibt ersetzt.'
-          : 'Recovery work is not due today because of the 48-hour spacing, two-per-seven-day cap, or pending morning feedback; hinge work stays replaced.';
+          ? 'Optionale Rückenstrecker-Arbeit ist heute wegen des 48-Stunden-Abstands, der Grenze von zwei Einheiten pro sieben Tage oder des noch offenen Morgen-Feedbacks nicht fällig; Heben bleibt ersetzt.'
+          : 'Optional back-extension work is not due today because of the 48-hour spacing, two-per-seven-day cap, or pending morning feedback; hinge work stays replaced.';
     case RuleKey.lowerBackRecoveryReentry:
       return lang == AppLanguage.de
           ? 'Die symptomgesteuerten Kriterien erlauben einen vorsichtigen Heben-Wiedereinstieg mit 50% und erhöhtem Start; heute keine Laststeigerung.'

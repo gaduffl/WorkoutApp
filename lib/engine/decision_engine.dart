@@ -223,6 +223,34 @@ class DecisionEngine {
         patchedStates,
       );
     }
+    if (input.settings.lowerBackRecovery.active &&
+        (checkin.pain.any(
+              (p) => p.region == BodyRegion.lowerBack && p.tags.isNotEmpty,
+            ) ||
+            patchedStates.values.any(
+              (s) =>
+                  s.painFrozen &&
+                  s.painRegion == BodyRegion.lowerBack &&
+                  s.painTags.isNotEmpty,
+            ))) {
+      fired.add(
+        const FiredRule(RuleKey.painMedicalEscalation, pattern: 'hinge'),
+      );
+      return DecisionEngineOutput(
+        DecisionTrace(
+          date: today,
+          checkin: checkin,
+          recovery: recoveryTrace,
+          candidates: const [],
+          firedRules: fired,
+          plan: null,
+          restReason:
+              'Leg symptoms reported: pause training and seek clinical assessment.',
+          queue: queueTraceBase,
+        ),
+        patchedStates,
+      );
+    }
     final sharpHipPainActive = painEngine.hipSharpActive(checkin.pain) ||
         patchedStates.values.any(
           (state) =>
@@ -269,6 +297,12 @@ class DecisionEngine {
 
     // --- Step 2: candidate filtering and target-status calculation ---
     final feasible = _feasibleCandidates(checkin.timeMinutes)
+        .where(
+          (id) =>
+              !(input.settings.stationaryBikePaused ||
+                  input.settings.lowerBackRecovery.active) ||
+              !sessionTemplates[id]!.isCardioOnly,
+        )
         .where(
           (id) =>
               !input.settings.travelMode ||
@@ -392,6 +426,7 @@ class DecisionEngine {
           travelMode: input.settings.travelMode,
           lowerBackRecoveryMode:
               input.settings.lowerBackRecovery.active,
+          deadliftAlternative: input.settings.deadliftAlternative,
         );
         final painAdjusted = _painAdjustedStrengthProjection(
           workSlots,
@@ -834,6 +869,7 @@ class DecisionEngine {
         travelMode: input.settings.travelMode,
         lowerBackRecoveryMode:
             input.settings.lowerBackRecovery.active,
+          deadliftAlternative: input.settings.deadliftAlternative,
       );
       for (final (pattern, usesCompoundSetCount, namedExercise) in slots) {
         final isGenuineCompound = namedExercise == null &&
@@ -916,6 +952,8 @@ class DecisionEngine {
           continue;
         }
         if (lowerBackRecoveryActive &&
+            input.settings.recoveryBackExtensionsEnabled &&
+            input.settings.lowerBackRecovery.stage != LowerBackRecoveryStage.deadliftReentry &&
             !input.settings.travelMode &&
             flag?.severity != PainSeverity.sharp) {
           final recoveryExercise =
@@ -938,7 +976,9 @@ class DecisionEngine {
 
         PainAction action = const PainAction(PainActionKind.none);
         if (lowerBackRecoveryActive) {
-          fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
+          if (input.settings.recoveryBackExtensionsEnabled) {
+            fired.add(const FiredRule(RuleKey.lowerBackRecoverySpacing));
+          }
           continue;
         } else if (flag != null &&
             !reentryPending &&
@@ -973,6 +1013,10 @@ class DecisionEngine {
             ((pattern == MovementPattern.hinge &&
                     !lowerBackRecoveryPosteriorAccessory) ||
                 trackKey == lowerBackRecoveryPullUp.trackKey)) {
+          exerciseRir = Rir.rir4plus;
+        }
+        if (trackKey == recoveryAbdominalActivation.trackKey) {
+          exerciseSets = 5;
           exerciseRir = Rir.rir4plus;
         }
         var persistLoad = false;
@@ -1097,10 +1141,7 @@ class DecisionEngine {
                 : (timedDeloadTarget, timedDeloadTarget));
         final lowerBackProgressionFrozen = lowerBackLoadMinimizedPlan &&
             (pattern == MovementPattern.hinge ||
-                prescriptionState.trackKey ==
-                    lowerBackRecoveryPullUp.trackKey ||
-                prescriptionState.trackKey ==
-                    lowerBackRecoveryDip.trackKey);
+                trackKey == recoveryAbdominalActivation.trackKey);
         final lowerBackInstruction = lowerBackLoadMinimizedPlan
             ? _lowerBackLoadMinimizedInstruction(
                 prescriptionState.trackKey,
@@ -1134,7 +1175,20 @@ class DecisionEngine {
               ? prescriptionStep.metric == ExerciseMetric.seconds
                   ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
                   : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
-              : painActionInstruction ?? lowerBackInstruction,
+              : painActionInstruction ??
+                    (lowerBackInstruction == null
+                        ? null
+                        : [
+                            lowerBackInstruction,
+                            if (!lowerBackProgressionFrozen &&
+                                progressionEligible &&
+                                !suppressMicroProgressionCue)
+                              _microProgressionInstruction(
+                                prescriptionState,
+                                prescriptionStep.metric,
+                                enabled: true,
+                              ),
+                          ].whereType<String>().join(' ')),
         );
 
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
@@ -1269,6 +1323,8 @@ class DecisionEngine {
         recovery.bucket == ReadinessBucket.green &&
         !recovery.illnessGuardFired &&
         !highIntensitySafety.blocked &&
+        !input.settings.stationaryBikePaused &&
+        !input.settings.lowerBackRecovery.active &&
         naturalHighIntensityTargetDue;
     if (template != null && !template.isCardioOnly) {
       final unbudgetedWork =
@@ -1517,7 +1573,9 @@ class DecisionEngine {
 
   String? _lowerBackLoadMinimizedInstruction(String trackKey) =>
       switch (trackKey) {
-        'sub:pullVertical:lower_back_pull_up' =>
+    'sub:coreGrip:lower_back_abdominal_activation' =>
+      'Lie comfortably with knees bent. Gently tighten the abdomen while breathing normally; do not flatten or arch the back. Stop if symptoms worsen or spread.',
+    'sub:pullVertical:lower_back_pull_up' =>
           'Use assistance as needed, keep at least 4 RIR, and avoid swinging or deliberately arching the lower back. No added weight; stop if lower-back symptoms worsen or spread.',
         'sub:pushHorizontal:floor_press' =>
           'Keep the pelvis and lower back comfortably supported; do not force a lifting arch. Stop if lower-back symptoms worsen or spread.',
@@ -1618,14 +1676,19 @@ class DecisionEngine {
       tier == SessionTier.compressed,
       lowerBackRecoveryDip as SubstituteExercise?,
     );
+    final abdominal = (
+      MovementPattern.coreGrip,
+      true,
+      recoveryAbdominalActivation as SubstituteExercise?,
+    );
     final floorGluteBridge = (
       MovementPattern.hinge,
-      tier == SessionTier.compressed,
+      tier == SessionTier.compressed || dropAccessories,
       lowerBackRecoveryFloorGluteBridge as SubstituteExercise?,
     );
     final slidingHamstringCurl = (
       MovementPattern.hinge,
-      tier == SessionTier.compressed,
+      tier == SessionTier.compressed || dropAccessories,
       lowerBackRecoverySlidingHamstringCurl as SubstituteExercise?,
     );
 
@@ -1652,6 +1715,7 @@ class DecisionEngine {
           floorGluteBridge,
           slidingHamstringCurl,
           pullUp,
+          abdominal,
           curl,
           raise,
           bodyweightDip,
@@ -1671,6 +1735,7 @@ class DecisionEngine {
           floorGluteBridge,
           slidingHamstringCurl,
           pullUp,
+        abdominal,
           if (!dropAccessories) ...[
             curl,
             raise,
@@ -1703,6 +1768,7 @@ class DecisionEngine {
     required double stimulusSetMultiplier,
     required bool travelMode,
     required bool lowerBackRecoveryMode,
+    bool deadliftAlternative = false,
   }) {
     final template = sessionTemplates[sessionId]!;
     final compress60to35 = isTimeCompressedSession(sessionId, tier);
@@ -1720,9 +1786,28 @@ class DecisionEngine {
             stimulusSetMultiplier: stimulusSetMultiplier,
             dropAccessories: compress60to35,
           );
-    if (!travelMode) return slots;
+    final resolvedSlots = [
+      for (final slot in slots)
+        if (deadliftAlternative &&
+            !lowerBackRecoveryMode &&
+            slot.$1 == MovementPattern.hinge &&
+            slot.$3 == null) ...[
+          (
+            MovementPattern.hinge,
+            slot.$2,
+            alternativeGluteBridge as SubstituteExercise?,
+          ),
+          (
+            MovementPattern.hinge,
+            slot.$2,
+            alternativeHamstringCurl as SubstituteExercise?,
+          ),
+        ] else
+          slot,
+    ];
+    if (!travelMode) return resolvedSlots;
 
-    final travelViable = slots
+    final travelViable = resolvedSlots
         .where((slot) => _travelStepFor(slot.$1, slot.$3) != null)
         .toList();
     if (travelViable.isNotEmpty) return travelViable;
@@ -1761,6 +1846,7 @@ class DecisionEngine {
       travelMode: input.settings.travelMode,
       lowerBackRecoveryMode:
           input.settings.lowerBackRecovery.active,
+          deadliftAlternative: input.settings.deadliftAlternative,
     );
     return _painAdjustedStrengthProjection(
       slots,
@@ -1835,6 +1921,30 @@ class DecisionEngine {
     }
     if (flag != null && painEngine.isEscalated(flag, input.today)) {
       return const _PainAdjustedSlotResolution(hasWork: false);
+    }
+
+    if (input.settings.lowerBackRecovery.active && pattern == MovementPattern.hinge) {
+      if (namedExercise == null) {
+        final due = input.settings.recoveryBackExtensionsEnabled &&
+            !input.settings.travelMode &&
+            input.settings.lowerBackRecovery.stage != LowerBackRecoveryStage.deadliftReentry &&
+            flag?.severity != PainSeverity.sharp &&
+            lowerBackRecoveryEngine.isSessionDue(
+              input.settings.lowerBackRecovery,
+              input.today,
+            );
+        return _PainAdjustedSlotResolution(hasWork: due);
+      }
+      if (flag?.severity == PainSeverity.sharp) return const _PainAdjustedSlotResolution(hasWork: false);
+      if (input.settings.travelMode && _travelStepFor(pattern, namedExercise) == null) return const _PainAdjustedSlotResolution(hasWork: false);
+      final prescription = progressionEngine.resolveTodaysPrescription(
+        state, input.today, input.settings.equipment,
+      );
+      return _PainAdjustedSlotResolution(
+        hasWork: true,
+        stimulusSlot: prescription.deloadActive || prescription.painReentryTestFired
+            ? null : slot,
+      );
     }
 
     final reentryPending = state.painReentryTestOffered &&
@@ -2124,7 +2234,7 @@ class DecisionEngine {
     for (final (pattern, isCompound, named) in slots) {
       // The recovery pull-up is deliberately held at 4+ RIR and therefore
       // maintains movement exposure without claiming hypertrophy stimulus.
-      if (named?.trackKey == lowerBackRecoveryPullUp.trackKey) continue;
+      if (named?.trackKey == lowerBackRecoveryPullUp.trackKey || named?.trackKey == recoveryAbdominalActivation.trackKey) continue;
       final perSet = exerciseMuscleMap.contributionForExercise(
         trackKey: named?.trackKey ?? pattern.name,
         pattern: pattern,

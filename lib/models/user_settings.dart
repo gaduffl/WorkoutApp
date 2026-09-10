@@ -40,6 +40,10 @@ class UserSettings {
   /// strength/cardio category heatmap.
   final bool classicHeatmap;
 
+  final bool stationaryBikePaused;
+  final bool deadliftAlternative;
+  final bool recoveryBackExtensionsEnabled;
+
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
 
@@ -92,6 +96,9 @@ class UserSettings {
     this.wakeWindow = '07:00',
     this.checkInCutoffHour = 10,
     this.travelMode = false,
+    this.stationaryBikePaused = false,
+    this.deadliftAlternative = false,
+    this.recoveryBackExtensionsEnabled = false,
     this.classicHeatmap = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeEnabled = false,
@@ -128,6 +135,9 @@ class UserSettings {
     String? wakeWindow,
     int? checkInCutoffHour,
     bool? travelMode,
+    bool? stationaryBikePaused,
+    bool? deadliftAlternative,
+    bool? recoveryBackExtensionsEnabled,
     bool? classicHeatmap,
     bool? notificationsEnabled,
     bool? secondRehitNudgeEnabled,
@@ -163,6 +173,9 @@ class UserSettings {
       wakeWindow: wakeWindow ?? this.wakeWindow,
       checkInCutoffHour: checkInCutoffHour ?? this.checkInCutoffHour,
       travelMode: travelMode ?? this.travelMode,
+      stationaryBikePaused: stationaryBikePaused ?? this.stationaryBikePaused,
+      deadliftAlternative: deadliftAlternative ?? this.deadliftAlternative,
+      recoveryBackExtensionsEnabled: recoveryBackExtensionsEnabled ?? this.recoveryBackExtensionsEnabled,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       secondRehitNudgeEnabled:

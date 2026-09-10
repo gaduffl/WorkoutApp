@@ -168,6 +168,8 @@ class SubstituteExercise {
   final MovementPattern pattern;
   final int dumbbells;
   final String? visualId;
+  final ExerciseMetric metric;
+  final (int, int)? targetRange;
 
   /// Bodyweight movement loaded by a backpack/belt (§2.6 rule 5) — e.g. dips.
   /// Progresses on reps at bodyweight, then in free-entered added weight.
@@ -179,6 +181,8 @@ class SubstituteExercise {
     required this.pattern,
     this.dumbbells = 0,
     this.visualId,
+    this.metric = ExerciseMetric.reps,
+    this.targetRange,
     this.backpackLoaded = false,
   });
 
@@ -187,6 +191,8 @@ class SubstituteExercise {
   /// The ladder step this named exercise resolves to.
   LadderStep get ladderStep => LadderStep(
         name: name,
+        metric: metric,
+        targetRange: targetRange,
         visualId: visualId,
         dumbbells: dumbbells,
         backpackLoaded: backpackLoaded,
@@ -248,6 +254,27 @@ const lowerBackRecoveryFloorGluteBridge = SubstituteExercise(
 
 const lowerBackRecoverySlidingHamstringCurl = SubstituteExercise(
   slug: 'lower_back_recovery_sliding_hamstring_curl',
+  name: 'Sliding hamstring curl',
+  pattern: MovementPattern.hinge,
+);
+
+const recoveryAbdominalActivation = SubstituteExercise(
+  slug: 'lower_back_abdominal_activation',
+  name: 'Gentle abdominal activation',
+  pattern: MovementPattern.coreGrip,
+  metric: ExerciseMetric.seconds,
+  targetRange: (6, 6),
+);
+
+const alternativeGluteBridge = SubstituteExercise(
+  slug: 'alternative_glute_bridge',
+  name: 'Floor glute bridge',
+  pattern: MovementPattern.hinge,
+  dumbbells: 1,
+);
+
+const alternativeHamstringCurl = SubstituteExercise(
+  slug: 'alternative_hamstring_curl',
   name: 'Sliding hamstring curl',
   pattern: MovementPattern.hinge,
 );
@@ -327,6 +354,14 @@ const s5NamedAccessories = <SubstituteExercise>[
 /// their normal track keys means the session still records recency for the
 /// intended slot while load-based progression remains frozen in travel mode.
 const Map<String, LadderStep> travelNamedSteps = {
+  'sub:coreGrip:lower_back_abdominal_activation': LadderStep(
+    name: 'Gentle abdominal activation',
+    metric: ExerciseMetric.seconds,
+    targetRange: (6, 6),
+  ),
+  'sub:hinge:alternative_glute_bridge': LadderStep(name: 'Floor glute bridge'),
+  // Sliding curls need sliders/towels and a compatible surface; no assumed
+  // no-equipment travel equivalent.
   'sub:hinge:bridge_hamstring_curl': LadderStep(name: 'Bridge hamstring curl'),
   'sub:hinge:light_sl_rdl': LadderStep(name: 'Single-leg RDL (bodyweight)'),
   'sub:pushHorizontal:floor_press': LadderStep(
@@ -342,9 +377,6 @@ const Map<String, LadderStep> travelNamedSteps = {
   ),
   'sub:hinge:lower_back_recovery_floor_glute_bridge': LadderStep(
     name: 'Floor glute bridge',
-  ),
-  'sub:hinge:lower_back_recovery_sliding_hamstring_curl': LadderStep(
-    name: 'Sliding hamstring curl',
   ),
   'sub:coreGrip:db_curl': LadderStep(name: 'Self-resisted curl'),
   'sub:pushVertical:lateral_raise': LadderStep(name: 'Prone Y-raise'),
@@ -368,6 +400,9 @@ final Map<String, SubstituteExercise> substituteRegistry = {
     lowerBackRecoveryDip,
     lowerBackRecoveryFloorGluteBridge,
     lowerBackRecoverySlidingHamstringCurl,
+    recoveryAbdominalActivation,
+    alternativeGluteBridge,
+    alternativeHamstringCurl,
     ...s5NamedAccessories,
   ])
     s.trackKey: s,

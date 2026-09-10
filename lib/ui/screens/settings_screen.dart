@@ -215,8 +215,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text(
           'This mode does not diagnose a disc injury or promise a cure. It '
           'replaces high lumbar-load strength work with unweighted pull-ups, '
-          'supported upper-body work, ATG 1 pump work, and a conservative '
-          'symptom-gated back-extension progression. Because pain has persisted for weeks, '
+          'supported upper-body work, glute bridges, sliding hamstring curls and '
+          'gentle core work. Unaffected strength work can progress. Stationary cycling pauses. Back extensions are optional. Because pain has persisted for weeks, '
           'arrange an assessment with a qualified clinician.\n\n'
           'Do not start this program if you have leg weakness, spreading leg '
           'pain, numbness or tingling, saddle-area numbness, bladder/bowel '
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text(
           'Normal loaded squat, hinge, press, row, pull-up, and core ladders '
           'may return on the next plan. End the mode only if you intentionally '
-          'want to leave its staged re-entry.',
+          'want to return to normal training. Cycling stays paused until you resume it in Settings.',
         ),
         actions: [
           TextButton(
@@ -357,8 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Recovery mode'),
               subtitle: Text(
                 controller.lowerBackRecovery.active
-                    ? '${controller.lowerBackRecovery.stageLabel}\n'
-                        '${controller.lowerBackRecovery.targetLabel} · lumbar-load-minimized strength catalogue active'
+                    ? 'Supported strength + glutes, hamstrings and gentle core. Unaffected exercises can progress.'
                     : 'Replace high lumbar-load strength work and use symptom-gated recovery work',
               ),
               value: controller.lowerBackRecovery.active,
@@ -366,16 +365,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? _startLowerBackRecovery()
                   : _stopLowerBackRecovery(),
             ),
-            if (controller.lowerBackRecovery.active)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'At most 2 recovery sessions per rolling 7 days, at least '
-                  '48 hours apart. Progress requires both same-day and '
-                  'next-morning symptoms to be no worse.',
-                  style: Theme.of(context).textTheme.bodySmall,
+            ExpansionTile(
+              key: const Key('recovery-options'),
+              title: const Text('Recovery options'),
+              children: [
+                if (controller.lowerBackRecovery.active)
+                  SwitchListTile(
+                    key: const Key('settings-recovery-extensions'),
+                    title: const Text('Include back extensions'),
+                    subtitle: const Text(
+                      'Optional, pain-tolerated work. Use after clinical advice; stop if symptoms worsen. A brief response after training and next morning controls this exercise only.',
+                    ),
+                    value: controller.settings.recoveryBackExtensionsEnabled,
+                    onChanged: (v) async {
+                      await controller.saveSettings(
+                        controller.settings.copyWith(
+                          recoveryBackExtensionsEnabled: v,
+                        ),
+                      );
+                      if (mounted)
+                        setState(() => _settings = controller.settings);
+                    },
+                  ),
+                SwitchListTile(
+                  key: const Key('settings-stationary-bike-paused'),
+                  title: const Text('Pause stationary cycling'),
+                  subtitle: Text(
+                    controller.lowerBackRecovery.active
+                        ? 'Paused during recovery, including finishers and reminders.'
+                        : 'Resume only when cycling is comfortable, including afterwards.',
+                  ),
+                  value: controller.stationaryBikePaused,
+                  onChanged: controller.lowerBackRecovery.active
+                      ? null
+                      : (v) async {
+                          await controller.saveSettings(
+                            controller.settings.copyWith(
+                              stationaryBikePaused: v,
+                            ),
+                          );
+                          if (mounted)
+                            setState(() => _settings = controller.settings);
+                        },
                 ),
-              ),
+                SwitchListTile(
+                  key: const Key('settings-deadlift-alternative'),
+                  title: const Text('Keep deadlift alternatives'),
+                  subtitle: const Text(
+                    'Use floor glute bridges and sliding hamstring curls in normal training too. Separate progression from deadlifts.',
+                  ),
+                  value: controller.settings.deadliftAlternative,
+                  onChanged: (v) async {
+                    await controller.saveSettings(
+                      controller.settings.copyWith(deadliftAlternative: v),
+                    );
+                    if (mounted)
+                      setState(() => _settings = controller.settings);
+                  },
+                ),
+              ],
+            ),
             const Divider(height: 32),
             Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
             SwitchListTile(

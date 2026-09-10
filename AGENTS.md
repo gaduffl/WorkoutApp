@@ -59,15 +59,27 @@ safety rules, validation, or delivery workflow changes.
   a session must never unlock or advance it.
 - Recovery lower/full-body plans use separate bodyweight-only floor-glute-bridge and
   sliding-hamstring-curl tracks at 3+ RIR. Credit them only to glutes and hamstrings,
-  respectively; never let either track advance the deadlift ladder or replace the
-  symptom-gated back-extension schedule. Suppress both when lower-back pain is sharp.
+  respectively; never let either track advance the deadlift ladder. Back extensions
+  are optional (off by default), with feedback and spacing limited to that exercise.
+  Suppress both posterior accessories when lower-back pain is sharp.
 - Every strength plan in lower-back recovery mode must come from the closed
   low-lumbar-load catalogue. Normal weighted squat, unsupported row/press, loaded
   pull-up, L-sit, weighted-hang, and weighted-dip ladder state must never leak into
   the plan. Use the dedicated unweighted/assisted pull-up, supported press/row, ATG 1
   accessories, and symptom-gated hinge tracks instead.
-- Recovery pull-ups carry no added load, stay at 4+ RIR, and cannot advance the normal
-  pull-up ladder. Bodyweight recovery dips likewise cannot unlock loaded dip work.
+- Recovery uses the normal queue, time budget and per-exercise progression engine,
+  not a second planner with mandatory phases or daily dose-selection forms. Supported
+  presses/rows, curls and raises retain normal load/tempo progression on GREEN days.
+  Recovery pull-ups (4+ RIR) and dips progress tempo then pause only, on dedicated
+  unweighted tracks. Neither advances a normal loaded ladder. Per-exercise pain,
+  partial-work, travel, readiness and deload gates still apply.
+- Stationary cycling, finishers and nudges pause during recovery; the effective pause
+  persists on exit, including legacy profiles. Resuming cycling is explicit in Settings.
+  Retrospective activity remains loggable. The independent deadlift-alternative setting
+  replaces normal hinge work with separate floor-bridge/curl tracks without load transfer.
+- Home displays one compact recovery summary. Settings keeps optional extension,
+  cycling and normal-training alternative controls collapsed. No automatic recovery
+  exit or deadlift re-entry follows tolerated extension sessions.
 - Back-extension recovery work advances only after recorded same-day and next-morning
   symptom tolerance. New/increasing radiating pain, numbness, tingling, weakness,
   saddle/genital sensory change, or bladder/bowel dysfunction blocks training and
