@@ -603,8 +603,9 @@ void main() {
           exercise.name == 'Pull-up (bodyweight; assisted as needed)',
     );
     expect(pullUp.loadTotal, isNull);
-    expect(pullUp.rirTarget, Rir.rir4plus);
+    expect(pullUp.rirTarget, Rir.rir3plus);
     expect(pullUp.progressionEligible, isTrue);
+    expect(pullUp.instruction, contains('at least 3 RIR'));
     expect(
       work.any(
         (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,

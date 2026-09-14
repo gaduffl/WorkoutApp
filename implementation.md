@@ -487,14 +487,15 @@ treat filename as canonical version).
     plan title makes the substitution visible without pretending that a lower
     workout was performed normally.
 58. **Recovery pull-ups and dips have dedicated substitute tracks.** Pull-ups
-    are bodyweight/assisted, fixed at 4+ RIR, and progression-ineligible; dips
-    are bodyweight-only and cannot advance the normal loaded-dip state.
+    are bodyweight/assisted at 3+ RIR; dips are bodyweight-only. Both use only
+    their tempo/pause micro-progression and cannot advance the normal loaded
+    pull-up or dip state.
     Chest-supported rows also use a dedicated track, while floor press, curls,
     and lateral raises reuse their existing explicit tracks and muscle maps.
 59. **Advanced normal ladder state is treated as hostile test input.** Engine
     regressions force every strength family with the ordinary ladders at their
     highest or loaded steps, then assert that the emitted recovery plan contains
-    none of their names and only work at 3+ RIR (4+ for pull-ups/hinge work).
+    none of their names and only work at 3+ RIR (4+ for hinge work).
 60. **A squash merge has exactly one APK publishing trigger.** Pull-request
     validation still runs on open, synchronize, and reopen, but `closed` no longer
     launches a second post-merge workflow. The `main` push is the sole automatic
@@ -653,3 +654,22 @@ treat filename as canonical version).
 80. **The normal-training deadlift alternative has independent tracks.** It uses the
     earlier #50 track keys, so saved alternative progression can be reused; it never
     transfers a deadlift load. Recovery bodyweight variants retain their #53 keys.
+
+## Session 2026-09-14 (mixed activity order and honest muscle exposure)
+
+81. **History uses one activity projection.** Session and bouldering rows are merged
+    before applying the 30-row limit and sorted newest-first by calendar day. Exact
+    session completion times lead date-only activities on the same day; stable ids
+    resolve remaining ties. This replaces the two separately sorted/rendered blocks
+    that always put every bouldering entry above every workout.
+82. **Today is exposure, not a second dose ledger.** When completed activity exists
+    today, History opens the Today tab and projects every non-zero, non-warm-up set,
+    including RIR 4+ recovery work. Otherwise it projects the pending plan. The view
+    is labelled exposure and cannot alter effective-set targets, recency, progression,
+    or recommendation inputs. The existing 28-day and recency tabs remain ledger-only.
+83. **Lumbar color is exact and display-only.** The bundled `lower-back` paths can
+    light in Today only for the canonical hinge track or the dedicated back-extension
+    track. Named floor bridges and sliding curls keep their glute/hamstring mappings.
+    Recovery pull-ups now target 3+ RIR, remain unweighted with tempo/pause-only
+    progression, and therefore earn ordinary back/biceps effective-set credit when
+    actually completed at a qualifying RIR.

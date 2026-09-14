@@ -1,7 +1,9 @@
 import '../models/cardio_protocol.dart';
 import '../models/bouldering_log.dart';
 import '../models/floor_category.dart';
+import '../models/lower_back_recovery.dart';
 import '../models/movement_pattern.dart';
+import '../models/plan.dart';
 import '../models/session_log.dart';
 import '../models/session_type.dart';
 import '../models/set_log.dart';
@@ -177,6 +179,19 @@ class ExerciseMuscleMap {
 
     return _patterns[pattern]!.effectiveSets;
   }
+
+  /// Direct lumbar exposure is intentionally separate from the hypertrophy
+  /// ledger's broad hinge profile. A deadlift or the dedicated extension can
+  /// light the lumbar anatomy in the worked-today view; named glute bridges
+  /// and hamstring curls do not inherit it merely because they occupy a hinge
+  /// slot.
+  bool isDirectLumbarExposure({
+    required String trackKey,
+    required MovementPattern pattern,
+  }) =>
+      trackKey == lowerBackRecoveryTrackKey ||
+      (trackKey == MovementPattern.hinge.name &&
+          pattern == MovementPattern.hinge);
 }
 
 class _MuscleProfile {
@@ -209,6 +224,124 @@ class TargetEffortPolicy {
 
   bool qualifies(SetLog set) =>
       !set.isWarmup && set.value > 0 && qualifyingRir.contains(set.rir);
+}
+
+/// Relative, non-diagnostic muscle exposure for the History "Today" view.
+/// It deliberately includes completed RIR 4+ work while leaving effective-set
+/// dose, target status, progression and recommendation inputs unchanged.
+class MuscleExposureSnapshot {
+  final Map<MajorMuscleGroup, double> muscles;
+  final double lowerBack;
+  final bool completed;
+
+  MuscleExposureSnapshot({
+    required Map<MajorMuscleGroup, double> muscles,
+    required this.lowerBack,
+    required this.completed,
+  }) : muscles = Map<MajorMuscleGroup, double>.unmodifiable(muscles);
+
+  bool get hasExposure =>
+      lowerBack > 0 || muscles.values.any((value) => value > 0);
+}
+
+class MuscleExposureEngine {
+  final ExerciseMuscleMap muscleMap;
+
+  const MuscleExposureEngine({
+    this.muscleMap = const ExerciseMuscleMap(),
+  });
+
+  MuscleExposureSnapshot fromCompleted({
+    required Iterable<SessionLog> logs,
+    Iterable<BoulderingLog> boulderingLogs = const [],
+  }) {
+    final totals = _emptyTotals();
+    var lumbar = 0.0;
+    for (final log in logs) {
+      for (final set in log.setLogs) {
+        if (set.isWarmup || set.value <= 0) continue;
+        _add(
+          totals,
+          muscleMap.contributionFor(set),
+          multiplier: 1,
+        );
+        if (muscleMap.isDirectLumbarExposure(
+          trackKey: set.trackKey,
+          pattern: set.pattern,
+        )) {
+          lumbar += 1;
+        }
+      }
+    }
+    const boulderingPolicy = BoulderingStimulusPolicy();
+    for (final log in boulderingLogs) {
+      _add(totals, boulderingPolicy.eventFor(log).effectiveSets);
+    }
+    return _normalized(totals, lumbar, completed: true);
+  }
+
+  MuscleExposureSnapshot fromPlan(Iterable<PlannedExercise> exercises) {
+    final totals = _emptyTotals();
+    var lumbar = 0.0;
+    for (final exercise in exercises) {
+      if (exercise.isWarmup || exercise.sets <= 0) continue;
+      _add(
+        totals,
+        muscleMap.contributionForExercise(
+          trackKey: exercise.trackKey,
+          pattern: exercise.pattern,
+          exerciseName: exercise.name,
+        ),
+        multiplier: exercise.sets.toDouble(),
+      );
+      if (muscleMap.isDirectLumbarExposure(
+        trackKey: exercise.trackKey,
+        pattern: exercise.pattern,
+      )) {
+        lumbar += exercise.sets;
+      }
+    }
+    return _normalized(totals, lumbar, completed: false);
+  }
+
+  Map<MajorMuscleGroup, double> _emptyTotals() => {
+        for (final muscle in MajorMuscleGroup.values) muscle: 0,
+      };
+
+  void _add(
+    Map<MajorMuscleGroup, double> totals,
+    Map<MajorMuscleGroup, double> contribution, {
+    double multiplier = 1,
+  }) {
+    for (final entry in contribution.entries) {
+      totals[entry.key] = totals[entry.key]! + entry.value * multiplier;
+    }
+  }
+
+  MuscleExposureSnapshot _normalized(
+    Map<MajorMuscleGroup, double> totals,
+    double lumbar, {
+    required bool completed,
+  }) {
+    var maximum = lumbar;
+    for (final value in totals.values) {
+      if (value > maximum) maximum = value;
+    }
+    if (maximum <= 0) {
+      return MuscleExposureSnapshot(
+        muscles: totals,
+        lowerBack: 0,
+        completed: completed,
+      );
+    }
+    return MuscleExposureSnapshot(
+      muscles: totals.map(
+        (muscle, value) => MapEntry(muscle, value / maximum),
+      ),
+      lowerBack: lumbar / maximum,
+      completed: completed,
+    );
+  }
 }
 
 /// Converts persisted session history into normalized stimulus events.

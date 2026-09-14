@@ -51,6 +51,7 @@ void main() {
           height: 260,
           child: AnatomicalMuscleMap(
             values: {MajorMuscleGroup.chest: 1},
+            lowerBackValue: 0.75,
           ),
         ),
       ),
@@ -61,6 +62,13 @@ void main() {
     expect(
       find.byKey(const Key('anatomical-muscle-map-paint')),
       findsOneWidget,
+    );
+    final paint = tester.widget<CustomPaint>(
+      find.byKey(const Key('anatomical-muscle-map-paint')),
+    );
+    expect(
+      (paint.painter! as AnatomicalMuscleMapPainter).lowerBackValue,
+      0.75,
     );
     expect(tester.takeException(), isNull);
   });

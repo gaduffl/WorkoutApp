@@ -11,6 +11,7 @@ import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/history_data.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -19,6 +20,8 @@ import 'package:morningcoach/models/training_targets.dart';
 import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/history_screen.dart';
+import 'package:morningcoach/ui/view_models/history_feedback_view_model.dart';
+import 'package:morningcoach/ui/widgets/anatomical_muscle_map.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -135,6 +138,145 @@ void main() {
     expect(day.boulderingLogs.single.id, 'boulder');
     expect(day.tooltip(DateTime(2026, 7, 13)), contains('1 activity'));
   });
+
+  test('mixed activity feed is newest first across activity types', () {
+    final newest = heatLog(
+      id: 's4-newest',
+      date: DateTime(2026, 9, 14),
+      type: SessionTypeId.s4,
+    );
+    final middle = heatLog(
+      id: 'zone2-middle',
+      date: DateTime(2026, 9, 12),
+      type: SessionTypeId.s6,
+    );
+    final entries = historyActivityEntries(
+      sessions: [middle, newest],
+      bouldering: [
+        BoulderingLog(
+          id: 'bouldering-oldest',
+          date: DateTime(2026, 9, 1),
+          durationMinutes: 90,
+          effort: BoulderingEffort.moderate,
+        ),
+      ],
+    );
+
+    expect(
+      entries.map((entry) => entry.stableId),
+      ['s4-newest', 'zone2-middle', 'bouldering-oldest'],
+    );
+  });
+
+  test('same-day exact sessions lead date-only activity deterministically', () {
+    final day = DateTime(2026, 9, 14);
+    final earlier = heatLog(id: 'session-early', date: day);
+    final later = SessionLog(
+      id: 'session-late',
+      templateId: SessionTypeId.s4,
+      tier: SessionTier.full,
+      date: day,
+      completedAt: day.add(const Duration(hours: 18)),
+      setLogs: const [],
+      plannedWorkSets: 0,
+      completedWorkSets: 0,
+      durationMinutes: 20,
+      countsAs: const {},
+    );
+    final legacy = SessionLog(
+      id: 'legacy-date-only',
+      templateId: SessionTypeId.s1,
+      tier: SessionTier.full,
+      date: day,
+      setLogs: const [],
+      plannedWorkSets: 0,
+      completedWorkSets: 0,
+      durationMinutes: 20,
+      countsAs: const {},
+    );
+
+    final entries = historyActivityEntries(
+      sessions: [legacy, earlier, later],
+      bouldering: [
+        BoulderingLog(
+          id: 'bouldering-date-only',
+          date: day,
+          durationMinutes: 60,
+          effort: BoulderingEffort.easy,
+        ),
+      ],
+    );
+
+    expect(
+      entries.map((entry) => entry.stableId),
+      [
+        'session-late',
+        'session-early',
+        'bouldering-date-only',
+        'legacy-date-only',
+      ],
+    );
+  });
+
+  testWidgets(
+    'completed recovery work opens Today exposure and lights upper and lower back',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final log = SessionLog(
+        id: 'recovery-s4',
+        templateId: SessionTypeId.s4,
+        tier: SessionTier.full,
+        date: asOf,
+        completedAt: asOf,
+        setLogs: [
+          SetLog(
+            trackKey: 'sub:pullVertical:lower_back_pull_up',
+            pattern: MovementPattern.pullVertical,
+            exerciseName: 'Pull-up (bodyweight; assisted as needed)',
+            weight: 0,
+            value: 8,
+            rir: Rir.rir4plus,
+            timestamp: asOf,
+          ),
+          SetLog(
+            trackKey: lowerBackRecoveryTrackKey,
+            pattern: MovementPattern.hinge,
+            exerciseName: 'Static back-extension hold',
+            weight: 0,
+            metric: ExerciseMetric.seconds,
+            value: 30,
+            rir: Rir.rir4plus,
+            timestamp: asOf,
+          ),
+        ],
+        plannedWorkSets: 2,
+        completedWorkSets: 2,
+        durationMinutes: 35,
+        countsAs: const {FloorCategory.strength},
+      );
+
+      await tester.pumpWidget(
+        app(loader: (_) async => dataWith(logs: [log])),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Muscles worked in today’s completed activity'),
+        findsOneWidget,
+      );
+      expect(find.text('Back worked'), findsOneWidget);
+      expect(find.text('Lower back worked'), findsOneWidget);
+      final paint = tester.widget<CustomPaint>(
+        find.byKey(const Key('anatomical-muscle-map-paint')),
+      );
+      final painter = paint.painter! as AnatomicalMuscleMapPainter;
+      expect(painter.values[MajorMuscleGroup.back], greaterThan(0));
+      expect(painter.lowerBackValue, greaterThan(0));
+    },
+  );
 
   testWidgets('year activity heatmap is the default history view',
       (tester) async {
