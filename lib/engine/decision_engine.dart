@@ -1010,9 +1010,8 @@ class DecisionEngine {
           exerciseRir = Rir.rir3plus;
         }
         if (lowerBackLoadMinimizedPlan &&
-            ((pattern == MovementPattern.hinge &&
-                    !lowerBackRecoveryPosteriorAccessory) ||
-                trackKey == lowerBackRecoveryPullUp.trackKey)) {
+            (pattern == MovementPattern.hinge &&
+                !lowerBackRecoveryPosteriorAccessory)) {
           exerciseRir = Rir.rir4plus;
         }
         if (trackKey == recoveryAbdominalActivation.trackKey) {
@@ -1583,7 +1582,7 @@ class DecisionEngine {
     'sub:coreGrip:lower_back_abdominal_activation' =>
       'Lie comfortably with knees bent. Gently tighten the abdomen while breathing normally; do not flatten or arch the back. Stop if symptoms worsen or spread.',
     'sub:pullVertical:lower_back_pull_up' =>
-          'Use assistance as needed, keep at least 4 RIR, and avoid swinging or deliberately arching the lower back. No added weight; stop if lower-back symptoms worsen or spread.',
+          'Use assistance as needed, keep at least 3 RIR, and avoid swinging or deliberately arching the lower back. No added weight; stop if lower-back symptoms worsen or spread.',
         'sub:pushHorizontal:floor_press' =>
           'Keep the pelvis and lower back comfortably supported; do not force a lifting arch. Stop if lower-back symptoms worsen or spread.',
         'sub:pullHorizontal:lower_back_chest_supported_row' =>
@@ -2244,9 +2243,10 @@ class DecisionEngine {
   }) {
     final result = <MajorMuscleGroup, double>{};
     for (final (pattern, isCompound, named) in slots) {
-      // The recovery pull-up is deliberately held at 4+ RIR and therefore
-      // maintains movement exposure without claiming hypertrophy stimulus.
-      if (named?.trackKey == lowerBackRecoveryPullUp.trackKey || named?.trackKey == recoveryAbdominalActivation.trackKey) continue;
+      // Gentle abdominal activation remains exposure-only at 4+ RIR. The
+      // assisted recovery pull-up is a conservative 3+ RIR stimulus and uses
+      // the same explicit back/biceps attribution as completed-set logging.
+      if (named?.trackKey == recoveryAbdominalActivation.trackKey) continue;
       final perSet = exerciseMuscleMap.contributionForExercise(
         trackKey: named?.trackKey ?? pattern.name,
         pattern: pattern,

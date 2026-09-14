@@ -11,7 +11,6 @@ import '../../models/plan.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../models/session_log.dart';
 import '../../models/session_type.dart';
-import '../../models/set_log.dart';
 import '../../models/stimulus_ledger.dart';
 import '../../models/training_status.dart';
 import '../../models/training_targets.dart';
@@ -118,6 +117,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final todayPlan = trace != null && _sameDay(trace.date, today)
               ? trace.plan
               : null;
+          final todayLogs = logs
+              .where((log) => _sameDay(log.date, today))
+              .toList();
+          final todayBouldering = boulderingLogs
+              .where((log) => _sameDay(log.date, today))
+              .toList();
+          final activityEntries = historyActivityEntries(
+            sessions: logs,
+            bouldering: boulderingLogs,
+          );
           final progressionSince = today.subtract(const Duration(days: 84));
 
           return ListView(
@@ -129,6 +138,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ledger: data.ledger,
                 status: data.trainingStatus,
                 todayExercises: todayPlan?.exercises ?? const [],
+                todayLogs: todayLogs,
+                todayBoulderingLogs: todayBouldering,
               ),
               const SizedBox(height: 12),
               if (controller.settings.classicHeatmap)
@@ -157,34 +168,46 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   padding: EdgeInsets.all(16),
                   child: Text('No activity logged yet.'),
                 ),
-              ...boulderingLogs.reversed.take(30).map(
-                    (log) => Card(
+              ...activityEntries.map(
+                (entry) {
+                  final bouldering = entry.bouldering;
+                  if (bouldering != null) {
+                    return Card(
+                      key: ValueKey('activity-bouldering-${bouldering.id}'),
                       child: ListTile(
                         dense: true,
                         leading: const Icon(Icons.terrain),
                         title: Text(
-                          'Bouldering · ${_boulderingEffortLabel(log.effort)}',
+                          'Bouldering · ${_boulderingEffortLabel(bouldering.effort)}',
                         ),
                         subtitle: Text(
-                          '${_d(log.date)} · ${log.durationMinutes} min · '
+                          '${_d(bouldering.date)} · ${bouldering.durationMinutes} min · '
                           'estimated pull/grip stimulus',
                         ),
                       ),
-                    ),
-                  ),
-              ...logs.reversed.take(30).map((l) => Card(
+                    );
+                  }
+                  final log = entry.session!;
+                  return Card(
+                    key: ValueKey('activity-session-${log.id}'),
                     child: ListTile(
                       dense: true,
-                      leading: l.travelMode ? const Icon(Icons.luggage_outlined) : null,
-                      title: Text('${l.templateId.name.toUpperCase()} - ${l.tier.name}'
-                          '${l.travelMode ? ' · travel' : ''}'
-                          '${_sessionOriginSuffix(l)}'),
+                      leading: log.travelMode
+                          ? const Icon(Icons.luggage_outlined)
+                          : null,
+                      title: Text(
+                        '${log.templateId.name.toUpperCase()} - ${log.tier.name}'
+                        '${log.travelMode ? ' · travel' : ''}'
+                        '${_sessionOriginSuffix(log)}',
+                      ),
                       subtitle: Text(
-                        '${_d(l.date)} - ${historySessionDoseSummary(l)}'
-                        '${_sessionCompletionSuffix(l)}',
+                        '${_d(log.date)} - ${historySessionDoseSummary(log)}'
+                        '${_sessionCompletionSuffix(log)}',
                       ),
                     ),
-                  )),
+                  );
+                },
+              ),
             ],
           );
         },
@@ -990,12 +1013,16 @@ class MuscleMapCard extends StatefulWidget {
   final StimulusLedgerSnapshot ledger;
   final TrainingStatus status;
   final List<PlannedExercise> todayExercises;
+  final List<SessionLog> todayLogs;
+  final List<BoulderingLog> todayBoulderingLogs;
 
   const MuscleMapCard({
     super.key,
     required this.ledger,
     required this.status,
     this.todayExercises = const [],
+    this.todayLogs = const [],
+    this.todayBoulderingLogs = const [],
   });
 
   @override
@@ -1006,12 +1033,45 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
   _MuscleMapMode _mode = _MuscleMapMode.dose;
 
   @override
+  void initState() {
+    super.initState();
+    if (_completedExposure.hasExposure) _mode = _MuscleMapMode.today;
+  }
+
+  @override
+  void didUpdateWidget(covariant MuscleMapCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldExposure = const MuscleExposureEngine().fromCompleted(
+      logs: oldWidget.todayLogs,
+      boulderingLogs: oldWidget.todayBoulderingLogs,
+    );
+    if (!oldExposure.hasExposure && _completedExposure.hasExposure) {
+      _mode = _MuscleMapMode.today;
+    }
+  }
+
+  MuscleExposureSnapshot get _completedExposure =>
+      const MuscleExposureEngine().fromCompleted(
+        logs: widget.todayLogs,
+        boulderingLogs: widget.todayBoulderingLogs,
+      );
+
+  MuscleExposureSnapshot get _todayExposure {
+    final completed = _completedExposure;
+    if (completed.hasExposure) return completed;
+    return const MuscleExposureEngine().fromPlan(widget.todayExercises);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final values = _values();
+    final exposure = _mode == _MuscleMapMode.today ? _todayExposure : null;
+    final values = _values(exposure);
     final title = switch (_mode) {
       _MuscleMapMode.dose => 'Completed effective sets in the trailing 28 days',
       _MuscleMapMode.recency => 'Days since last qualifying stimulus — not a fatigue score',
-      _MuscleMapMode.today => 'Expected qualifying set contribution in today’s plan',
+      _MuscleMapMode.today => exposure!.completed && exposure.hasExposure
+          ? 'Muscles worked in today’s completed activity — exposure, not effective-set credit'
+          : 'Expected muscle exposure in today’s plan',
     };
     return Card(
       child: Padding(
@@ -1052,20 +1112,30 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
               child: SizedBox(
                 height: 230,
                 width: double.infinity,
-                child: AnatomicalMuscleMap(values: values),
+                child: AnatomicalMuscleMap(
+                  values: values,
+                  lowerBackValue: exposure?.lowerBack ?? 0,
+                ),
               ),
             ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
               runSpacing: 6,
-              children: MajorMuscleGroup.values.map((muscle) {
-                final value = values[muscle] ?? 0;
-                return Text(
-                  '${_muscleLabel(muscle)} ${_muscleValue(muscle, value)}',
-                  style: Theme.of(context).textTheme.labelSmall,
-                );
-              }).toList(),
+              children: [
+                ...MajorMuscleGroup.values.map((muscle) {
+                  final value = values[muscle] ?? 0;
+                  return Text(
+                    '${_muscleLabel(muscle)} ${_muscleValue(muscle, value, exposure)}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  );
+                }),
+                if (_mode == _MuscleMapMode.today)
+                  Text(
+                    'Lower back ${exposure!.lowerBack > 0 ? (exposure.completed ? 'worked' : 'planned') : '—'}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+              ],
             ),
           ],
         ),
@@ -1073,7 +1143,9 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
     );
   }
 
-  Map<MajorMuscleGroup, double> _values() {
+  Map<MajorMuscleGroup, double> _values(
+    MuscleExposureSnapshot? exposure,
+  ) {
     if (_mode == _MuscleMapMode.dose) {
       return {
         for (final row in widget.status.muscle)
@@ -1092,22 +1164,7 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
           ),
       };
     }
-    final totals = {for (final muscle in MajorMuscleGroup.values) muscle: 0.0};
-    const map = ExerciseMuscleMap();
-    for (final exercise in widget.todayExercises) {
-      if (exercise.isWarmup || exercise.rirTarget == Rir.rir4plus) continue;
-      final contribution = map.contributionForExercise(
-        trackKey: exercise.trackKey,
-        pattern: exercise.pattern,
-        exerciseName: exercise.name,
-      );
-      for (final entry in contribution.entries) {
-        totals[entry.key] = totals[entry.key]! + entry.value * exercise.sets;
-      }
-    }
-    final max = totals.values.fold<double>(0, (a, b) => a > b ? a : b);
-    if (max == 0) return totals;
-    return totals.map((key, value) => MapEntry(key, value / max));
+    return exposure!.muscles;
   }
 
   double _recencyLevel(int? days) {
@@ -1118,7 +1175,11 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
     return 0.18;
   }
 
-  String _muscleValue(MajorMuscleGroup muscle, double normalized) {
+  String _muscleValue(
+    MajorMuscleGroup muscle,
+    double normalized,
+    MuscleExposureSnapshot? exposure,
+  ) {
     if (_mode == _MuscleMapMode.dose) {
       return _sets(widget.ledger.muscle(muscle).effectiveSets28d);
     }
@@ -1126,7 +1187,11 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
       final days = widget.ledger.muscle(muscle).daysSinceLastStimulus;
       return days == null ? 'never' : '${days}d';
     }
-    return normalized <= 0 ? '—' : 'planned';
+    return normalized <= 0
+        ? '—'
+        : exposure!.completed
+            ? 'worked'
+            : 'planned';
   }
 }
 

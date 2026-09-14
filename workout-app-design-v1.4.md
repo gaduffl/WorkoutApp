@@ -331,6 +331,8 @@ The last three posterior/core tracks remain conservative and progression-frozen.
 Supported upper-body load/tempo progression remains eligible on GREEN days, independently
 of pending back-extension feedback. Pull-ups and dips can progress tempo then pause on
 their dedicated bodyweight tracks, with no added load or normal ladder advancement.
+Assisted-as-needed recovery pull-ups target at least 3 RIR, so completed sets can
+contribute conservative back/biceps effective-set credit under the ordinary ledger.
 Every track retains pain, readiness, deload, travel and completed-set gates.
 
 Normal loaded squat/deadlift ladders, unsupported rows/presses and demanding core
@@ -442,7 +444,7 @@ no planner-duration estimate for accuracy comparisons.
 1. **Check-in** — time buttons, feel 1–5, body map, Oura strip (pre-filled), submit.
 2. **Today** — session card: name/tier, AI "why" text, exercise list with targets, start button, "swap session" (shows the 2 next-ranked alternatives from the decision trace, keeping user agency).
 3. **Logger** — one exercise at a time; global exercise/set progress; concise last-time performance; original static start/finish guide when the resolved exercise has an explicit visual ID; big steppers for weight/reps; RIR buttons (0/1/2/3+); pain button; rest timer; "wrap up" button. Android keeps the display awake only while this route is active and resumed.
-4. **History** — fixed-scale 53-week activity heatmap by elapsed training time (tap for daily detail), muscle map with 28-day dose / recency / today's expected contribution, per-pattern 12-week progression charts, and HRV/readiness overlay. Settings offers **Classic heatmap** to restore the original compact 12-week strength / Zone 2 / VO₂-REHIT category view; the preference changes presentation only.
+4. **History** — fixed-scale 53-week activity heatmap by elapsed training time (tap for daily detail), one newest-first activity feed across workouts and bouldering, muscle map with 28-day effective-set dose / qualifying-stimulus recency / today's completed-or-planned exposure, per-pattern 12-week progression charts, and HRV/readiness overlay. Today's exposure includes non-zero conservative RIR 4+ work without converting it into effective-set credit. The lumbar anatomy lights only for a canonical hinge or dedicated back extension, not for named bridges/curls occupying a hinge slot. Settings offers **Classic heatmap** to restore the original compact 12-week strength / Zone 2 / VO₂-REHIT category view; the preference changes presentation only.
 5. **Settings** — equipment & max loads, weekly floor, rep ranges, Oura token, language, AI tone.
 
 ---

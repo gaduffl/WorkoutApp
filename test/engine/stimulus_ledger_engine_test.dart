@@ -4,6 +4,7 @@ import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -295,6 +296,47 @@ void main() {
       expect(result.muscle(MajorMuscleGroup.delts).effectiveSets7d, 0.5);
       expect(result.muscle(MajorMuscleGroup.coreGrip).effectiveSets7d, 0);
     });
+
+    test(
+      'worked-today exposure includes conservative pull-ups and lumbar extensions without changing dose',
+      () {
+        final log = strengthLog(
+          id: 'recovery-exposure',
+          templateId: SessionTypeId.s4,
+          sets: [
+            set(
+              trackKey: 'sub:pullVertical:lower_back_pull_up',
+              pattern: MovementPattern.pullVertical,
+              name: 'Pull-up (bodyweight; assisted as needed)',
+              rir: Rir.rir4plus,
+            ),
+            set(
+              trackKey: lowerBackRecoveryTrackKey,
+              pattern: MovementPattern.hinge,
+              name: 'Static back-extension hold',
+              rir: Rir.rir4plus,
+            ),
+            set(
+              trackKey:
+                  'sub:hinge:lower_back_recovery_floor_glute_bridge',
+              pattern: MovementPattern.hinge,
+              name: 'Floor glute bridge',
+              rir: Rir.rir3plus,
+            ),
+          ],
+        );
+
+        final dose = engine.buildFromSessionLogs(logs: [log], asOf: asOf);
+        final exposure = const MuscleExposureEngine().fromCompleted(
+          logs: [log],
+        );
+
+        expect(dose.muscle(MajorMuscleGroup.back).effectiveSets7d, 0);
+        expect(exposure.muscles[MajorMuscleGroup.back], greaterThan(0));
+        expect(exposure.muscles[MajorMuscleGroup.glutes], greaterThan(0));
+        expect(exposure.lowerBack, greaterThan(0));
+      },
+    );
 
     test('recovery bridge and sliding curl keep distinct posterior credit',
         () {

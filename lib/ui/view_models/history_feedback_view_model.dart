@@ -1,5 +1,6 @@
 import '../../engine/stimulus_ledger_engine.dart';
 import '../../engine/training_status_engine.dart';
+import '../../models/bouldering_log.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/session_log.dart';
 import '../../models/session_type.dart';
@@ -10,6 +11,54 @@ import '../../models/training_targets.dart';
 enum MuscleTargetBandState { belowMinimum, inBand, aboveMaximum }
 
 enum CardioTargetState { met, deficit, notNeeded }
+
+/// One row in History's mixed activity feed. Bouldering currently has
+/// calendar-date precision only, while modern MorningCoach sessions carry an
+/// exact completion time. Exact sessions sort ahead of date-only entries on
+/// the same day; the stable id makes remaining ties deterministic.
+class HistoryActivityEntry {
+  final SessionLog? session;
+  final BoulderingLog? bouldering;
+
+  const HistoryActivityEntry._({this.session, this.bouldering})
+      : assert((session == null) != (bouldering == null));
+
+  factory HistoryActivityEntry.session(SessionLog value) =>
+      HistoryActivityEntry._(session: value);
+
+  factory HistoryActivityEntry.bouldering(BoulderingLog value) =>
+      HistoryActivityEntry._(bouldering: value);
+
+  DateTime get date => session?.date ?? bouldering!.date;
+  DateTime get sortAt => session?.completedAt ?? bouldering!.date;
+  bool get hasExactTime =>
+      session?.completedAtPrecision == CompletionTimePrecision.exact;
+  String get stableId => session?.id ?? bouldering!.id;
+}
+
+List<HistoryActivityEntry> historyActivityEntries({
+  required Iterable<SessionLog> sessions,
+  required Iterable<BoulderingLog> bouldering,
+  int limit = 30,
+}) {
+  final entries = <HistoryActivityEntry>[
+    ...sessions.map(HistoryActivityEntry.session),
+    ...bouldering.map(HistoryActivityEntry.bouldering),
+  ];
+  entries.sort((a, b) {
+    final aDay = DateTime(a.date.year, a.date.month, a.date.day);
+    final bDay = DateTime(b.date.year, b.date.month, b.date.day);
+    final dayOrder = bDay.compareTo(aDay);
+    if (dayOrder != 0) return dayOrder;
+    if (a.hasExactTime != b.hasExactTime) return a.hasExactTime ? -1 : 1;
+    if (a.hasExactTime) {
+      final timeOrder = b.sortAt.compareTo(a.sortAt);
+      if (timeOrder != 0) return timeOrder;
+    }
+    return a.stableId.compareTo(b.stableId);
+  });
+  return List<HistoryActivityEntry>.unmodifiable(entries.take(limit));
+}
 
 class MuscleTargetRowModel {
   final MajorMuscleGroup muscle;

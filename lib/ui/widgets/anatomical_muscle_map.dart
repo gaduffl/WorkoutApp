@@ -9,8 +9,13 @@ import 'svg_path_parser.dart';
 /// Anatomical front/back projection of MorningCoach's existing muscle ledger.
 class AnatomicalMuscleMap extends StatelessWidget {
   final Map<MajorMuscleGroup, double> values;
+  final double lowerBackValue;
 
-  const AnatomicalMuscleMap({super.key, required this.values});
+  const AnatomicalMuscleMap({
+    super.key,
+    required this.values,
+    this.lowerBackValue = 0,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -27,6 +32,7 @@ class AnatomicalMuscleMap extends StatelessWidget {
               key: const Key('anatomical-muscle-map-paint'),
               painter: AnatomicalMuscleMapPainter(
                 values: values,
+                lowerBackValue: lowerBackValue,
                 colorScheme: Theme.of(context).colorScheme,
               ),
               child: const SizedBox.expand(),
@@ -54,10 +60,12 @@ MajorMuscleGroup? majorMuscleGroupForAnatomicalSlug(String slug) =>
 
 class AnatomicalMuscleMapPainter extends CustomPainter {
   final Map<MajorMuscleGroup, double> values;
+  final double lowerBackValue;
   final ColorScheme colorScheme;
 
   const AnatomicalMuscleMapPainter({
     required this.values,
+    this.lowerBackValue = 0,
     required this.colorScheme,
   });
 
@@ -102,11 +110,16 @@ class AnatomicalMuscleMapPainter extends CustomPainter {
     canvas.translate(-body.left, -body.top);
     for (final group in body.groups) {
       final muscle = majorMuscleGroupForAnatomicalSlug(group.slug);
-      final strength = muscle == null
-          ? 0.0
-          : (values[muscle] ?? 0).clamp(0.0, 1.0);
+      final isLowerBackExposure = group.slug == 'lower-back';
+      final tracked = muscle != null ||
+          (isLowerBackExposure && lowerBackValue > 0);
+      final strength = isLowerBackExposure
+          ? lowerBackValue.clamp(0.0, 1.0)
+          : muscle == null
+              ? 0.0
+              : (values[muscle] ?? 0).clamp(0.0, 1.0);
       final fill = Paint()
-        ..color = muscle == null
+        ..color = !tracked
             ? base
             : Color.lerp(
                 colorScheme.primaryContainer.withValues(alpha: 0.42),
@@ -124,5 +137,7 @@ class AnatomicalMuscleMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant AnatomicalMuscleMapPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.colorScheme != colorScheme;
+      oldDelegate.values != values ||
+      oldDelegate.lowerBackValue != lowerBackValue ||
+      oldDelegate.colorScheme != colorScheme;
 }
