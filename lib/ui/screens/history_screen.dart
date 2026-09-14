@@ -11,7 +11,6 @@ import '../../models/plan.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../models/session_log.dart';
 import '../../models/session_type.dart';
-import '../../models/set_log.dart';
 import '../../models/stimulus_ledger.dart';
 import '../../models/training_status.dart';
 import '../../models/training_targets.dart';
