@@ -22,6 +22,7 @@ import '../models/set_log.dart';
 import '../models/training_status.dart';
 import '../models/training_targets.dart';
 import '../models/user_settings.dart';
+import '../models/workout_draft.dart';
 import '../engine/queue_engine.dart';
 
 String _dateStr(DateTime d) => DateTime(d.year, d.month, d.day).toIso8601String();
@@ -1014,3 +1015,51 @@ DecisionTrace decisionTraceFromJson(Map<String, dynamic> j) {
     ),
   );
 }
+
+Map<String, dynamic> workoutDraftToJson(WorkoutDraft d) => {
+      'plan': sessionPlanToJson(d.plan),
+      'startedAt': d.startedAt.toIso8601String(),
+      'stepStartedAt': d.stepStartedAt.toIso8601String(),
+      'superset': d.superset,
+      'current': d.current,
+      'logged': d.logged.map(setLogToJson).toList(),
+      'loggedKeys': d.loggedKeys,
+      'weights': d.weights.map((key, value) => MapEntry('$key', value)),
+      'value': d.value,
+      'rir': d.rir.name,
+      'painFlag': d.painFlag,
+      'plannedRestIntoStep': d.plannedRestIntoStep,
+      'restEndsAt': d.restEndsAt?.toIso8601String(),
+      'holdSecondsLeft': d.holdSecondsLeft,
+      'holdTargetSeconds': d.holdTargetSeconds,
+      'holdTimerUsed': d.holdTimerUsed,
+      'holdEndsAt': d.holdEndsAt?.toIso8601String(),
+      'warmupSecondsLeft': d.warmupSecondsLeft,
+      'warmupEndsAt': d.warmupEndsAt?.toIso8601String(),
+    };
+
+WorkoutDraft workoutDraftFromJson(Map<String, dynamic> j) => WorkoutDraft(
+      plan: sessionPlanFromJson((j['plan'] as Map).cast<String, dynamic>()),
+      startedAt: DateTime.parse(j['startedAt'] as String),
+      stepStartedAt: DateTime.parse(j['stepStartedAt'] as String),
+      superset: j['superset'] as bool? ?? true,
+      current: (j['current'] as num?)?.toInt() ?? 0,
+      logged: ((j['logged'] as List?) ?? const [])
+          .map((e) => setLogFromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      loggedKeys: ((j['loggedKeys'] as List?) ?? const []).cast<String>(),
+      weights: ((j['weights'] as Map?) ?? const {}).map(
+        (key, value) => MapEntry(int.parse('$key'), (value as num).toDouble()),
+      ),
+      value: (j['value'] as num?)?.toInt() ?? 8,
+      rir: Rir.values.byName(j['rir'] as String? ?? Rir.rir2.name),
+      painFlag: j['painFlag'] as bool? ?? false,
+      plannedRestIntoStep: (j['plannedRestIntoStep'] as num?)?.toInt() ?? 0,
+      restEndsAt: _tryParseOptionalDateTime(j['restEndsAt']),
+      holdSecondsLeft: (j['holdSecondsLeft'] as num?)?.toInt() ?? 0,
+      holdTargetSeconds: (j['holdTargetSeconds'] as num?)?.toInt() ?? 0,
+      holdTimerUsed: j['holdTimerUsed'] as bool? ?? false,
+      holdEndsAt: _tryParseOptionalDateTime(j['holdEndsAt']),
+      warmupSecondsLeft: (j['warmupSecondsLeft'] as num?)?.toInt() ?? 0,
+      warmupEndsAt: _tryParseOptionalDateTime(j['warmupEndsAt']),
+    );

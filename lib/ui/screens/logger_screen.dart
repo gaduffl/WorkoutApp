@@ -15,6 +15,7 @@ import '../../models/lower_back_recovery.dart';
 import '../../models/plan.dart';
 import '../../models/session_type.dart';
 import '../../models/set_log.dart';
+import '../../models/workout_draft.dart';
 import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
 import '../widgets/progression_panel.dart';
@@ -26,8 +27,15 @@ import '../widgets/exercise_visual.dart';
 /// with a toggle to run them as straight sets instead.
 class LoggerScreen extends StatefulWidget {
   final SessionPlan plan;
+  final bool persistDraft;
+  final WorkoutDraft? restoredDraft;
 
-  const LoggerScreen({super.key, required this.plan});
+  const LoggerScreen({
+    super.key,
+    required this.plan,
+    this.persistDraft = false,
+    this.restoredDraft,
+  });
 
   @override
   State<LoggerScreen> createState() => _LoggerScreenState();
@@ -55,31 +63,38 @@ class _LoggerScreenState extends State<LoggerScreen>
   Rir _rir = Rir.rir2;
   bool _painFlag = false;
   bool _finishing = false;
+  bool _ready = true;
+  bool _savingSet = false;
+  String? _saveError;
   Timer? _restTimer;
   int _restSecondsLeft = 0;
+  DateTime? _restEndsAt;
   Timer? _holdTimer;
   int _holdSecondsLeft = 0;
   int _holdTargetSeconds = 0;
   bool _holdRunning = false;
   bool _holdTimerUsed = false;
+  DateTime? _holdEndsAt;
   // Countdown for minute-based warm-up blocks (general prep / ATG). Purely a
   // guide to pace the block; it never changes what gets logged.
   Timer? _warmupTimer;
   int _warmupSecondsLeft = 0;
   int _warmupTotalSeconds = 0;
   bool _warmupRunning = false;
-  final _stopwatch = Stopwatch()..start();
+  DateTime? _warmupEndsAt;
 
   /// Wall-clock start of the session, and of the step currently on screen.
-  /// Both are needed: the stopwatch measures elapsed time exactly, while the
-  /// timestamps place the session in the day for schedule analysis.
-  final DateTime _sessionStartedAt = DateTime.now();
+  /// Wall-clock time also survives process death so resumed duration can be
+  /// measured from the original start, while the step timestamp places each
+  /// set in the day for schedule analysis.
+  DateTime _sessionStartedAt = DateTime.now();
   DateTime _stepStartedAt = DateTime.now();
 
   /// Prescribed rest counting down into the current step (0 when the previous
   /// step had none). Recorded per set so rest and work can be separated
   /// afterwards without guessing.
   int _plannedRestIntoStep = 0;
+  Duration get _elapsed => DateTime.now().difference(_sessionStartedAt);
 
   List<PlannedExercise> get _ex => widget.plan.exercises;
   PlannedExercise get _exercise => _ex[_steps[_current].exIdx];
@@ -95,14 +110,136 @@ class _LoggerScreenState extends State<LoggerScreen>
     }
     _steps = _buildSteps(_superset);
     _syncSetInputs();
+    final draft = widget.restoredDraft;
+    if (draft != null) {
+      _restoreDraft(draft);
+    } else if (widget.persistDraft) {
+      _ready = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _beginDraft());
+    }
     // Fire-and-forget: the session start observation must never delay the
     // first step appearing, and a missing provider (logger tests, legacy
     // callers) simply means no event.
     final controller = Provider.of<AppController?>(context, listen: false);
-    unawaited(
-      controller?.markSessionStarted(widget.plan, at: _sessionStartedAt) ??
-          Future<void>.value(),
-    );
+    if (widget.restoredDraft == null) {
+      unawaited(
+        controller?.markSessionStarted(widget.plan, at: _sessionStartedAt) ??
+            Future<void>.value(),
+      );
+    }
+  }
+
+  WorkoutDraft _snapshot() => WorkoutDraft(
+        plan: widget.plan,
+        startedAt: _sessionStartedAt,
+        stepStartedAt: _stepStartedAt,
+        superset: _superset,
+        current: _current,
+        logged: List.of(_logged),
+        loggedKeys: _loggedKeys.toList(),
+        weights: Map.of(_weightByExercise),
+        value: _value,
+        rir: _rir,
+        painFlag: _painFlag,
+        plannedRestIntoStep: _plannedRestIntoStep,
+        restEndsAt: _restEndsAt,
+        holdSecondsLeft: _holdSecondsLeft,
+        holdTargetSeconds: _holdTargetSeconds,
+        holdTimerUsed: _holdTimerUsed,
+        holdEndsAt: _holdEndsAt,
+        warmupSecondsLeft: _warmupSecondsLeft,
+        warmupEndsAt: _warmupEndsAt,
+      );
+
+  Future<void> _beginDraft() async {
+    if (!mounted) return;
+    await _checkpoint();
+    if (mounted) setState(() => _ready = _saveError == null);
+  }
+
+  Future<void> _checkpoint() async {
+    if (!widget.persistDraft || !mounted) return;
+    try {
+      await context.read<AppController>().saveWorkoutDraft(_snapshot());
+      if (mounted && _saveError != null) setState(() => _saveError = null);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saveError =
+            'Workout could not be saved. Check storage and retry.');
+      }
+    }
+  }
+
+  void _restoreDraft(WorkoutDraft draft) {
+    _sessionStartedAt = draft.startedAt;
+    _superset = draft.superset;
+    _steps = _buildSteps(_superset);
+    _current = draft.current.clamp(0, _steps.length - 1).toInt();
+    _logged.addAll(draft.logged);
+    _loggedKeys.addAll(draft.loggedKeys);
+    _weightByExercise.addAll(draft.weights);
+    _value = draft.value;
+    _rir = draft.rir;
+    _painFlag = draft.painFlag;
+    _stepStartedAt = draft.stepStartedAt;
+    _plannedRestIntoStep = draft.plannedRestIntoStep;
+    _restEndsAt = draft.restEndsAt;
+    _holdTargetSeconds = draft.holdTargetSeconds;
+    _holdTimerUsed = draft.holdTimerUsed;
+    _holdEndsAt = draft.holdEndsAt;
+    _warmupEndsAt = draft.warmupEndsAt;
+    _restSecondsLeft = _secondsRemaining(_restEndsAt);
+    _holdSecondsLeft = _holdEndsAt == null
+        ? draft.holdSecondsLeft
+        : _secondsRemaining(_holdEndsAt);
+    _warmupSecondsLeft = _warmupEndsAt == null
+        ? draft.warmupSecondsLeft
+        : _secondsRemaining(_warmupEndsAt);
+    _holdRunning = _holdEndsAt != null && _holdSecondsLeft > 0;
+    _warmupRunning = _warmupEndsAt != null && _warmupSecondsLeft > 0;
+    if (_restSecondsLeft > 0 || _holdRunning || _warmupRunning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resumeTimers());
+    }
+  }
+
+  int _secondsRemaining(DateTime? end) => end == null
+      ? 0
+      : ((end.difference(DateTime.now()).inMilliseconds + 999) ~/ 1000)
+          .clamp(0, 86400)
+          .toInt();
+
+  void _resumeTimers() {
+    if (!mounted) return;
+    _restTimer?.cancel();
+    _holdTimer?.cancel();
+    _warmupTimer?.cancel();
+    if (_restSecondsLeft > 0) {
+      _restTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _restSecondsLeft = _secondsRemaining(_restEndsAt));
+        if (_restSecondsLeft == 0) _restTimer?.cancel();
+      });
+    }
+    if (_holdRunning) {
+      _holdTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {
+          _holdSecondsLeft = _secondsRemaining(_holdEndsAt);
+          if (_holdSecondsLeft == 0) _holdRunning = false;
+        });
+        if (!_holdRunning) _holdTimer?.cancel();
+      });
+    }
+    if (_warmupRunning) {
+      _warmupTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {
+          _warmupSecondsLeft = _secondsRemaining(_warmupEndsAt);
+          if (_warmupSecondsLeft == 0) _warmupRunning = false;
+        });
+        if (!_warmupRunning) _warmupTimer?.cancel();
+      });
+    }
   }
 
   @override
@@ -119,6 +256,18 @@ class _LoggerScreenState extends State<LoggerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(ScreenAwake.setEnabled(true));
+      setState(() {
+        _restSecondsLeft = _secondsRemaining(_restEndsAt);
+        if (_holdEndsAt != null) {
+          _holdSecondsLeft = _secondsRemaining(_holdEndsAt);
+          _holdRunning = _holdSecondsLeft > 0;
+        }
+        if (_warmupEndsAt != null) {
+          _warmupSecondsLeft = _secondsRemaining(_warmupEndsAt);
+          _warmupRunning = _warmupSecondsLeft > 0;
+        }
+      });
+      _resumeTimers();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
@@ -198,8 +347,10 @@ class _LoggerScreenState extends State<LoggerScreen>
       if (_current < 0) _current = _steps.length - 1;
       _restTimer?.cancel();
       _restSecondsLeft = 0;
+      _restEndsAt = null;
       _syncSetInputs();
     });
+    unawaited(_checkpoint());
   }
 
   void _syncSetInputs() {
@@ -210,6 +361,7 @@ class _LoggerScreenState extends State<LoggerScreen>
     _plannedRestIntoStep = 0;
     _holdTimer?.cancel();
     _holdRunning = false;
+    _holdEndsAt = null;
     // Default to the TOP of the target range so the user rarely has to step it
     // up. Timed holds keep their progression-driven suggestedValue.
     _value = _exercise.suggestedValue ?? _exercise.targetRange.$2;
@@ -218,6 +370,7 @@ class _LoggerScreenState extends State<LoggerScreen>
     _holdTimerUsed = false;
     _warmupTimer?.cancel();
     _warmupRunning = false;
+    _warmupEndsAt = null;
     _warmupTotalSeconds = _isMinuteWarmup ? _exercise.targetRange.$1 * 60 : 0;
     _warmupSecondsLeft = _warmupTotalSeconds;
     _rir = _exercise.rirTarget;
@@ -240,10 +393,12 @@ class _LoggerScreenState extends State<LoggerScreen>
       next = below.isEmpty ? cur : below.last;
     }
     setState(() => _weightByExercise[idx] = next);
+    unawaited(_checkpoint());
   }
 
   void _startRest(int seconds) {
     _restSecondsLeft = seconds;
+    _restEndsAt = DateTime.now().add(Duration(seconds: seconds));
     _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_restSecondsLeft <= 0) {
@@ -274,6 +429,8 @@ class _LoggerScreenState extends State<LoggerScreen>
     if (_holdRunning) {
       _holdTimer?.cancel();
       setState(() => _holdRunning = false);
+      _holdEndsAt = null;
+      unawaited(_checkpoint());
       return;
     }
     setState(() {
@@ -283,7 +440,9 @@ class _LoggerScreenState extends State<LoggerScreen>
       }
       _holdTimerUsed = true;
       _holdRunning = true;
+      _holdEndsAt = DateTime.now().add(Duration(seconds: _holdSecondsLeft));
     });
+    unawaited(_checkpoint());
     _holdTimer?.cancel();
     _holdTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -295,7 +454,9 @@ class _LoggerScreenState extends State<LoggerScreen>
         setState(() {
           _holdSecondsLeft = 0;
           _holdRunning = false;
+          _holdEndsAt = null;
         });
+        unawaited(_checkpoint());
       } else {
         setState(() => _holdSecondsLeft -= 1);
       }
@@ -309,19 +470,25 @@ class _LoggerScreenState extends State<LoggerScreen>
       _holdSecondsLeft = _value;
       _holdTargetSeconds = _value;
       _holdTimerUsed = false;
+      _holdEndsAt = null;
     });
+    unawaited(_checkpoint());
   }
 
   void _toggleWarmupTimer() {
     if (_warmupRunning) {
       _warmupTimer?.cancel();
       setState(() => _warmupRunning = false);
+      _warmupEndsAt = null;
+      unawaited(_checkpoint());
       return;
     }
     setState(() {
       if (_warmupSecondsLeft <= 0) _warmupSecondsLeft = _warmupTotalSeconds;
       _warmupRunning = true;
+      _warmupEndsAt = DateTime.now().add(Duration(seconds: _warmupSecondsLeft));
     });
+    unawaited(_checkpoint());
     _warmupTimer?.cancel();
     _warmupTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -333,7 +500,9 @@ class _LoggerScreenState extends State<LoggerScreen>
         setState(() {
           _warmupSecondsLeft = 0;
           _warmupRunning = false;
+          _warmupEndsAt = null;
         });
+        unawaited(_checkpoint());
       } else {
         setState(() => _warmupSecondsLeft -= 1);
       }
@@ -345,7 +514,9 @@ class _LoggerScreenState extends State<LoggerScreen>
     setState(() {
       _warmupRunning = false;
       _warmupSecondsLeft = _warmupTotalSeconds;
+      _warmupEndsAt = null;
     });
+    unawaited(_checkpoint());
   }
 
   String _fmtClock(int totalSeconds) {
@@ -377,6 +548,7 @@ class _LoggerScreenState extends State<LoggerScreen>
     };
     final next = (_value + direction * step).clamp(0, max).toInt();
     _holdTimer?.cancel();
+    _holdEndsAt = null;
     setState(() {
       _value = next;
       if (_exercise.metric == ExerciseMetric.seconds) {
@@ -389,10 +561,15 @@ class _LoggerScreenState extends State<LoggerScreen>
         _holdSecondsLeft = next;
       }
     });
+    unawaited(_checkpoint());
   }
 
   Future<void> _logSet() async {
-    if (_finishing) return;
+    if (_finishing || _savingSet || !_ready) return;
+    if (_loggedKeys.contains('${_steps[_current].exIdx}:${_steps[_current].setNumber}')) {
+      await _finish();
+      return;
+    }
     final completedValue = _loggedValue;
     if (completedValue <= 0) return;
     final step = _steps[_current];
@@ -414,17 +591,21 @@ class _LoggerScreenState extends State<LoggerScreen>
       plannedRestSecondsBefore: _plannedRestIntoStep,
     );
     setState(() {
+      _savingSet = true;
       _logged.add(log);
       _loggedKeys.add('${step.exIdx}:${step.setNumber}');
       // Logging ends the previous rest — always reset the timer, then start
       // a fresh one only if this set is followed by rest.
       _restTimer?.cancel();
       _restSecondsLeft = 0;
+      _restEndsAt = null;
       _holdTimer?.cancel();
       _holdRunning = false;
       _holdSecondsLeft = 0;
+      _holdEndsAt = null;
       _warmupTimer?.cancel();
       _warmupRunning = false;
+      _warmupEndsAt = null;
       if (restSeconds != null) _startRest(restSeconds);
       if (!wasLast) {
         _current++;
@@ -434,6 +615,10 @@ class _LoggerScreenState extends State<LoggerScreen>
         _plannedRestIntoStep = restSeconds ?? 0;
       }
     });
+    await _checkpoint();
+    if (!mounted) return;
+    setState(() => _savingSet = false);
+    if (_saveError != null) return;
     // Logging the final set finishes the workout automatically.
     if (wasLast) await _finish();
   }
@@ -468,6 +653,8 @@ class _LoggerScreenState extends State<LoggerScreen>
     final controller = context.read<AppController>();
 
     try {
+      await _checkpoint();
+      if (_saveError != null) return;
       CardioCompletion? rehitCompletion;
       // A partial dose is evaluated separately by the shared >=50% gate.
       // `endedEarly` records only the user's explicit Wrap up action.
@@ -514,15 +701,20 @@ class _LoggerScreenState extends State<LoggerScreen>
       await controller.completeSession(
         widget.plan,
         _logged,
-        durationMinutes: _stopwatch.elapsed.inMinutes.clamp(1, 999),
-        // The stopwatch is the exact measurement; durationMinutes stays as
-        // the whole-minute value every existing consumer already reads.
+        durationMinutes: _elapsed.inMinutes.clamp(1, 999),
         startedAt: _sessionStartedAt,
-        elapsedSeconds: _stopwatch.elapsed.inSeconds,
+        elapsedSeconds: _elapsed.inSeconds.clamp(0, 86399).toInt(),
         rehitFinisherCompletion: rehitCompletion,
         endedEarly: endedEarly,
         lowerBackSameDayResponse: lowerBackResponse,
       );
+      if (widget.persistDraft) {
+        // The session log is authoritative once committed. A failed cleanup
+        // must not invite the user to submit that workout a second time.
+        try {
+          await controller.clearWorkoutDraft();
+        } catch (_) {}
+      }
       if (!mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
     } finally {
@@ -573,6 +765,25 @@ class _LoggerScreenState extends State<LoggerScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Starting workout')),
+        body: Center(
+          child: _saveError == null
+              ? const CircularProgressIndicator()
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_saveError!),
+                    FilledButton(
+                      onPressed: _beginDraft,
+                      child: const Text('Retry saving workout'),
+                    ),
+                  ],
+                ),
+        ),
+      );
+    }
     final step = _steps[_current];
     final e = _exercise;
     // Logger tests and legacy callers may render a plan outside the normal
@@ -608,7 +819,7 @@ class _LoggerScreenState extends State<LoggerScreen>
         ),
         actions: [
           TextButton(
-            onPressed: _finishing
+            onPressed: _finishing || _savingSet || _saveError != null
                 ? null
                 : () async {
                     if (await _confirmFinishEarly()) {
@@ -721,7 +932,10 @@ class _LoggerScreenState extends State<LoggerScreen>
                                     .map((r) => ChoiceChip(
                                           label: Text(_rirLabel(r)),
                                           selected: _rir == r,
-                                          onSelected: (_) => setState(() => _rir = r),
+                                          onSelected: (_) {
+                                            setState(() => _rir = r);
+                                            unawaited(_checkpoint());
+                                          },
                                         ))
                                     .toList(),
                               ),
@@ -733,7 +947,10 @@ class _LoggerScreenState extends State<LoggerScreen>
                                 child: FilterChip(
                                   label: const Text('Pain — stop progression today'),
                                   selected: _painFlag,
-                                  onSelected: (v) => setState(() => _painFlag = v),
+                                  onSelected: (v) {
+                                    setState(() => _painFlag = v);
+                                    unawaited(_checkpoint());
+                                  },
                                 ),
                               ),
                             if (_painFlag)
@@ -764,12 +981,22 @@ class _LoggerScreenState extends State<LoggerScreen>
                       ),
                     ),
                     const SizedBox(height: 8),
+                    if (_saveError != null) ...[
+                      Text(_saveError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      TextButton(onPressed: _checkpoint, child: const Text('Retry save')),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
                         onPressed:
-                            _finishing || _loggedValue <= 0 ? null : _logSet,
-                        child: Text(_logButtonLabel(e, isLast)),
+                            _finishing || _savingSet || _saveError != null ||
+                                    (_loggedValue <= 0 &&
+                                        !_loggedKeys.contains('${step.exIdx}:${step.setNumber}'))
+                                ? null
+                                : _logSet,
+                        child: Text(_loggedKeys.contains('${step.exIdx}:${step.setNumber}')
+                            ? 'Finish saved workout'
+                            : _logButtonLabel(e, isLast)),
                       ),
                     ),
                     if (!isLast) ...[
@@ -777,7 +1004,7 @@ class _LoggerScreenState extends State<LoggerScreen>
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
-                          onPressed: _finishing
+                          onPressed: _finishing || _savingSet || _saveError != null
                               ? null
                               : () async {
                                   if (await _confirmFinishEarly()) {

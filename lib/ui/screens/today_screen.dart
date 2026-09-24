@@ -606,9 +606,24 @@ class _TodayScreenState extends State<TodayScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => LoggerScreen(plan: plan))),
-                  child: const Text('Start session'),
+                  onPressed: controller.workoutDraft != null &&
+                          !controller.canResumeWorkoutDraft
+                      ? null
+                      : () {
+                          final draft = controller.workoutDraft;
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => LoggerScreen(
+                              plan: draft?.plan ?? plan,
+                              restoredDraft: draft,
+                              persistDraft: controller.workoutDraftPersistenceEnabled,
+                            ),
+                          ));
+                        },
+                  child: Text(controller.workoutDraft == null
+                      ? 'Start session'
+                      : controller.canResumeWorkoutDraft
+                          ? 'Resume session'
+                          : 'Discard old workout on Home first'),
                 ),
               )
             else if (plan != null)
