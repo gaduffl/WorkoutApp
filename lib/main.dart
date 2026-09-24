@@ -17,7 +17,7 @@ class MorningCoachApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final db = AppDatabase();
     final repo = Repository(db);
-    final controller = AppController(repo)..init();
+    final controller = AppController(repo, workoutDraftPersistenceEnabled: true)..init();
 
     return MultiProvider(
       providers: [

@@ -10,6 +10,7 @@ import '../widgets/cardio_widgets.dart';
 import 'checkin_screen.dart';
 import 'history_screen.dart';
 import 'insights_screen.dart';
+import 'logger_screen.dart';
 import 'settings_screen.dart';
 import 'today_screen.dart';
 
@@ -45,6 +46,23 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loggingUnplannedRehit = false;
   bool _loggingBouldering = false;
   bool _loggingZone2 = false;
+
+  Future<void> _discardWorkoutDraft() async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Discard unfinished workout?'),
+        content: const Text('Saved sets from this unfinished workout will be lost.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Keep')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Discard')),
+        ],
+      ),
+    );
+    if (discard == true && mounted) {
+      await context.read<AppController>().clearWorkoutDraft();
+    }
+  }
 
   Future<void> _logZone2() async {
     if (_loggingZone2) return;
@@ -193,6 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<AppController>();
+    final draft = controller.workoutDraft;
 
     return Scaffold(
       appBar: AppBar(
@@ -257,6 +276,44 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (draft != null) ...[
+                              Card(
+                                key: const Key('home-workout-draft'),
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        controller.canResumeWorkoutDraft
+                                            ? 'Unfinished workout: ${draft.plan.sessionName} (${draft.loggedKeys.length} sets saved)'
+                                            : 'An unfinished workout is saved, but its plan is no longer current or safe to resume.',
+                                      ),
+                                      if (controller.canResumeWorkoutDraft)
+                                        FilledButton.icon(
+                                          key: const Key('home-resume-workout'),
+                                          onPressed: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => LoggerScreen(
+                                                plan: draft.plan,
+                                                restoredDraft: draft,
+                                                persistDraft: controller.workoutDraftPersistenceEnabled,
+                                              ),
+                                            ),
+                                          ),
+                                          icon: const Icon(Icons.play_arrow),
+                                          label: const Text('Resume workout'),
+                                        ),
+                                      TextButton(
+                                        onPressed: _discardWorkoutDraft,
+                                        child: const Text('Discard unfinished workout'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             if (controller.lowerBackRecovery.active) ...[
                               Card(
                                 key: const Key('home-lower-back-recovery'),

@@ -12,6 +12,7 @@ import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/set_log.dart';
+import 'package:morningcoach/models/workout_draft.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/logger_screen.dart';
 
@@ -1090,6 +1091,107 @@ void main() {
       controller.lastLowerBackResponse,
       LowerBackSymptomResponse.unchanged,
     );
+  });
+
+  testWidgets('restoring a final saved set finishes without logging it twice',
+      (tester) async {
+    final controller = captureController();
+    final oneSet = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [ex('squat', MovementPattern.squat, 24, null, sets: 1)],
+    );
+    final started = DateTime.now().subtract(const Duration(minutes: 2));
+    final draft = WorkoutDraft(
+      plan: oneSet,
+      startedAt: started,
+      stepStartedAt: started,
+      superset: true,
+      current: 0,
+      logged: [
+        SetLog(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          exerciseName: 'squat',
+          weight: 24,
+          value: 10,
+          rir: Rir.rir2,
+          timestamp: started.add(const Duration(minutes: 1)),
+        ),
+      ],
+      loggedKeys: const ['0:1'],
+      weights: const {0: 24},
+      value: 10,
+      rir: Rir.rir2,
+      painFlag: false,
+      plannedRestIntoStep: 0,
+      holdSecondsLeft: 0,
+      holdTargetSeconds: 0,
+      holdTimerUsed: false,
+      warmupSecondsLeft: 0,
+    );
+    await tester.pumpWidget(ChangeNotifierProvider<AppController>.value(
+      value: controller,
+      child: MaterialApp(home: LoggerScreen(plan: oneSet, restoredDraft: draft)),
+    ));
+    expect(find.text('Finish saved workout'), findsOneWidget);
+    await tester.tap(find.text('Finish saved workout'));
+    await tester.pumpAndSettle();
+    expect(controller.lastLoggedSets, hasLength(1));
+  });
+
+  testWidgets('restoring mid-workout keeps the next set and its inputs',
+      (tester) async {
+    final controller = captureController();
+    final twoSets = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.compressed,
+      estimatedDurationMin: 20,
+      exercises: [ex('squat', MovementPattern.squat, 24, null, sets: 2)],
+    );
+    final started = DateTime.now().subtract(const Duration(minutes: 2));
+    final draft = WorkoutDraft(
+      plan: twoSets,
+      startedAt: started,
+      stepStartedAt: started.add(const Duration(minutes: 1)),
+      superset: true,
+      current: 1,
+      logged: [
+        SetLog(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          exerciseName: 'squat',
+          weight: 24,
+          value: 10,
+          rir: Rir.rir2,
+          timestamp: started.add(const Duration(minutes: 1)),
+        ),
+      ],
+      loggedKeys: const ['0:1'],
+      weights: const {0: 45},
+      value: 7,
+      rir: Rir.rir3plus,
+      painFlag: true,
+      plannedRestIntoStep: 90,
+      holdSecondsLeft: 0,
+      holdTargetSeconds: 0,
+      holdTimerUsed: false,
+      warmupSecondsLeft: 0,
+    );
+    await tester.pumpWidget(ChangeNotifierProvider<AppController>.value(
+      value: controller,
+      child: MaterialApp(home: LoggerScreen(plan: twoSets, restoredDraft: draft)),
+    ));
+    await tester.tap(find.text('Log set & finish'));
+    await tester.pumpAndSettle();
+    expect(controller.lastLoggedSets, hasLength(2));
+    expect(controller.lastLoggedSets.last.weight, 45);
+    expect(controller.lastLoggedSets.last.value, 7);
+    expect(controller.lastLoggedSets.last.rir, Rir.rir3plus);
+    expect(controller.lastLoggedSets.last.painFlag, isTrue);
   });
 }
 

@@ -124,6 +124,15 @@ safety rules, validation, or delivery workflow changes.
 - The logger may keep the Android display awake only while its route is active and
   the app is resumed. Clear the platform flag on pause, detach, and dispose; a
   missing platform bridge must never block logging.
+- Strength workouts persist a single active draft in the existing database meta
+  table. Checkpoint the plan snapshot, completed sets, current inputs, and timer
+  deadlines at user actions; await each logged-set checkpoint before allowing
+  another submission. Offer same-day resume only while the original plan and
+  safety gates still match. Never resubmit a final set already in the draft.
+  Clear the draft after a successful session log or an explicit discard, and
+  recognize a committed log on startup even if draft cleanup was interrupted.
+  Do not request sensor permissions or battery-optimization exemptions merely
+  to keep this manual logger alive in the background.
 
 ## GitHub delivery
 

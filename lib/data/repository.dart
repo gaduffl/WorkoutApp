@@ -7,6 +7,7 @@ import '../models/exercise_state.dart';
 import '../models/recovery_snapshot.dart';
 import '../models/session_log.dart';
 import '../models/user_settings.dart';
+import '../models/workout_draft.dart';
 import 'app_database.dart';
 import 'serializers.dart';
 
@@ -16,6 +17,27 @@ class Repository {
   final AppDatabase db;
 
   Repository(this.db);
+
+  Future<WorkoutDraft?> loadWorkoutDraft() async {
+    final json = await db.getJson('meta', 'key', 'workout_draft');
+    if (json == null) return null;
+    try {
+      return workoutDraftFromJson(json);
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    } on RangeError {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  Future<void> saveWorkoutDraft(WorkoutDraft draft) =>
+      db.putJson('meta', 'key', 'workout_draft', workoutDraftToJson(draft));
+
+  Future<void> deleteWorkoutDraft() => db.delete('meta', 'key', 'workout_draft');
 
   String _dateKey(DateTime d) => DateTime(d.year, d.month, d.day).toIso8601String();
 

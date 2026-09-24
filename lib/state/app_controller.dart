@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/repository.dart';
+import '../data/serializers.dart';
 import '../engine/analytics_engine.dart';
 import '../engine/cardio_engine.dart';
 import '../engine/decision_engine.dart';
@@ -48,11 +49,13 @@ import '../models/set_log.dart';
 import '../models/training_targets.dart';
 import '../models/training_status.dart';
 import '../models/user_settings.dart';
+import '../models/workout_draft.dart';
 
 /// Ties the pure engine + persistence layer to the UI. All decision logic
 /// stays in `engine/`; this only orchestrates load/save around it.
 class AppController extends ChangeNotifier {
   final Repository repo;
+  final bool workoutDraftPersistenceEnabled;
 
   static const _intensityRecoveryPolicy = IntensityRecoveryPolicy();
   static const _lowerBackRecoveryEngine = LowerBackRecoveryEngine();
@@ -61,7 +64,41 @@ class AppController extends ChangeNotifier {
   QueueState queueState = const QueueState();
   Map<String, ExerciseState> exerciseStates = {};
   DecisionTrace? todayTrace;
+  WorkoutDraft? workoutDraft;
+  Future<void> _draftWrite = Future<void>.value();
   bool loading = true;
+
+  Future<void> saveWorkoutDraft(WorkoutDraft draft) {
+    _draftWrite = _draftWrite.catchError((Object _) {}).then((_) async {
+      await repo.saveWorkoutDraft(draft);
+      workoutDraft = draft;
+      notifyListeners();
+    });
+    return _draftWrite;
+  }
+
+  Future<void> clearWorkoutDraft() {
+    _draftWrite = _draftWrite.catchError((Object _) {}).then((_) async {
+      await repo.deleteWorkoutDraft();
+      workoutDraft = null;
+      notifyListeners();
+    });
+    return _draftWrite;
+  }
+
+  bool get canResumeWorkoutDraft {
+    final draft = workoutDraft;
+    final currentPlan = todayTrace?.plan;
+    if (draft == null ||
+        currentPlan == null ||
+        sessionLoggedToday ||
+        !isPlanUsableNow(draft.plan)) {
+      return false;
+    }
+    if (!_isSameDate(draft.startedAt, today())) return false;
+    return jsonEncode(sessionPlanToJson(draft.plan)) ==
+        jsonEncode(sessionPlanToJson(currentPlan));
+  }
 
   /// Last load the user typed into the manual progression-override dialog,
   /// keyed by `<pattern>:<ladderIndex>`. Shown back as a reference only —
@@ -481,7 +518,7 @@ class AppController extends ChangeNotifier {
   /// cleared on the next successful attempt.
   String? ouraError;
 
-  AppController(this.repo);
+  AppController(this.repo, {this.workoutDraftPersistenceEnabled = false});
 
   DateTime today() {
     final n = DateTime.now();
@@ -673,6 +710,8 @@ class AppController extends ChangeNotifier {
   /// Reloads all in-memory state from the database (used at startup and
   /// after a OneDrive restore).
   Future<void> _reloadAll() async {
+    await _draftWrite.catchError((Object _) {});
+    workoutDraft = await repo.loadWorkoutDraft();
     settings = await repo.loadSettings();
     queueState = await repo.loadQueueState();
     exerciseStates = await repo.loadExerciseStates();
@@ -680,6 +719,11 @@ class AppController extends ChangeNotifier {
     _recentLogs = await repo.loadSessionLogsSince(
       today().subtract(const Duration(days: 7)),
     );
+    if (workoutDraft != null &&
+        _recentLogs.any((log) =>
+            log.timings?.startedAt == workoutDraft!.startedAt)) {
+      await clearWorkoutDraft();
+    }
     _scheduleLogs = await repo.loadSessionLogsSince(
       today().subtract(const Duration(days: scheduleHabitWindowDays - 1)),
     );
@@ -1463,6 +1507,9 @@ class AppController extends ChangeNotifier {
   /// after a session is logged — that's the point.
   Future<void> resetDay() async {
     final now = today();
+    if (workoutDraft != null && _isSameDate(workoutDraft!.startedAt, now)) {
+      await clearWorkoutDraft();
+    }
 
     // Roll progression + queue back to the start of today, if we have the
     // snapshot. Delete any exercise-state tracks that only came into existence

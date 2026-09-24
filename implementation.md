@@ -673,3 +673,16 @@ treat filename as canonical version).
     Recovery pull-ups now target 3+ RIR, remain unweighted with tempo/pause-only
     progression, and therefore earn ordinary back/biceps effective-set credit when
     actually completed at a qualifying RIR.
+
+# Interrupted strength workouts
+
+The Android process may be stopped while a workout is in progress. The logger
+stores one backward-compatible workout draft in the existing `meta` table. The
+draft snapshots the prescribed plan, completed sets, play order, in-progress
+inputs and wall-clock timer deadlines. User actions checkpoint immediately;
+logging a set waits for its database write. Home offers same-day resume when
+the current plan still matches the saved plan and the normal safety gates pass.
+An incompatible or older draft can be explicitly discarded. A previously
+committed session log takes precedence if the process stopped before cleanup.
+This protects recorded work without adding an Android foreground service or
+asking for unrelated sensor or battery permissions.
