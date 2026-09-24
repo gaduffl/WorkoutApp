@@ -89,8 +89,12 @@ class AppController extends ChangeNotifier {
   bool get canResumeWorkoutDraft {
     final draft = workoutDraft;
     final currentPlan = todayTrace?.plan;
-    if (draft == null || currentPlan == null || sessionLoggedToday ||
-        !isPlanUsableNow(draft.plan)) return false;
+    if (draft == null ||
+        currentPlan == null ||
+        sessionLoggedToday ||
+        !isPlanUsableNow(draft.plan)) {
+      return false;
+    }
     if (!_isSameDate(draft.startedAt, today())) return false;
     return jsonEncode(sessionPlanToJson(draft.plan)) ==
         jsonEncode(sessionPlanToJson(currentPlan));
