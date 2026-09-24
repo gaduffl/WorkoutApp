@@ -175,6 +175,7 @@ class _LoggerScreenState extends State<LoggerScreen>
     _superset = draft.superset;
     _steps = _buildSteps(_superset);
     _current = draft.current.clamp(0, _steps.length - 1).toInt();
+    _syncSetInputs();
     _logged.addAll(draft.logged);
     _loggedKeys.addAll(draft.loggedKeys);
     _weightByExercise.addAll(draft.weights);
