@@ -14,6 +14,7 @@ import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/pain.dart';
+import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/recovery_snapshot.dart';
 import 'package:morningcoach/models/rule_key.dart';
 import 'package:morningcoach/models/session_log.dart';
@@ -151,255 +152,37 @@ void main() {
     );
   });
 
-  test('lower-back recovery replaces the hinge slot and freezes its track',
-      () {
-    final originalHinge = baseStates()['hinge']!;
-    final output = decisionEngine.decide(buildInput(
-      time: 35,
-      subjective: 3,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      exerciseStates: {
-        ...baseStates(),
-        'hinge': originalHinge,
-      },
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 1)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s1,
-    ));
-
-    final plan = output.trace.plan!;
-    expect(plan.lowerBackRecoveryMode, isTrue);
-    expect(
-      plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name),
-      isFalse,
-    );
-    final recovery = plan.exercises.firstWhere(
-      (exercise) => exercise.trackKey == lowerBackRecoveryTrackKey,
-    );
-    expect(recovery.name, 'Static back-extension hold');
-    expect(recovery.loadTotal, isNull);
-    expect(recovery.progressionEligible, isFalse);
-    expect(
-      output.patchedExerciseStates['hinge']!.currentLoad,
-      originalHinge.currentLoad,
-    );
-    expect(
-      output.trace.firedRules.map((rule) => rule.key),
-      contains(RuleKey.lowerBackRecoveryActive),
-    );
-  });
-
-  test('recovery spacing gate uses distinct bridge and curl stimulus', () {
-    final output = decisionEngine.decide(buildInput(
-      time: 35,
-      subjective: 3,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 2)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          recoverySessionDates: [today.subtract(const Duration(days: 1))],
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s1,
-    ));
-
-    final plan = output.trace.plan!;
-    expect(
-      plan.exercises.any((e) => e.trackKey == MovementPattern.hinge.name),
-      isFalse,
-    );
-    expect(
-      plan.exercises.any((e) => e.trackKey == lowerBackRecoveryTrackKey),
-      isFalse,
-    );
-    final floorBridge = plan.exercises.firstWhere(
-      (exercise) =>
-          exercise.trackKey == lowerBackRecoveryFloorGluteBridge.trackKey,
-    );
-    final slidingCurl = plan.exercises.firstWhere(
-      (exercise) =>
-          exercise.trackKey == lowerBackRecoverySlidingHamstringCurl.trackKey,
-    );
-    expect(floorBridge.name, 'Floor glute bridge');
-    expect(slidingCurl.name, 'Sliding hamstring curl');
-    expect(floorBridge.rirTarget, Rir.rir3plus);
-    expect(slidingCurl.rirTarget, Rir.rir3plus);
-    expect(floorBridge.progressionEligible, isFalse);
-    expect(slidingCurl.progressionEligible, isFalse);
-    expect(
-      plan.exercises.any(
-        (exercise) => exercise.trackKey == bridgeHamstringCurl.trackKey,
-      ),
-      isFalse,
-    );
-    expect(
-      output.trace.firedRules.map((rule) => rule.key),
-      contains(RuleKey.lowerBackRecoverySpacing),
-    );
-  });
-
-  test('recovery bridge and curl supplement a due back-extension exposure',
-      () {
-    final output = decisionEngine.decide(buildInput(
-      time: 35,
-      subjective: 4,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
+  UserSettings rebuildSettings({
+    BackRebuildStage stage = BackRebuildStage.bridges,
+    List<DateTime> spacedDates = const [],
+    bool extensions = false,
+  }) =>
+      UserSettings(
+        recoveryBackExtensionsEnabled: extensions,
+        lowerBackRecovery: LowerBackRecoveryState(
           active: true,
           activatedAt: today.subtract(const Duration(days: 2)),
           symptomOnsetDate: today.subtract(const Duration(days: 21)),
           neurologicalSymptomsAbsentConfirmedAt: today,
           preRecoveryHingeLoad: 90,
+          preRecoveryHingeLadderStepIndex: 2,
+          rebuildStage: stage,
+          recoverySessionDates: spacedDates,
+          bikeReturnStep: BikeReturnStep.walkOnly,
         ),
-      ),
-      forcedSessionId: SessionTypeId.s1,
-    ));
+      );
 
-    final work = output.trace.plan!.exercises
-        .where((exercise) => !exercise.isWarmup)
-        .toList();
-    expect(
-      work.map((exercise) => exercise.trackKey),
-      containsAll([
-        lowerBackRecoveryTrackKey,
-        lowerBackRecoveryFloorGluteBridge.trackKey,
-        lowerBackRecoverySlidingHamstringCurl.trackKey,
-      ]),
-    );
-    expect(
-      work.where((exercise) => exercise.trackKey == lowerBackRecoveryTrackKey),
-      hasLength(1),
-    );
-    expect(
-      work.any((exercise) => exercise.trackKey == MovementPattern.hinge.name),
-      isFalse,
-    );
-  });
-
-  test('compressed recovery lower work retains both posterior accessories',
-      () {
-    final output = decisionEngine.decide(buildInput(
-      time: 20,
-      subjective: 4,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 2)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s1,
-    ));
-
-    final plan = output.trace.plan!;
-    final tracks = plan.exercises.map((exercise) => exercise.trackKey);
-    expect(
-      tracks,
-      contains(lowerBackRecoveryFloorGluteBridge.trackKey),
-    );
-    expect(
-      tracks,
-      contains(lowerBackRecoverySlidingHamstringCurl.trackKey),
-    );
-    expect(plan.estimatedDurationMin, lessThanOrEqualTo(20));
-  });
-
-  test('sharp lower-back pain suppresses the posterior accessories', () {
-    final output = decisionEngine.decide(buildInput(
-      time: 35,
-      subjective: 4,
-      pain: [
-        PainFlag(
-          region: BodyRegion.lowerBack,
-          severity: PainSeverity.sharp,
-          flaggedDate: today,
-        ),
-      ],
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 2)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s1,
-    ));
-
-    final tracks = output.trace.plan!.exercises
-        .map((exercise) => exercise.trackKey);
-    expect(
-      tracks,
-      isNot(contains(lowerBackRecoveryFloorGluteBridge.trackKey)),
-    );
-    expect(
-      tracks,
-      isNot(contains(lowerBackRecoverySlidingHamstringCurl.trackKey)),
-    );
-  });
-
-  test('normal training does not add recovery bridge or sliding curl', () {
-    for (final sessionId in const [SessionTypeId.s1, SessionTypeId.s4]) {
-      final output = decisionEngine.decide(buildInput(
-        time: 60,
+  DecisionEngineOutput plannedFor(
+    SessionTypeId id, {
+    int time = 35,
+    UserSettings? settings,
+    Map<String, ExerciseState>? states,
+    List<PainFlag> pain = const [],
+  }) =>
+      decisionEngine.decide(buildInput(
+        time: time,
         subjective: 4,
+        pain: pain,
         todaySnapshot: RecoverySnapshot(
           date: today,
           hrvRmssd: 50,
@@ -408,27 +191,57 @@ void main() {
         ),
         recoveryHistory: normalHrvHistory(),
         sessionLogs: floorSatisfiedLogs(),
-        forcedSessionId: sessionId,
+        exerciseStates: states,
+        settings: settings ?? rebuildSettings(),
+        forcedSessionId: id,
       ));
 
-      final tracks = output.trace.plan!.exercises
-          .map((exercise) => exercise.trackKey);
-      expect(
-        tracks,
-        isNot(contains(lowerBackRecoveryFloorGluteBridge.trackKey)),
-        reason: sessionId.name,
-      );
-      expect(
-        tracks,
-        isNot(contains(lowerBackRecoverySlidingHamstringCurl.trackKey)),
-        reason: sessionId.name,
-      );
+  test('Back rebuild stage 1 keeps the normal plan and swaps only the hinge',
+      () {
+    final output = plannedFor(SessionTypeId.s1);
+    final plan = output.trace.plan!;
+    final work = plan.exercises.where((e) => !e.isWarmup).toList();
+
+    expect(plan.lowerBackRecoveryMode, isTrue);
+    expect(plan.sessionName, 'Lower Strength');
+    final squat = work.singleWhere(
+      (e) => e.trackKey == MovementPattern.squat.name,
+    );
+    expect(squat.loadTotal, greaterThan(0));
+    expect(squat.rirTarget, Rir.rir2);
+    expect(squat.progressionEligible, isTrue);
+    expect(work.any((e) => e.trackKey == MovementPattern.hinge.name), isFalse);
+
+    final bridge = work.singleWhere(
+      (e) => e.trackKey == alternativeGluteBridge.trackKey,
+    );
+    final curl = work.singleWhere(
+      (e) => e.trackKey == alternativeHamstringCurl.trackKey,
+    );
+    expect(bridge.loadTotal, isNotNull);
+    expect(bridge.dumbbellCount, 1);
+    for (final exercise in [bridge, curl]) {
+      expect(exercise.rirTarget, Rir.rir2);
+      expect(exercise.progressionEligible, isTrue);
+      expect(exercise.instruction, isNotNull);
     }
+    // The frozen normal hinge ladder is untouched.
+    expect(output.patchedExerciseStates['hinge']!.currentLoad, 90);
+    expect(
+      output.trace.firedRules.map((rule) => rule.key),
+      containsAll([
+        RuleKey.lowerBackRecoveryLoadMinimized,
+        RuleKey.lowerBackRecoveryActive,
+      ]),
+    );
+    final prep = plan.exercises.firstWhere((e) => e.trackKey == 'warmup:s1');
+    expect(prep.instruction, contains('ATG treadmill'));
+    expect(prep.instruction, contains('step jacks'));
   });
 
   test(
-      'lower-back recovery removes every normal high-lumbar-load ladder from strength plans',
-      () {
+      'Back rebuild keeps every non-hinge slot identical to the normal plan, '
+      'even from advanced ladders', () {
     final advancedStates = <String, ExerciseState>{
       for (final entry in ladders.entries)
         entry.key.name: ExerciseState(
@@ -441,27 +254,21 @@ void main() {
           currentLoad: 24,
           lastTrainedDate: today.subtract(const Duration(days: 3)),
         ),
-      dip.trackKey: ExerciseState(
-        trackKey: dip.trackKey,
-        pattern: dip.pattern,
-        currentLoad: 24,
-        lastTrainedDate: today.subtract(const Duration(days: 3)),
-      ),
+      for (final named in s5NamedAccessories)
+        named.trackKey: ExerciseState(
+          trackKey: named.trackKey,
+          pattern: named.pattern,
+          currentLoad: 24,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
     };
-    final unsafeNames = <String>{
-      'Weighted pull-up (backpack/DB)',
-      'Weighted pull-up +pause at top',
-      dip.name,
-    };
-    for (final pattern in const [
-      MovementPattern.squat,
-      MovementPattern.hinge,
-      MovementPattern.pushVertical,
-      MovementPattern.pullHorizontal,
-      MovementPattern.coreGrip,
-    ]) {
-      unsafeNames.addAll(ladders[pattern]!.steps.map((step) => step.name));
-    }
+    Set<String> nonHinge(DecisionEngineOutput output) => {
+          for (final e in output.trace.plan!.exercises)
+            if (!e.isWarmup &&
+                e.pattern != MovementPattern.hinge &&
+                e.trackKey != lowerBackRecoveryTrackKey)
+              '${e.trackKey}|${e.name}|${e.sets}|${e.loadTotal}|${e.rirTarget}',
+        };
 
     for (final sessionId in const [
       SessionTypeId.s1,
@@ -469,196 +276,312 @@ void main() {
       SessionTypeId.s4,
       SessionTypeId.s5,
     ]) {
-      final output = decisionEngine.decide(buildInput(
+      final normal = plannedFor(
+        sessionId,
         time: 60,
-        subjective: 4,
-        todaySnapshot: RecoverySnapshot(
-          date: today,
-          hrvRmssd: 50,
-          restingHr: 60,
-          sleepScore: 90,
-        ),
-        recoveryHistory: normalHrvHistory(),
-        sessionLogs: floorSatisfiedLogs(),
-        exerciseStates: advancedStates,
-        settings: UserSettings(
-              recoveryBackExtensionsEnabled: true,
-              lowerBackRecovery: LowerBackRecoveryState(
-            active: true,
-            activatedAt: today.subtract(const Duration(days: 2)),
-            symptomOnsetDate: today.subtract(const Duration(days: 21)),
-            neurologicalSymptomsAbsentConfirmedAt: today,
-            preRecoveryHingeLoad: 90,
-          ),
-        ),
-        forcedSessionId: sessionId,
-      ));
-
-      final plan = output.trace.plan!;
-      final work = plan.exercises
-          .where((exercise) => !exercise.isWarmup)
-          .toList();
+        settings: const UserSettings(),
+        states: advancedStates,
+      );
+      final rebuild = plannedFor(
+        sessionId,
+        time: 60,
+        states: advancedStates,
+      );
+      expect(nonHinge(rebuild), nonHinge(normal), reason: sessionId.name);
+      expect(nonHinge(rebuild), isNotEmpty, reason: sessionId.name);
       expect(
-        work.map((exercise) => exercise.name),
-        contains('Pull-up (bodyweight; assisted as needed)'),
+        rebuild.trace.plan!.exercises.any(
+          (e) => e.trackKey == MovementPattern.hinge.name,
+        ),
+        isFalse,
         reason: sessionId.name,
       );
       expect(
-        work.map((exercise) => exercise.name).toSet().intersection(
-              unsafeNames,
-            ),
-        isEmpty,
-        reason: sessionId.name,
-      );
-      expect(
-        work.every(
-          (exercise) => exercise.rirTarget.index >= Rir.rir3plus.index,
-        ),
-        isTrue,
-        reason: sessionId.name,
-      );
-      expect(
-        output.trace.firedRules.map((rule) => rule.key),
-        contains(RuleKey.lowerBackRecoveryLoadMinimized),
+        rebuild.trace.plan!.estimatedDurationMin,
+        lessThanOrEqualTo(60),
         reason: sessionId.name,
       );
     }
   });
 
-  test('recovery upper day uses supported work and an unweighted pull-up',
-      () {
-    final advancedStates = <String, ExerciseState>{
-      MovementPattern.pushHorizontal.name: ExerciseState(
-        trackKey: MovementPattern.pushHorizontal.name,
-        pattern: MovementPattern.pushHorizontal,
-        ladderStepIndex: 4,
-        currentLoad: 24,
-      ),
-      MovementPattern.pushVertical.name: ExerciseState(
-        trackKey: MovementPattern.pushVertical.name,
-        pattern: MovementPattern.pushVertical,
-        ladderStepIndex: 3,
-        currentLoad: 24,
-      ),
-      MovementPattern.pullHorizontal.name: ExerciseState(
-        trackKey: MovementPattern.pullHorizontal.name,
-        pattern: MovementPattern.pullHorizontal,
-        ladderStepIndex: 2,
-        currentLoad: 24,
-      ),
-      MovementPattern.pullVertical.name: ExerciseState(
-        trackKey: MovementPattern.pullVertical.name,
-        pattern: MovementPattern.pullVertical,
-        ladderStepIndex: 3,
-        currentLoad: 24,
-      ),
-      MovementPattern.coreGrip.name: ExerciseState(
-        trackKey: MovementPattern.coreGrip.name,
-        pattern: MovementPattern.coreGrip,
-        ladderStepIndex: 3,
-        currentLoad: 24,
-      ),
-    };
-    final output = decisionEngine.decide(buildInput(
-      time: 60,
-      subjective: 4,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      exerciseStates: advancedStates,
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 2)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s2,
-    ));
-
+  test('stage 2 prescribes a capped block deadlift last in the session', () {
+    final output = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+    );
     final plan = output.trace.plan!;
-    final work = plan.exercises
-        .where((exercise) => !exercise.isWarmup)
-        .toList();
-    expect(plan.sessionName, 'Lower-back recovery · Pull + ATG 1');
+    final work = plan.exercises.where((e) => !e.isWarmup).toList();
+    final block = work.last;
+
+    expect(block.trackKey, backRebuildBlockDeadlift.trackKey);
+    expect(block.name, 'DB deadlift from blocks');
+    expect(block.loadTotal, 42);
+    expect(block.rirTarget, Rir.rir3plus);
+    expect(block.isCompoundWork, isTrue);
+    expect(block.supersetGroup, isNull);
+    expect(block.instruction, contains('Last exercise today'));
     expect(
-      work.map((exercise) => exercise.name),
+      plan.exercises[plan.exercises.indexOf(block) - 1].trackKey,
+      backRebuildBlockDeadlift.trackKey,
+      reason: 'a feeder or ramp set precedes the deadlift',
+    );
+    expect(work.any((e) => e.trackKey == MovementPattern.squat.name), isTrue);
+    expect(
+      work.any((e) => e.trackKey == alternativeGluteBridge.trackKey),
+      isFalse,
+    );
+    final reentry = output.trace.firedRules.singleWhere(
+      (rule) => rule.key == RuleKey.lowerBackRecoveryReentry,
+    );
+    expect(reentry.params['stage'], '2');
+
+    final aboveCap = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+      states: {
+        ...baseStates(),
+        backRebuildBlockDeadlift.trackKey: ExerciseState(
+          trackKey: backRebuildBlockDeadlift.trackKey,
+          pattern: MovementPattern.hinge,
+          currentLoad: 70,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
+      },
+    );
+    expect(
+      aboveCap.trace.plan!.exercises
+          .where((e) => !e.isWarmup)
+          .last
+          .loadTotal,
+      60,
+    );
+
+    final romanian = plannedFor(
+      SessionTypeId.s4,
+      time: 60,
+      settings: rebuildSettings(stage: BackRebuildStage.romanianDeadlift),
+    ).trace.plan!;
+    final rdl = romanian.exercises.where((e) => !e.isWarmup).last;
+    expect(rdl.trackKey, backRebuildRomanianDeadlift.trackKey);
+    expect(rdl.loadTotal, 60);
+    expect(rdl.rirTarget, Rir.rir2);
+  });
+
+  test('the loaded step waits for spacing while bridges and curls fill in', () {
+    final output = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(
+        stage: BackRebuildStage.blockDeadlift,
+        spacedDates: [today.subtract(const Duration(days: 1))],
+      ),
+    );
+    final tracks = output.trace.plan!.exercises
+        .where((e) => !e.isWarmup)
+        .map((e) => e.trackKey)
+        .toList();
+    expect(tracks, isNot(contains(backRebuildBlockDeadlift.trackKey)));
+    expect(
+      tracks,
       containsAll([
-        'Floor press',
-        'Chest-supported DB row (bolster)',
-        'Pull-up (bodyweight; assisted as needed)',
-        'Alternating lateral raise',
+        alternativeGluteBridge.trackKey,
+        alternativeHamstringCurl.trackKey,
       ]),
     );
-    final pullUp = work.firstWhere(
-      (exercise) =>
-          exercise.name == 'Pull-up (bodyweight; assisted as needed)',
+    final spacing = output.trace.firedRules.singleWhere(
+      (rule) => rule.key == RuleKey.lowerBackRecoverySpacing,
     );
-    expect(pullUp.loadTotal, isNull);
-    expect(pullUp.rirTarget, Rir.rir3plus);
-    expect(pullUp.progressionEligible, isTrue);
-    expect(pullUp.instruction, contains('at least 3 RIR'));
-    expect(
-      work.any(
-        (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,
+    expect(spacing.params['exercise'], 'DB deadlift from blocks');
+  });
+
+  test('a lower-back flag keeps the deadlift off; sharp pain removes the lane',
+      () {
+    final mild = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.mild,
+          flaggedDate: today,
+        ),
+      ],
+    ).trace.plan!;
+    final mildTracks = mild.exercises.map((e) => e.trackKey).toList();
+    expect(mildTracks, isNot(contains(backRebuildBlockDeadlift.trackKey)));
+    expect(mildTracks, contains(alternativeGluteBridge.trackKey));
+
+    final sharp = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(
+        stage: BackRebuildStage.blockDeadlift,
+        extensions: true,
       ),
-      isFalse,
+      pain: [
+        PainFlag(
+          region: BodyRegion.lowerBack,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+    ).trace.plan!;
+    final sharpTracks = sharp.exercises.map((e) => e.trackKey).toList();
+    for (final key in [
+      alternativeGluteBridge.trackKey,
+      alternativeHamstringCurl.trackKey,
+      backRebuildBlockDeadlift.trackKey,
+      lowerBackRecoveryTrackKey,
+      MovementPattern.hinge.name,
+    ]) {
+      expect(sharpTracks, isNot(contains(key)));
+    }
+    expect(sharpTracks, contains(MovementPattern.squat.name));
+  });
+
+  test('any mild hinge flag keeps the deadlift off and eases the bridge', () {
+    final states = {
+      alternativeGluteBridge.trackKey: ExerciseState(
+        trackKey: alternativeGluteBridge.trackKey,
+        pattern: MovementPattern.hinge,
+        currentLoad: 40,
+        lastTrainedDate: today.subtract(const Duration(days: 3)),
+      ),
+    };
+    double bridgeLoad(SessionPlan plan) => plan.exercises
+        .firstWhere((e) => e.trackKey == alternativeGluteBridge.trackKey)
+        .loadTotal!;
+
+    final clear = plannedFor(SessionTypeId.s1, states: states).trace.plan!;
+    expect(bridgeLoad(clear), 40);
+
+    for (final region in [BodyRegion.lowerBack, BodyRegion.hip]) {
+      final flagged = plannedFor(
+        SessionTypeId.s1,
+        settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+        states: states,
+        pain: [
+          PainFlag(
+            region: region,
+            severity: PainSeverity.mild,
+            flaggedDate: today,
+          ),
+        ],
+      ).trace.plan!;
+      final tracks = flagged.exercises.map((e) => e.trackKey).toList();
+      expect(
+        tracks,
+        isNot(contains(backRebuildBlockDeadlift.trackKey)),
+        reason: region.name,
+      );
+      // One achievable step lighter, as the pain table does elsewhere.
+      expect(bridgeLoad(flagged), 35, reason: region.name);
+    }
+  });
+
+  test('optional back extensions join stages 1–2 at the end, unweighted', () {
+    // At 35 minutes the budgeter trims this optional accessory first.
+    final stageOne = plannedFor(
+      SessionTypeId.s1,
+      time: 60,
+      settings: rebuildSettings(extensions: true),
+    ).trace.plan!;
+    final work = stageOne.exercises.where((e) => !e.isWarmup).toList();
+    expect(work.last.trackKey, lowerBackRecoveryTrackKey);
+    expect(work.last.loadTotal, isNull);
+    expect(
+      work.map((e) => e.trackKey),
+      contains(alternativeGluteBridge.trackKey),
+    );
+
+    final stageThree = plannedFor(
+      SessionTypeId.s1,
+      time: 60,
+      settings: rebuildSettings(
+        stage: BackRebuildStage.romanianDeadlift,
+        extensions: true,
+      ),
+    ).trace.plan!;
+    expect(
+      stageThree.exercises.map((e) => e.trackKey),
+      isNot(contains(lowerBackRecoveryTrackKey)),
     );
   });
 
-  test('recovery ATG 1 keeps pump work but removes weighted dips and core',
-      () {
-    final output = decisionEngine.decide(buildInput(
-      time: 35,
-      subjective: 4,
-      todaySnapshot: RecoverySnapshot(
-        date: today,
-        hrvRmssd: 50,
-        restingHr: 60,
-        sleepScore: 90,
-      ),
-      recoveryHistory: normalHrvHistory(),
-      sessionLogs: floorSatisfiedLogs(),
-      settings: UserSettings(
-          recoveryBackExtensionsEnabled: true,
-          lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          activatedAt: today.subtract(const Duration(days: 2)),
-          symptomOnsetDate: today.subtract(const Duration(days: 21)),
-          neurologicalSymptomsAbsentConfirmedAt: today,
-          preRecoveryHingeLoad: 90,
-        ),
-      ),
-      forcedSessionId: SessionTypeId.s5,
-    ));
-
-    final work = output.trace.plan!.exercises
-        .where((exercise) => !exercise.isWarmup)
-        .toList();
+  test('compressed Back rebuild lower work fits 20 minutes', () {
+    final stageOne = plannedFor(SessionTypeId.s1, time: 20).trace.plan!;
+    expect(stageOne.estimatedDurationMin, lessThanOrEqualTo(20));
     expect(
-      work.map((exercise) => exercise.name),
+      stageOne.exercises.map((e) => e.trackKey),
       containsAll([
-        'Pull-up (bodyweight; assisted as needed)',
-        'Alternating DB curl',
-        'Alternating lateral raise',
-        'Dip (bodyweight)',
+        MovementPattern.squat.name,
+        alternativeGluteBridge.trackKey,
       ]),
     );
-    expect(work.map((exercise) => exercise.name), isNot(contains(dip.name)));
+
+    final stageTwo = plannedFor(
+      SessionTypeId.s1,
+      time: 20,
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+    ).trace.plan!;
+    expect(stageTwo.estimatedDurationMin, lessThanOrEqualTo(20));
     expect(
-      work.any(
-        (exercise) => exercise.trackKey == MovementPattern.coreGrip.name,
-      ),
-      isFalse,
+      stageTwo.exercises.where((e) => !e.isWarmup).last.trackKey,
+      backRebuildBlockDeadlift.trackKey,
     );
+  });
+
+  test('mild lower-back pain never regresses the hinge onto the floor pull',
+      () {
+    for (final entry in {2: 0, 3: 2}.entries) {
+      final output = plannedFor(
+        SessionTypeId.s1,
+        settings: const UserSettings(),
+        states: {
+          ...baseStates(),
+          'hinge': ExerciseState(
+            trackKey: 'hinge',
+            pattern: MovementPattern.hinge,
+            ladderStepIndex: entry.key,
+            currentLoad: 90,
+            lastTrainedDate: today.subtract(const Duration(days: 2)),
+          ),
+        },
+        pain: [
+          PainFlag(
+            region: BodyRegion.lowerBack,
+            severity: PainSeverity.mild,
+            flaggedDate: today,
+          ),
+        ],
+      );
+      final hinge = output.trace.plan!.exercises.singleWhere(
+        (e) => !e.isWarmup && e.trackKey == 'hinge',
+      );
+      expect(
+        hinge.name,
+        ladders[MovementPattern.hinge]!.steps[entry.value].name,
+      );
+      expect(hinge.name, isNot('DB deadlift, floor'));
+      expect(hinge.loadTotal, 80);
+    }
+  });
+
+  test('normal training does not add Back rebuild tracks', () {
+    for (final sessionId in const [SessionTypeId.s1, SessionTypeId.s4]) {
+      final tracks = plannedFor(
+        sessionId,
+        time: 60,
+        settings: const UserSettings(),
+      ).trace.plan!.exercises.map((exercise) => exercise.trackKey);
+      for (final key in [
+        alternativeGluteBridge.trackKey,
+        alternativeHamstringCurl.trackKey,
+        backRebuildBlockDeadlift.trackKey,
+        backRebuildRomanianDeadlift.trackKey,
+      ]) {
+        expect(tracks, isNot(contains(key)), reason: sessionId.name);
+      }
+      expect(tracks, contains(MovementPattern.hinge.name));
+    }
   });
 
   test('neurological warning signs block the entire plan', () {
@@ -1521,11 +1444,18 @@ void main() {
     expect(work.every((e) => !e.progressionEligible), isTrue);
     expect(s1.trace.plan!.travelMode, isTrue);
     expect(s1.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
-    // no percent-load ramp without loads, but movement prep remains explicit
-    final travelWarmups = s1.trace.plan!.exercises.where((e) => e.isWarmup).toList();
+    // no percent-load ramp without loads, but movement prep remains explicit;
+    // the equipment-free McGill Big 3 still follows it
+    final travelWarmups = s1.trace.plan!.exercises
+        .where((e) => e.isWarmup && e.trackKey != 'warmup:big3')
+        .toList();
     expect(travelWarmups, hasLength(1));
     expect(travelWarmups.single.trackKey, 'warmup:s1');
     expect(travelWarmups.single.instruction, contains('jumping jacks'));
+    expect(
+      s1.trace.plan!.exercises.map((e) => e.trackKey),
+      contains('warmup:big3'),
+    );
     expect(s1.trace.plan!.plannedWorkSets, 6);
 
     final s2 = decisionEngine.decide(buildInput(

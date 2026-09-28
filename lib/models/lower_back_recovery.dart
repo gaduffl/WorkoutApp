@@ -1,48 +1,112 @@
-/// Persisted state for the dedicated lower-back recovery mode.
-///
-/// This describes training modifications and observed symptom response. It is
-/// deliberately not a diagnosis or a claim that a particular tissue healed.
+/// Dose stages of the optional back-extension exercise. They never reach a
+/// deadlift on their own; the hinge slot is owned by [BackRebuildStage].
 enum LowerBackRecoveryStage {
   isometricHold,
   dynamicUnloaded,
+
+  /// Legacy value from the retired extension-led re-entry. Read as the top
+  /// unloaded dose; it never prescribes a loaded hinge.
   deadliftReentry,
 }
+
 enum LowerBackSymptomResponse {
   better,
   unchanged,
   worse,
 }
 
+/// The hinge-slot stages of Back rebuild. Every other slot follows the
+/// normal plan.
+enum BackRebuildStage {
+  /// Dumbbell-loaded floor glute bridges and sliding hamstring curls.
+  bridges,
+
+  /// Dumbbell deadlift from blocks, 50–70% of the pre-rebuild load.
+  blockDeadlift,
+
+  /// Dumbbell Romanian deadlift, 70–100% of the pre-rebuild load.
+  romanianDeadlift,
+}
+
+/// Stepped return to stationary cycling. Each step opens after a
+/// same-or-better next morning following the previous step's exposure.
+enum BikeReturnStep {
+  /// Zone 2 is an uphill walk; the next step needs an easy test ride.
+  walkOnly,
+
+  /// Zone 2 rides are planned; 4×4 needs a 30-minute ride first.
+  zone2Ride,
+
+  /// 4×4 intervals are planned; REHIT, finishers and nudges stay closed.
+  fourByFour,
+
+  /// All cycling is available again.
+  complete,
+}
+
+/// Hinge-slot work completed in a rebuild session that awaits its
+/// next-morning check.
+enum BackRebuildExposure { none, accessory, loaded }
+
+/// Bike work awaiting its next-morning check, ordered by dose.
+enum BikeExposure { none, easyRide, zone2Ride, fourByFour, rehit }
+
 const lowerBackRecoveryTrackKey =
     'recovery:lower_back:back_extension';
 
+/// Persisted state for Back rebuild (formerly "lower-back recovery mode").
+///
+/// This describes training modifications and observed symptom response. It is
+/// deliberately not a diagnosis or a claim that a particular tissue healed.
 class LowerBackRecoveryState {
   final bool active;
   final DateTime? activatedAt;
   final DateTime? completedAt;
   final DateTime? symptomOnsetDate;
   final DateTime? neurologicalSymptomsAbsentConfirmedAt;
+
+  /// Optional back-extension dose stage.
   final LowerBackRecoveryStage stage;
   final int targetHoldSeconds;
   final int targetDynamicReps;
+
+  /// Consecutive tolerated back-extension exposures (extension dose only).
   final int consecutiveToleratedSessions;
 
-  /// Calendar dates on which recovery work was actually completed. The
-  /// engine uses these for the 48-hour and twice-per-rolling-week caps.
+  /// Calendar dates of spaced rebuild exposures: loaded hinge steps and
+  /// optional back extensions. Used for the 48-hour and
+  /// twice-per-rolling-week caps.
   final List<DateTime> recoverySessionDates;
 
-  /// A recovery session cannot affect the dose until its next-morning
+  /// A rebuild exposure cannot affect any stage until its next-morning
   /// response has been recorded.
   final DateTime? pendingNextMorningSessionDate;
+
+  /// Set to [LowerBackSymptomResponse.worse] when rebuild work was
+  /// pain-flagged in the logger. There is no separate same-day question.
   final LowerBackSymptomResponse? pendingSameDayResponse;
   final LowerBackSymptomResponse? lastNextMorningResponse;
 
-  /// Snapshot of the normal hinge prescription at activation. Loaded hinge
-  /// work stays frozen while [active]; this snapshot makes the later 50%
-  /// re-entry explicit rather than deriving it from unrelated substitutes.
+  /// Snapshot of the normal hinge prescription at activation. The normal
+  /// hinge ladder stays frozen while [active]; stage loads derive from this.
   final double? preRecoveryHingeLoad;
   final int? preRecoveryHingeLadderStepIndex;
   final double? lastReentryLoad;
+
+  final BackRebuildStage rebuildStage;
+
+  /// Consecutive same-or-better next mornings counted for the current
+  /// stage (after stage work; loaded work in stages 2–3).
+  final int rebuildGoodMornings;
+
+  /// Independent of [active]: the bike return can still be in progress after
+  /// the hinge stages finish. Profiles that never used Back rebuild default
+  /// to [BikeReturnStep.complete].
+  final BikeReturnStep bikeReturnStep;
+
+  final BackRebuildExposure pendingRebuildExposure;
+  final bool pendingExtensionExposure;
+  final BikeExposure pendingBikeExposure;
 
   const LowerBackRecoveryState({
     this.active = false,
@@ -61,27 +125,54 @@ class LowerBackRecoveryState {
     this.preRecoveryHingeLoad,
     this.preRecoveryHingeLadderStepIndex,
     this.lastReentryLoad,
+    this.rebuildStage = BackRebuildStage.bridges,
+    this.rebuildGoodMornings = 0,
+    this.bikeReturnStep = BikeReturnStep.complete,
+    this.pendingRebuildExposure = BackRebuildExposure.none,
+    this.pendingExtensionExposure = false,
+    this.pendingBikeExposure = BikeExposure.none,
   });
 
   bool get awaitingNextMorningResponse =>
       pendingNextMorningSessionDate != null;
 
+  bool get bikeReturnInProgress => bikeReturnStep != BikeReturnStep.complete;
+
+  /// 1-based stage number shown to the user.
+  int get rebuildStageNumber => rebuildStage.index + 1;
+
+  static const rebuildStageCount = 3;
+
+  String get rebuildStageTitle => switch (rebuildStage) {
+        BackRebuildStage.bridges => 'Bridges & hamstring curls',
+        BackRebuildStage.blockDeadlift => 'Deadlift from blocks',
+        BackRebuildStage.romanianDeadlift => 'Romanian deadlift',
+      };
+
+  String get bikeReturnLabel => switch (bikeReturnStep) {
+        BikeReturnStep.walkOnly =>
+          'Bike: test with a 15-min easy ride, sitting upright (log it as a Zone 2 ride)',
+        BikeReturnStep.zone2Ride =>
+          'Bike: Zone 2 rides are back; 4×4 opens after a 30-min ride',
+        BikeReturnStep.fourByFour =>
+          'Bike: 4×4 is back; REHIT opens after a 4×4',
+        BikeReturnStep.complete => 'Bike: all cycling is back',
+      };
+
   String get stageLabel => switch (stage) {
         LowerBackRecoveryStage.isometricHold =>
-          'Stage 1 · static back-extension holds',
-        LowerBackRecoveryStage.dynamicUnloaded =>
-          'Stage 2 · controlled unweighted back extensions',
+          'Back extensions · static holds',
+        LowerBackRecoveryStage.dynamicUnloaded ||
         LowerBackRecoveryStage.deadliftReentry =>
-          'Stage 3 · graded deadlift re-entry',
+          'Back extensions · controlled unweighted reps',
       };
 
   String get targetLabel => switch (stage) {
         LowerBackRecoveryStage.isometricHold =>
           '3 × $targetHoldSeconds-second holds',
-        LowerBackRecoveryStage.dynamicUnloaded =>
-          '2 × $targetDynamicReps controlled repetitions',
+        LowerBackRecoveryStage.dynamicUnloaded ||
         LowerBackRecoveryStage.deadliftReentry =>
-          '1 × 8 elevated-start deadlift at 50%',
+          '2 × $targetDynamicReps controlled repetitions',
       };
 
   LowerBackRecoveryState copyWith({
@@ -101,6 +192,12 @@ class LowerBackRecoveryState {
     double? preRecoveryHingeLoad,
     int? preRecoveryHingeLadderStepIndex,
     double? lastReentryLoad,
+    BackRebuildStage? rebuildStage,
+    int? rebuildGoodMornings,
+    BikeReturnStep? bikeReturnStep,
+    BackRebuildExposure? pendingRebuildExposure,
+    bool? pendingExtensionExposure,
+    BikeExposure? pendingBikeExposure,
     bool clearCompletedAt = false,
     bool clearPendingResponse = false,
     bool clearLastNextMorningResponse = false,
@@ -141,6 +238,18 @@ class LowerBackRecoveryState {
         lastReentryLoad: clearLastReentryLoad
             ? null
             : lastReentryLoad ?? this.lastReentryLoad,
+        rebuildStage: rebuildStage ?? this.rebuildStage,
+        rebuildGoodMornings: rebuildGoodMornings ?? this.rebuildGoodMornings,
+        bikeReturnStep: bikeReturnStep ?? this.bikeReturnStep,
+        pendingRebuildExposure: clearPendingResponse
+            ? BackRebuildExposure.none
+            : pendingRebuildExposure ?? this.pendingRebuildExposure,
+        pendingExtensionExposure: clearPendingResponse
+            ? false
+            : pendingExtensionExposure ?? this.pendingExtensionExposure,
+        pendingBikeExposure: clearPendingResponse
+            ? BikeExposure.none
+            : pendingBikeExposure ?? this.pendingBikeExposure,
       );
 
   @override
@@ -166,7 +275,13 @@ class LowerBackRecoveryState {
           other.preRecoveryHingeLoad == preRecoveryHingeLoad &&
           other.preRecoveryHingeLadderStepIndex ==
               preRecoveryHingeLadderStepIndex &&
-          other.lastReentryLoad == lastReentryLoad;
+          other.lastReentryLoad == lastReentryLoad &&
+          other.rebuildStage == rebuildStage &&
+          other.rebuildGoodMornings == rebuildGoodMornings &&
+          other.bikeReturnStep == bikeReturnStep &&
+          other.pendingRebuildExposure == pendingRebuildExposure &&
+          other.pendingExtensionExposure == pendingExtensionExposure &&
+          other.pendingBikeExposure == pendingBikeExposure;
 
   @override
   int get hashCode => Object.hashAll([
@@ -186,6 +301,12 @@ class LowerBackRecoveryState {
         preRecoveryHingeLoad,
         preRecoveryHingeLadderStepIndex,
         lastReentryLoad,
+        rebuildStage,
+        rebuildGoodMornings,
+        bikeReturnStep,
+        pendingRebuildExposure,
+        pendingExtensionExposure,
+        pendingBikeExposure,
       ]);
 
   static bool _sameDates(List<DateTime> a, List<DateTime> b) {

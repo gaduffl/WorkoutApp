@@ -79,13 +79,13 @@ class AiExplainer {
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.lowerBackRecoveryActive:
-        return 'lower-back recovery mode is active; loaded hinge work stays paused while unaffected supported strength can progress';
+        return 'Back rebuild stage 1: dumbbell glute bridges and sliding hamstring curls replace deadlifts until two good mornings';
       case RuleKey.lowerBackRecoveryLoadMinimized:
-        return 'lower-back recovery uses a load-minimized strength catalogue: floor bridges, sliding hamstring curls, gentle core work, unweighted pull-ups, supported presses/rows, and ATG 1 work; back extensions are optional and off by default. These exercises replace weighted squats, unsupported trunk loading, loaded pull-ups, and demanding core variants';
+        return 'Back rebuild is on: only the deadlift slot changes and everything else is normal training at normal effort';
       case RuleKey.lowerBackRecoverySpacing:
-        return 'optional back extensions are not due under their spacing, frequency, and next-morning-response gates; other supported strength remains available';
+        return 'the rebuild deadlift is not due today (48-hour spacing, twice-a-week cap, a back or hip flag, or travel), so bridges and hamstring curls fill the slot';
       case RuleKey.lowerBackRecoveryReentry:
-        return 'symptom-gated graded elevated-start deadlift re-entry at 50% with no load increase';
+        return 'Back rebuild stage deadlift at a capped fraction of the old load, placed last in the session';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:

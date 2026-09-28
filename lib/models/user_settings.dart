@@ -40,9 +40,18 @@ class UserSettings {
   /// strength/cardio category heatmap.
   final bool classicHeatmap;
 
+  /// Manual override: no cycling is planned while true. Back rebuild runs its
+  /// own stepped bike return separately (see [LowerBackRecoveryState]).
   final bool stationaryBikePaused;
   final bool deadliftAlternative;
   final bool recoveryBackExtensionsEnabled;
+
+  /// Adds the McGill Big 3 after the strength warm-up and a short back
+  /// routine on days without lifting.
+  final bool bigThreeEnabled;
+
+  /// Local `yyyy-mm-dd` of the last day the back routine was marked done.
+  final String? backRoutineDoneDay;
 
   /// §3.1 wake-window notification + §12 cutoff nudge (opt-in).
   final bool notificationsEnabled;
@@ -99,6 +108,8 @@ class UserSettings {
     this.stationaryBikePaused = false,
     this.deadliftAlternative = false,
     this.recoveryBackExtensionsEnabled = false,
+    this.bigThreeEnabled = true,
+    this.backRoutineDoneDay,
     this.classicHeatmap = false,
     this.notificationsEnabled = false,
     this.secondRehitNudgeEnabled = false,
@@ -138,6 +149,8 @@ class UserSettings {
     bool? stationaryBikePaused,
     bool? deadliftAlternative,
     bool? recoveryBackExtensionsEnabled,
+    bool? bigThreeEnabled,
+    String? backRoutineDoneDay,
     bool? classicHeatmap,
     bool? notificationsEnabled,
     bool? secondRehitNudgeEnabled,
@@ -176,6 +189,8 @@ class UserSettings {
       stationaryBikePaused: stationaryBikePaused ?? this.stationaryBikePaused,
       deadliftAlternative: deadliftAlternative ?? this.deadliftAlternative,
       recoveryBackExtensionsEnabled: recoveryBackExtensionsEnabled ?? this.recoveryBackExtensionsEnabled,
+      bigThreeEnabled: bigThreeEnabled ?? this.bigThreeEnabled,
+      backRoutineDoneDay: backRoutineDoneDay ?? this.backRoutineDoneDay,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       secondRehitNudgeEnabled:

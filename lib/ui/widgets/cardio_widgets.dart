@@ -100,20 +100,25 @@ String _zone2ContinuousInstruction(CardioPrescription prescription) {
   final rpeRange = rpeMin != null && rpeMax != null
       ? ' (RPE ${_number(rpeMin)}–${_number(rpeMax)})'
       : '';
+  final walk = prescription.protocol.isWalk;
+  final adjust = walk ? 'incline/pace' : 'resistance/cadence';
 
   final targetCue = switch ((hrMin, hrMax, rpeMin, rpeMax)) {
     (final min?, final max?, _, _) =>
-      'Start near ${min.round()} bpm; adjust resistance/cadence to stay at ${min.round()}–${max.round()} bpm$rpeRange.',
+      'Start near ${min.round()} bpm; adjust $adjust to stay at ${min.round()}–${max.round()} bpm$rpeRange.',
     (_, _, final min?, final max?) =>
-      'Start near RPE ${_number(min)}; adjust resistance/cadence to stay at RPE ${_number(min)}–${_number(max)}.',
+      'Start near RPE ${_number(min)}; adjust $adjust to stay at RPE ${_number(min)}–${_number(max)}.',
     (final min?, _, _, _) =>
-      'Start near ${min.round()} bpm; adjust resistance/cadence to keep the effort comfortably sustainable.',
+      'Start near ${min.round()} bpm; adjust $adjust to keep the effort comfortably sustainable.',
     (_, final max?, _, _) =>
-      'Stay at or below ${max.round()} bpm; adjust resistance/cadence to keep the effort comfortably sustainable.',
+      'Stay at or below ${max.round()} bpm; adjust $adjust to keep the effort comfortably sustainable.',
     _ =>
-      'Adjust resistance/cadence as needed to keep the effort comfortably sustainable.',
+      'Adjust $adjust as needed to keep the effort comfortably sustainable.',
   };
-  return 'Ride continuously in Zone 2.\n$targetCue';
+  return walk
+      ? 'Walk uphill, forward, continuously in Zone 2 on the ATG treadmill '
+          '(or hills outdoors): tall posture, arms swinging.\n$targetCue'
+      : 'Ride continuously in Zone 2.\n$targetCue';
 }
 
 List<String> cardioPrescriptionSummaryLines(
@@ -223,11 +228,14 @@ class CardioPrescriptionCard extends StatelessWidget {
   }
 }
 
+/// [allowWalk] offers a Ride / Uphill walk choice for a Zone 2 entry; the
+/// dose, validation and credit are identical.
 Future<CardioCompletion?> showCardioCompletionDialog(
   BuildContext context, {
   required CardioPrescription prescription,
   String title = 'Log cardio attempt',
   bool unplannedRide = false,
+  bool allowWalk = false,
 }) =>
     showDialog<CardioCompletion>(
       context: context,
@@ -235,6 +243,7 @@ Future<CardioCompletion?> showCardioCompletionDialog(
         prescription: prescription,
         title: title,
         unplannedRide: unplannedRide,
+        allowWalk: allowWalk,
       ),
     );
 
@@ -242,11 +251,13 @@ class _CardioCompletionDialog extends StatefulWidget {
   final CardioPrescription prescription;
   final String title;
   final bool unplannedRide;
+  final bool allowWalk;
 
   const _CardioCompletionDialog({
     required this.prescription,
     required this.title,
     this.unplannedRide = false,
+    this.allowWalk = false,
   });
 
   @override
@@ -263,6 +274,17 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
   final _fitnessScore = TextEditingController();
   final _peakPower = TextEditingController();
   String? _error;
+  late bool _walk = widget.prescription.protocol.isWalk;
+
+  CardioPrescription get _prescription {
+    final base = widget.prescription;
+    if (!_isContinuous || _walk == base.protocol.isWalk) return base;
+    return base.withProtocol(
+      _walk ? CardioProtocol.zone2Walk : CardioProtocol.zone2Base,
+    );
+  }
+
+  String get _activity => _walk ? 'walk' : 'ride';
 
   bool get _isContinuous =>
       widget.prescription.protocol.type == CardioProtocolType.zone2Base;
@@ -327,7 +349,7 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
               peakPowerWatts: peakPower,
             )
           : const CardioEngine().completionFromEntry(
-              prescription: widget.prescription,
+              prescription: _prescription,
               completedWorkIntervals: intervals,
               completedDurationMinutes: int.parse(_duration.text.trim()),
               averageHeartRateBpm: averageHr,
@@ -388,14 +410,35 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.allowWalk && _isContinuous) ...[
+              SegmentedButton<bool>(
+                key: const Key('zone2-modality'),
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    icon: Icon(Icons.directions_bike),
+                    label: Text('Ride'),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    icon: Icon(Icons.directions_walk),
+                    label: Text('Uphill walk'),
+                  ),
+                ],
+                selected: {_walk},
+                onSelectionChanged: (selection) =>
+                    setState(() => _walk = selection.single),
+              ),
+              spacing,
+            ],
             Text(
-              widget.prescription.protocol.name,
+              _prescription.protocol.name,
               style: Theme.of(context).textTheme.titleSmall,
             ),
             spacing,
             if (widget.unplannedRide) ...[
-              const Text(
-                'Record a Zone 2 ride you already completed today. '
+              Text(
+                'Record a Zone 2 $_activity you already completed today. '
                 'It counts toward your training history and aerobic targets, '
                 'but does not complete or replace your MorningCoach plan.',
               ),
@@ -425,8 +468,8 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
                     : 'Duration (min)',
                 helperText: _isContinuous
                     ? widget.unplannedRide
-                        ? 'Actual ride time, 1–1440 minutes'
-                        : 'Actual ride time; may exceed the plan'
+                        ? 'Actual $_activity time, 1–1440 minutes'
+                        : 'Actual $_activity time; may exceed the plan'
                     : null,
               ),
             ),
@@ -491,7 +534,7 @@ class _CardioCompletionDialogState extends State<_CardioCompletionDialog> {
         ),
         FilledButton(
           onPressed: _save,
-          child: Text(widget.unplannedRide ? 'Save ride' : 'Save attempt'),
+          child: Text(widget.unplannedRide ? 'Save $_activity' : 'Save attempt'),
         ),
       ],
     );

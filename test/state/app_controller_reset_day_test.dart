@@ -7,6 +7,7 @@ import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/ladders.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -153,6 +154,86 @@ void main() {
 
       // The snapshot itself is consumed.
       expect(await controller.repo.loadDayStartSnapshot(), isNull);
+    });
+  });
+
+  group('Back rebuild and reset day', () {
+    test('a reset session no longer counts toward the next back check',
+        () async {
+      final controller =
+          _SilentController(Repository(_ScopedMemoryDatabase()));
+      final now = controller.today();
+      final earlier = now.subtract(const Duration(days: 4));
+      controller.settings = controller.settings.copyWith(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          activatedAt: now.subtract(const Duration(days: 10)),
+          preRecoveryHingeLoad: 90,
+          rebuildStage: BackRebuildStage.blockDeadlift,
+          rebuildGoodMornings: 1,
+          recoverySessionDates: [earlier, now],
+          pendingNextMorningSessionDate: now,
+          pendingSameDayResponse: LowerBackSymptomResponse.unchanged,
+          pendingRebuildExposure: BackRebuildExposure.loaded,
+        ),
+      );
+      await controller.repo.saveSettings(controller.settings);
+
+      await controller.resetDay();
+
+      final state = controller.lowerBackRecovery;
+      expect(state.awaitingNextMorningResponse, isFalse);
+      expect(state.pendingRebuildExposure, BackRebuildExposure.none);
+      expect(state.recoverySessionDates, [earlier]);
+      expect(state.rebuildGoodMornings, 1);
+      expect(state.rebuildStage, BackRebuildStage.blockDeadlift);
+    });
+
+    test('a rebuild ended today keeps its hand-off through a reset', () async {
+      final controller =
+          _SilentController(Repository(_ScopedMemoryDatabase()));
+      final now = controller.today();
+      controller
+        ..exerciseStates = {
+          'hinge': ExerciseState(
+            trackKey: 'hinge',
+            pattern: MovementPattern.hinge,
+            currentLoad: 90,
+            ladderStepIndex: 2,
+          ),
+          backRebuildBlockDeadlift.trackKey: ExerciseState(
+            trackKey: backRebuildBlockDeadlift.trackKey,
+            pattern: MovementPattern.hinge,
+            currentLoad: 48,
+          ),
+        }
+        ..settings = controller.settings.copyWith(
+          lowerBackRecovery: LowerBackRecoveryState(
+            active: true,
+            activatedAt: now.subtract(const Duration(days: 10)),
+            preRecoveryHingeLoad: 90,
+            preRecoveryHingeLadderStepIndex: 2,
+            rebuildStage: BackRebuildStage.blockDeadlift,
+          ),
+        );
+      await controller.repo.saveExerciseStates(controller.exerciseStates);
+      await controller.repo.saveSettings(controller.settings);
+      // The day started while the rebuild was still running.
+      await controller.repo.saveDayStartSnapshot(
+        now,
+        controller.exerciseStates,
+        controller.queueState,
+      );
+
+      await controller.deactivateLowerBackRecovery();
+      expect(controller.exerciseStates['hinge']!.currentLoad, 48);
+
+      await controller.resetDay();
+
+      final hinge = controller.exerciseStates['hinge']!;
+      expect(controller.lowerBackRecovery.active, isFalse);
+      expect(hinge.ladderStepIndex, 0);
+      expect(hinge.currentLoad, 48);
     });
   });
 

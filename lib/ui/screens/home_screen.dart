@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/cardio_engine.dart';
+import '../../engine/lower_back_recovery_engine.dart';
 import '../../models/lower_back_recovery.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
@@ -76,27 +77,97 @@ class _HomeScreenState extends State<HomeScreen> {
           durationMinutes: 60,
           heartRateMaxBpm: controller.settings.hrMax,
         ),
-        title: 'Log completed Zone 2 ride',
+        title: 'Log completed Zone 2',
         unplannedRide: true,
+        allowWalk: true,
       );
       if (completion == null || !mounted) return;
       await controller.logUnplannedZone2(completion: completion);
       if (!mounted) return;
+      final activity = completion.protocol.isWalk ? 'walk' : 'ride';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Zone 2 ride saved — ${completion.completedDurationSeconds ~/ 60} min',
+            'Zone 2 $activity saved — ${completion.completedDurationSeconds ~/ 60} min',
           ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not log Zone 2 ride: $error')),
+        SnackBar(content: Text('Could not log Zone 2: $error')),
       );
     } finally {
       if (mounted) setState(() => _loggingZone2 = false);
     }
+  }
+
+  Widget _backRebuildCard(BuildContext context, AppController controller) {
+    final rebuild = controller.lowerBackRecovery;
+    final theme = Theme.of(context);
+    final title = rebuild.active
+        ? 'Back rebuild · Stage ${rebuild.rebuildStageNumber} of '
+            '${LowerBackRecoveryState.rebuildStageCount}'
+        : 'Bike return';
+    return Card(
+      key: const Key('home-back-rebuild'),
+      color: theme.colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.health_and_safety),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(title, style: theme.textTheme.titleMedium),
+                ),
+              ],
+            ),
+            if (rebuild.active) ...[
+              const SizedBox(height: 8),
+              Text(rebuild.rebuildStageTitle),
+              Text(
+                '${controller.backRebuildNextStepLabel} · good mornings '
+                '${rebuild.rebuildGoodMornings}/'
+                '${LowerBackRecoveryEngine.goodMorningsToAdvance}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+            if (rebuild.bikeReturnInProgress) ...[
+              const SizedBox(height: 8),
+              Text(rebuild.bikeReturnLabel, style: theme.textTheme.bodySmall),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _backRoutineCard(BuildContext context, AppController controller) {
+    final done = controller.backRoutineDoneToday;
+    return Card(
+      key: const Key('home-back-routine'),
+      child: ListTile(
+        leading: Icon(done ? Icons.check_circle : Icons.self_improvement),
+        title: Text(done ? 'Back routine done today' : 'Back routine'),
+        subtitle: done
+            ? null
+            : const Text(
+                'McGill Big 3 (curl-up, side bridge, bird dog): 10-second '
+                'holds, 3-2-1, about 6 min. Then an easy 10–15 min uphill walk.',
+              ),
+        trailing: done
+            ? null
+            : FilledButton(
+                key: const Key('home-back-routine-done'),
+                onPressed: controller.markBackRoutineDone,
+                child: const Text('Done'),
+              ),
+      ),
+    );
   }
 
   Future<void> _logBouldering() async {
@@ -130,21 +201,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       if (mounted) setState(() => _loggingBouldering = false);
     }
-  }
-
-  Future<void> _recordLowerBackMorningResponse(
-    LowerBackSymptomResponse response,
-  ) async {
-    await context
-        .read<AppController>()
-        .recordLowerBackNextMorningResponse(response);
-    if (!mounted) return;
-    final message = response == LowerBackSymptomResponse.worse
-        ? 'Dose stepped back. Stop and seek care for new spreading pain, numbness, tingling, weakness, or bladder/bowel changes.'
-        : 'Next-morning response saved.';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   Future<void> _logUnplannedRehit() async {
@@ -314,79 +370,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 12),
                             ],
-                            if (controller.lowerBackRecovery.active) ...[
-                              Card(
-                                key: const Key('home-lower-back-recovery'),
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .secondaryContainer,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.health_and_safety),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'Lower-back recovery mode',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'Supported strength · glutes · hamstrings · gentle core',
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Your normal check-in chooses the workout. Unaffected strength exercises can progress; stationary cycling is paused.',
-                                      ),
-                                      if (controller
-                                          .lowerBackMorningResponseDue) ...[
-                                        const SizedBox(height: 12),
-                                        const Text(
-                                          'Compared with before yesterday\'s recovery work, how does your lower back feel this morning?',
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 8,
-                                          children: [
-                                            OutlinedButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse.worse,
-                                              ),
-                                              child: const Text('Worse'),
-                                            ),
-                                            OutlinedButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse
-                                                    .unchanged,
-                                              ),
-                                              child: const Text('Same'),
-                                            ),
-                                            FilledButton(
-                                              onPressed: () =>
-                                                  _recordLowerBackMorningResponse(
-                                                LowerBackSymptomResponse.better,
-                                              ),
-                                              child: const Text('Better'),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            if (controller.lowerBackRecovery.active ||
+                                controller
+                                    .lowerBackRecovery.bikeReturnInProgress) ...[
+                              _backRebuildCard(context, controller),
+                              const SizedBox(height: 12),
+                            ],
+                            if (controller.backRoutineOfferedToday) ...[
+                              _backRoutineCard(context, controller),
                               const SizedBox(height: 12),
                             ],
                             if (controller.settings.travelMode) ...[
@@ -486,8 +477,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             OutlinedButton.icon(
                               key: const Key('home-log-unplanned-zone2'),
                               onPressed: _loggingZone2 ? null : _logZone2,
-                              icon: const Icon(Icons.directions_bike),
-                              label: const Text('Log Zone 2 ride'),
+                              icon: const Icon(Icons.directions_walk),
+                              label: const Text('Log Zone 2 ride or walk'),
                             ),
                           ],
                         ),

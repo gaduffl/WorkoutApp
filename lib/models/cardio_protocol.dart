@@ -1,12 +1,26 @@
 /// The three cardio stimuli tracked independently by the training model.
 enum CardioProtocolType { norwegian4x4, zone2Base, rehit }
 
+/// How a continuous Zone 2 dose is performed. Interval presets are always
+/// ridden on the CAROL bike.
+enum CardioModality { bike, walk }
+
 /// Stable identity and human-readable name for a cardio protocol.
 class CardioProtocol {
   final CardioProtocolType type;
   final String name;
 
-  const CardioProtocol({required this.type, required this.name});
+  /// Credit and validation depend only on [type]; the modality decides the
+  /// instructions and whether the work counts as cycling.
+  final CardioModality modality;
+
+  const CardioProtocol({
+    required this.type,
+    required this.name,
+    this.modality = CardioModality.bike,
+  });
+
+  bool get isWalk => modality == CardioModality.walk;
 
   static const norwegian4x4 = CardioProtocol(
     type: CardioProtocolType.norwegian4x4,
@@ -15,6 +29,14 @@ class CardioProtocol {
   static const zone2Base = CardioProtocol(
     type: CardioProtocolType.zone2Base,
     name: 'Zone 2 / base aerobic',
+  );
+
+  /// Forward uphill walking on the ATG treadmill: the same Zone 2 dose when
+  /// cycling is paused or not yet cleared by Back rebuild.
+  static const zone2Walk = CardioProtocol(
+    type: CardioProtocolType.zone2Base,
+    name: 'Zone 2 · uphill walk (ATG treadmill)',
+    modality: CardioModality.walk,
   );
   static const rehit = CardioProtocol(
     type: CardioProtocolType.rehit,
@@ -69,6 +91,22 @@ class CardioPrescription {
         assert(targetRpeMin == null ||
             targetRpeMax == null ||
             targetRpeMax >= targetRpeMin);
+
+  /// The same dose and targets performed with another protocol variant, for
+  /// example the uphill-walk form of Zone 2.
+  CardioPrescription withProtocol(CardioProtocol protocol) =>
+      CardioPrescription(
+        protocol: protocol,
+        plannedWorkIntervals: plannedWorkIntervals,
+        plannedWorkSeconds: plannedWorkSeconds,
+        plannedRecoveryIntervals: plannedRecoveryIntervals,
+        plannedRecoverySeconds: plannedRecoverySeconds,
+        plannedDurationSeconds: plannedDurationSeconds,
+        targetHeartRateMinBpm: targetHeartRateMinBpm,
+        targetHeartRateMaxBpm: targetHeartRateMaxBpm,
+        targetRpeMin: targetRpeMin,
+        targetRpeMax: targetRpeMax,
+      );
 }
 
 /// Exact dose completed during a cardio session.

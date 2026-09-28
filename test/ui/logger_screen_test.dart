@@ -7,7 +7,6 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
-import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
 import 'package:morningcoach/models/session_type.dart';
@@ -1049,10 +1048,10 @@ void main() {
     expect(nominallySafe.lastEndedEarly, isTrue);
   });
 
-  testWidgets('recovery work requires a same-day symptom response',
+  testWidgets('Back rebuild work completes without a same-day question',
       (tester) async {
     final controller = captureController();
-    final recoveryPlan = SessionPlan(
+    final rebuildPlan = SessionPlan(
       sessionId: SessionTypeId.s1,
       sessionName: 'Lower',
       tier: SessionTier.compressed,
@@ -1060,37 +1059,29 @@ void main() {
       lowerBackRecoveryMode: true,
       exercises: const [
         PlannedExercise(
-          trackKey: lowerBackRecoveryTrackKey,
+          trackKey: 'sub:hinge:back_rebuild_block_deadlift',
           pattern: MovementPattern.hinge,
-          name: 'Static back-extension hold',
+          name: 'DB deadlift from blocks',
           sets: 1,
-          metric: ExerciseMetric.seconds,
-          targetRange: (30, 30),
-          suggestedValue: 30,
-          rirTarget: Rir.rir4plus,
-          progressionEligible: false,
+          targetRange: (8, 10),
+          loadTotal: 42,
+          rirTarget: Rir.rir3plus,
         ),
       ],
     );
     await tester.pumpWidget(
       ChangeNotifierProvider<AppController>.value(
         value: controller,
-        child: MaterialApp(home: LoggerScreen(plan: recoveryPlan)),
+        child: MaterialApp(home: LoggerScreen(plan: rebuildPlan)),
       ),
     );
 
-    await tester.tap(find.text('Log hold & finish'));
+    await tester.tap(find.text('Log set & finish'));
     await tester.pumpAndSettle();
-    expect(find.text('How does your lower back feel now?'), findsOneWidget);
-    expect(controller.completed, isFalse);
-
-    await tester.tap(find.text('Same'));
-    await tester.pumpAndSettle();
+    // The only back question is the next-morning check-in answer.
+    expect(find.text('How does your lower back feel now?'), findsNothing);
     expect(controller.completed, isTrue);
-    expect(
-      controller.lastLowerBackResponse,
-      LowerBackSymptomResponse.unchanged,
-    );
+    expect(controller.lastLoggedSets.single.weight, 42);
   });
 
   testWidgets('restoring a final saved set finishes without logging it twice',
@@ -1202,7 +1193,6 @@ class _FinisherController extends AppController {
   List<SetLog> lastLoggedSets = [];
   DateTime? lastStartedAt;
   int? lastElapsedSeconds;
-  LowerBackSymptomResponse? lastLowerBackResponse;
 
   _FinisherController(this.baseEligibility)
       : super(Repository(AppDatabase()));
@@ -1235,13 +1225,11 @@ class _FinisherController extends AppController {
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
-    LowerBackSymptomResponse? lowerBackSameDayResponse,
   }) async {
     completed = true;
     lastEndedEarly = endedEarly;
     lastLoggedSets = List.of(loggedSets);
     lastStartedAt = startedAt;
     lastElapsedSeconds = elapsedSeconds;
-    lastLowerBackResponse = lowerBackSameDayResponse;
   }
 }

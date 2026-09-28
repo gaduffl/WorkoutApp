@@ -10,11 +10,15 @@ import 'package:morningcoach/engine/stimulus_ledger_engine.dart';
 import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/check_in.dart';
+import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/history_data.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
 import 'package:morningcoach/models/training_targets.dart';
+import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/state/app_controller.dart';
 import 'package:morningcoach/ui/screens/home_screen.dart';
 
@@ -40,6 +44,66 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('Back rebuild shows one compact card and a rest-day routine',
+      (tester) async {
+    final controller = _RecordingHomeController()
+      ..settings = const UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          rebuildStage: BackRebuildStage.blockDeadlift,
+          rebuildGoodMornings: 1,
+          bikeReturnStep: BikeReturnStep.walkOnly,
+          preRecoveryHingeLoad: 90,
+        ),
+      );
+    controller.todayTrace = _restDayTrace(controller.today());
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pump();
+
+    final card = find.byKey(const Key('home-back-rebuild'));
+    expect(card, findsOneWidget);
+    Finder inCard(Finder finder) =>
+        find.descendant(of: card, matching: finder);
+    expect(inCard(find.text('Back rebuild · Stage 2 of 3')), findsOneWidget);
+    expect(inCard(find.text('Deadlift from blocks')), findsOneWidget);
+    expect(inCard(find.textContaining('reaches 70%')), findsOneWidget);
+    expect(inCard(find.textContaining('good mornings 1/2')), findsOneWidget);
+    expect(inCard(find.textContaining('15-min easy ride')), findsOneWidget);
+
+    final routine = find.byKey(const Key('home-back-routine'));
+    await tester.ensureVisible(routine);
+    expect(
+      find.descendant(of: routine, matching: find.textContaining('Big 3')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('home-back-routine-done')));
+    await tester.pump();
+    expect(controller.backRoutineDoneCalls, 1);
+    expect(find.text('Back routine done today'), findsOneWidget);
+    expect(find.byKey(const Key('home-back-routine-done')), findsNothing);
+  });
+
+  testWidgets('the back routine can be switched off and hides otherwise',
+      (tester) async {
+    final controller = _RecordingHomeController()
+      ..settings = const UserSettings(bigThreeEnabled: false);
+    controller.todayTrace = _restDayTrace(controller.today());
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('home-back-routine')), findsNothing);
+    expect(find.byKey(const Key('home-back-rebuild')), findsNothing);
+  });
 
   test('home copy treats a partial workout as a saved attempt', () {
     expect(
@@ -199,7 +263,7 @@ void main() {
     await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    expect(find.text('Log completed Zone 2 ride'), findsOneWidget);
+    expect(find.text('Log completed Zone 2'), findsOneWidget);
     expect(find.textContaining('already completed today'), findsOneWidget);
     final duration = find.widgetWithText(TextField, 'Duration (min)');
     expect(tester.widget<TextField>(duration).controller!.text, isEmpty);
@@ -231,11 +295,37 @@ void main() {
       await tester.tap(find.text('Save ride'));
       await tester.pumpAndSettle();
       expect(controller.zone2Calls, 0);
-      expect(find.text('Log completed Zone 2 ride'), findsOneWidget);
+      expect(find.text('Log completed Zone 2'), findsOneWidget);
     }
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(controller.zone2Calls, 0);
+  });
+
+  testWidgets('unplanned Zone 2 can be logged as an uphill walk',
+      (tester) async {
+    final controller = await pumpHome(tester);
+    final button = find.byKey(const Key('home-log-unplanned-zone2'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Uphill walk'));
+    await tester.pumpAndSettle();
+    expect(find.text(CardioProtocol.zone2Walk.name), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Duration (min)'),
+      '40',
+    );
+    await tester.tap(find.text('Save walk'));
+    await tester.pumpAndSettle();
+    expect(controller.zone2Calls, 1);
+    expect(controller.zone2Completion!.protocol.isWalk, isTrue);
+    expect(
+      controller.zone2Completion!.protocol.type,
+      CardioProtocolType.zone2Base,
+    );
+    expect(controller.zone2Completion!.meetsCreditableDose, isTrue);
+    expect(find.text('Zone 2 walk saved — 40 min'), findsOneWidget);
   });
 
   testWidgets('completed unplanned REHIT captures structured dose and credit',
@@ -408,6 +498,15 @@ class _RecordingHomeController extends AppController {
   @override
   DateTime today() => DateTime(2026, 9, 2);
 
+  int backRoutineDoneCalls = 0;
+
+  @override
+  Future<void> markBackRoutineDone() async {
+    backRoutineDoneCalls += 1;
+    settings = settings.copyWith(backRoutineDoneDay: repo.ymd(today()));
+    notifyListeners();
+  }
+
   @override
   Future<void> logUnplannedZone2({required CardioCompletion completion}) async {
     zone2Calls += 1;
@@ -485,3 +584,29 @@ class _RecordingHomeController extends AppController {
     );
   }
 }
+
+DecisionTrace _restDayTrace(DateTime day) => DecisionTrace(
+      date: day,
+      checkin: CheckIn(
+        date: day,
+        timeMinutes: 0,
+        subjective: 4,
+        timestamp: day,
+      ),
+      recovery: const RecoveryTrace(
+        hrvZToday: 0,
+        hrvTrend3: 0,
+        sleepScore: 90,
+        rhrDev: 0,
+        bucket: ReadinessBucket.green,
+        compositeScore: 1,
+      ),
+      candidates: const [],
+      firedRules: const [],
+      plan: null,
+      restReason: 'Rest day',
+      queue: const QueueTraceInfo(
+        pointerBefore: SessionTypeId.s1,
+        servedBefore: {},
+      ),
+    );

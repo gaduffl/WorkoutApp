@@ -123,20 +123,20 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.lowerBackRecoveryActive:
       return lang == AppLanguage.de
-          ? 'Der Rücken-Recovery-Modus ist aktiv: belastetes Heben und dessen Laststeigerung pausieren; die konservative Dosis gilt nur für Rückenstrecker; unbelastete Bereiche können weiter Fortschritte machen.'
-          : 'Lower-back recovery mode is active: loaded hinge work and its load progression are paused; the optional back-extension dose applies only to that exercise; unaffected strength work can progress.';
+          ? 'Back rebuild Stufe 1: Glute Bridges mit Kurzhantel und Sliding Hamstring Curls ersetzen vorerst das Kreuzheben.'
+          : 'Back rebuild stage 1: dumbbell glute bridges and sliding hamstring curls replace deadlifts for now.';
     case RuleKey.lowerBackRecoveryLoadMinimized:
       return lang == AppLanguage.de
-          ? 'Der Rücken-Recovery-Modus minimiert die LWS-Last: keine belasteten Squats, ungestützten Rows oder Presses, Zusatzgewichte bei Pull-ups oder belastenden Core-Stufen. Stattdessen gelten gestützte Oberkörperarbeit, Pull-ups ohne Zusatzgewicht und ATG-1/Pump-Arbeit.'
-          : 'Lower-back recovery minimizes lumbar loading: no weighted squats, unsupported rows or presses, added pull-up load, or demanding core steps. Supported upper-body work, unweighted pull-ups, and ATG 1 pump work are used instead.';
+          ? 'Back rebuild ist aktiv: nur der Kreuzheben-Platz ändert sich; der Rest des heutigen Plans ist normales Training.'
+          : 'Back rebuild is on: only the deadlift slot changes; the rest of today\'s plan is normal training.';
     case RuleKey.lowerBackRecoverySpacing:
       return lang == AppLanguage.de
-          ? 'Optionale Rückenstrecker-Arbeit ist heute wegen des 48-Stunden-Abstands, der Grenze von zwei Einheiten pro sieben Tage oder des noch offenen Morgen-Feedbacks nicht fällig; Heben bleibt ersetzt.'
-          : 'Optional back-extension work is not due today because of the 48-hour spacing, two-per-seven-day cap, or pending morning feedback; hinge work stays replaced.';
+          ? '${p['exercise'] ?? 'Das Kreuzheben'} ist heute nicht fällig (48-Stunden-Abstand, höchstens zweimal pro Woche, Rücken- oder Hüftschmerz oder Reise); Glute Bridges und Hamstring Curls füllen den Platz.'
+          : '${p['exercise'] ?? 'The rebuild deadlift'} is not due today (48-hour spacing, twice-a-week cap, a back or hip flag, or travel), so glute bridges and hamstring curls fill the slot.';
     case RuleKey.lowerBackRecoveryReentry:
       return lang == AppLanguage.de
-          ? 'Die symptomgesteuerten Kriterien erlauben einen vorsichtigen Heben-Wiedereinstieg mit 50% und erhöhtem Start; heute keine Laststeigerung.'
-          : 'Symptom-gated criteria opened a graded elevated-start deadlift re-entry at 50%; no load increase today.';
+          ? 'Back rebuild Stufe ${p['stage'] ?? ''}: ${p['exercise'] ?? 'Kreuzheben'} mit gedeckelter Last, als letzte Übung.'
+          : 'Back rebuild stage ${p['stage'] ?? ''}: ${p['exercise'] ?? 'the deadlift'} at a capped load, last in the session.';
     case RuleKey.painSubMild:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: leichter Schmerz - Last reduziert und Bewegungsradius angepasst.'

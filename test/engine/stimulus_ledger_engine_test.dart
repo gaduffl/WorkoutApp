@@ -4,6 +4,7 @@ import 'package:morningcoach/engine/training_status_engine.dart';
 import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/session_log.dart';
@@ -384,6 +385,63 @@ void main() {
       );
       expect(curlOnly.muscle(MajorMuscleGroup.hamstrings).effectiveSets7d, 1);
       expect(curlOnly.muscle(MajorMuscleGroup.glutes).effectiveSets7d, 0);
+    });
+
+    test('Back rebuild deadlifts credit like the hinge and light the lumbar',
+        () {
+      for (final exercise in [
+        backRebuildBlockDeadlift,
+        backRebuildRomanianDeadlift,
+      ]) {
+        final log = strengthLog(
+          id: exercise.slug,
+          templateId: SessionTypeId.s1,
+          sets: [
+            set(
+              trackKey: exercise.trackKey,
+              pattern: MovementPattern.hinge,
+              name: exercise.name,
+              rir: Rir.rir3plus,
+            ),
+          ],
+        );
+        final dose = engine.buildFromSessionLogs(logs: [log], asOf: asOf);
+        expect(
+          dose.muscle(MajorMuscleGroup.hamstrings).effectiveSets7d,
+          1,
+          reason: exercise.slug,
+        );
+        expect(dose.muscle(MajorMuscleGroup.glutes).effectiveSets7d, 0.5);
+        expect(dose.muscle(MajorMuscleGroup.back).effectiveSets7d, 0);
+        final exposure = const MuscleExposureEngine().fromCompleted(
+          logs: [log],
+        );
+        expect(exposure.lowerBack, greaterThan(0), reason: exercise.slug);
+      }
+
+      // The stage 1 bridge and curl never light the lumbar area.
+      final bridges = strengthLog(
+        id: 'rebuild-bridges',
+        templateId: SessionTypeId.s1,
+        sets: [
+          set(
+            trackKey: alternativeGluteBridge.trackKey,
+            pattern: MovementPattern.hinge,
+            name: alternativeGluteBridge.name,
+            rir: Rir.rir3plus,
+          ),
+          set(
+            trackKey: alternativeHamstringCurl.trackKey,
+            pattern: MovementPattern.hinge,
+            name: alternativeHamstringCurl.name,
+            rir: Rir.rir3plus,
+          ),
+        ],
+      );
+      expect(
+        const MuscleExposureEngine().fromCompleted(logs: [bridges]).lowerBack,
+        0,
+      );
     });
 
     test('unknown substitute tracks do not inherit their broad pattern', () {

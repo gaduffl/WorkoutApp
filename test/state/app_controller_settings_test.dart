@@ -13,26 +13,56 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'legacy active recovery keeps cycling paused after exit and reload',
+    'a legacy active recovery profile converts to Back rebuild stage 1',
     () async {
-      final raw =
-          userSettingsToJson(
-              const UserSettings(
-                lowerBackRecovery: LowerBackRecoveryState(active: true),
-              ),
-            )
-            ..remove('stationaryBikePaused')
-            ..remove('recoveryBackExtensionsEnabled');
+      Map<String, dynamic> legacy(UserSettings settings) {
+        final raw = userSettingsToJson(settings);
+        final recovery = (raw['lowerBackRecovery'] as Map<String, dynamic>)
+          ..remove('rebuildStage')
+          ..remove('rebuildGoodMornings')
+          ..remove('bikeReturnStep')
+          ..remove('pendingRebuildExposure')
+          ..remove('pendingExtensionExposure')
+          ..remove('pendingBikeExposure');
+        return raw..['lowerBackRecovery'] = recovery;
+      }
+
+      final active = userSettingsFromJson(
+        legacy(
+          const UserSettings(
+            stationaryBikePaused: true,
+            lowerBackRecovery: LowerBackRecoveryState(active: true),
+          ),
+        ),
+      );
+      expect(active.lowerBackRecovery.active, isTrue);
+      expect(active.lowerBackRecovery.rebuildStage, BackRebuildStage.bridges);
+      expect(
+        active.lowerBackRecovery.bikeReturnStep,
+        BikeReturnStep.walkOnly,
+      );
+      // The old mode's forced pause hands over to the stepped bike return.
+      expect(active.stationaryBikePaused, isFalse);
+
       final controller = _SettingsController(
         Repository(_SettingsMemoryDatabase()),
-      )..settings = userSettingsFromJson(raw);
-      expect(controller.stationaryBikePaused, isTrue);
-      expect(controller.settings.recoveryBackExtensionsEnabled, isFalse);
+      )..settings = active;
+      expect(controller.cyclingAccess.any, isFalse);
       await controller.deactivateLowerBackRecovery();
       expect(controller.lowerBackRecovery.active, isFalse);
+      expect(controller.cyclingAccess.rehit, isTrue);
+      final reloaded = await controller.repo.loadSettings();
+      expect(reloaded.stationaryBikePaused, isFalse);
+      expect(reloaded.lowerBackRecovery.bikeReturnStep, BikeReturnStep.complete);
+
+      // An inactive legacy profile keeps an explicit manual pause.
+      final inactive = userSettingsFromJson(
+        legacy(const UserSettings(stationaryBikePaused: true)),
+      );
+      expect(inactive.stationaryBikePaused, isTrue);
       expect(
-        (await controller.repo.loadSettings()).stationaryBikePaused,
-        isTrue,
+        inactive.lowerBackRecovery.bikeReturnStep,
+        BikeReturnStep.complete,
       );
     },
   );
@@ -51,6 +81,7 @@ void main() {
                 const Duration(days: 1),
               ),
               pendingSameDayResponse: LowerBackSymptomResponse.unchanged,
+              pendingExtensionExposure: true,
             ),
           );
     await controller.recordLowerBackNextMorningResponse(
@@ -61,6 +92,12 @@ void main() {
       controller.lowerBackRecovery.stage,
       LowerBackRecoveryStage.dynamicUnloaded,
     );
+    expect(controller.lowerBackRecovery.targetDynamicReps, 12);
+    expect(
+      controller.lowerBackRecovery.rebuildStage,
+      BackRebuildStage.bridges,
+    );
+    expect(controller.lowerBackRecovery.awaitingNextMorningResponse, isFalse);
   });
 
   test('recovery options survive serialization and ordinary saves', () async {

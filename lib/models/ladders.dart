@@ -266,6 +266,32 @@ const recoveryAbdominalActivation = SubstituteExercise(
   targetRange: (6, 6),
 );
 
+/// Back rebuild's loaded hinge steps. Separate tracks keep the capped stage
+/// loads from advancing or overwriting the frozen normal hinge ladder.
+const backRebuildBlockDeadlift = SubstituteExercise(
+  slug: 'back_rebuild_block_deadlift',
+  name: 'DB deadlift from blocks',
+  pattern: MovementPattern.hinge,
+  dumbbells: 2,
+  targetRange: (8, 10),
+);
+
+const backRebuildRomanianDeadlift = SubstituteExercise(
+  slug: 'back_rebuild_romanian_deadlift',
+  name: 'DB Romanian deadlift',
+  pattern: MovementPattern.hinge,
+  dumbbells: 2,
+  targetRange: (8, 10),
+);
+
+/// Hinge-slot tracks prescribed by Back rebuild: stage-1 bridges and curls
+/// (shared with the deadlift-alternative tracks) and the loaded deadlifts.
+bool isBackRebuildHingeTrack(String trackKey) =>
+    trackKey == alternativeGluteBridge.trackKey ||
+    trackKey == alternativeHamstringCurl.trackKey ||
+    trackKey == backRebuildBlockDeadlift.trackKey ||
+    trackKey == backRebuildRomanianDeadlift.trackKey;
+
 const alternativeGluteBridge = SubstituteExercise(
   slug: 'alternative_glute_bridge',
   name: 'Floor glute bridge',
@@ -401,6 +427,8 @@ final Map<String, SubstituteExercise> substituteRegistry = {
     lowerBackRecoveryFloorGluteBridge,
     lowerBackRecoverySlidingHamstringCurl,
     recoveryAbdominalActivation,
+    backRebuildBlockDeadlift,
+    backRebuildRomanianDeadlift,
     alternativeGluteBridge,
     alternativeHamstringCurl,
     ...s5NamedAccessories,

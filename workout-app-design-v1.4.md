@@ -85,18 +85,18 @@ Each ladder step also has micro-progressions in order: **load → reps (within r
 | Full (35 min) | 3 | 2 |
 | Compressed (20–25 min) | 2 (first superset pair only) | 0 |
 
-**Warm-up protocol:** every app-authored general or ATG preparation block begins with jumping jacks inside the existing time allocation; pain-aware plans use low-impact step jacks or marching when jumping or impact reproduces symptoms. Cardio-owned preset warm-ups are unchanged. For the session's *first* compound only: 40% × 8, 60% × 5, 80% × 3 (percent of first work load, round down to achievable total, rest ≤ 60 s). Every subsequent exercise: one feeder set at 60% × 5. When the ATG/knee-health block is present it runs first and replaces general warm-up (backward treadmill, jumping jacks, tibialis + calf raises within the allocated block).
+**Warm-up protocol:** every app-authored general or ATG preparation block begins with jumping jacks inside the existing time allocation; pain-aware plans use low-impact step jacks or marching when jumping or impact reproduces symptoms. Cardio-owned preset warm-ups are unchanged. For the session's *first* compound only: 40% × 8, 60% × 5, 80% × 3 (percent of first work load, round down to achievable total, rest ≤ 60 s). Every subsequent exercise: one feeder set at 60% × 5. When the ATG/knee-health block is present it runs first and replaces general warm-up (backward treadmill, jumping jacks, tibialis + calf raises within the allocated block). When the `McGill Big 3` setting is on (default), a fixed, non-progressing Big 3 entry (curl-up, side bridge, bird dog; 10-second holds) follows the preparation block in its own 2/4/6 minutes for the 20/35/60-minute windows.
 
 **Load semantics:** all loads are stored, computed, and displayed as **totals** (both dumbbells summed when two are used; single-DB exercises = that dumbbell's weight). The equipment table in Settings lists each dumbbell's achievable weight steps — §2.6 specifies the user's actual PowerBlocks, and Settings must ship pre-filled with these values. The engine derives the set of achievable *totals* per exercise (1-DB vs 2-DB). "One increment" = the next achievable total above/below current. All percentage-derived loads round **down** to the nearest achievable total. Units per user setting (lb default; kg conversion at display layer only, storage stays in the equipment's native unit).
 
 **Rep display:** the prescription always shows the range (6–10 or 8–15), never a single number; load stays fixed until the progress trigger fires (§6.2) — the user's job between progressions is to close the rep gap.
 
-**Rest defaults:** compounds 90 s (superset partner fills the rest), accessories 60 s; timer pre-set accordingly.
+**Rest defaults:** compounds 90 s (superset partner fills the rest), accessories 60 s; timer pre-set accordingly. Back rebuild's loaded deadlift (§7.3) is never supersetted and always runs last.
 
 **Cardio prescriptions (engine-emitted targets):**
 - S3 Norwegian 4×4: 4 × (4 min @ 85–95% HRmax + 3 min easy spin), plus 5 min warm-up / 3 min cool-down ≈ 36 min.
 - S7 REHIT: CAROL native protocol (2 × 20 s max sprints); no engine-side targets, the bike controls it.
-- S6 Zone 2: HR 60–70% HRmax or "full sentences possible"; CAROL manual mode or brisk walk.
+- S6 Zone 2: HR 60–70% HRmax or "full sentences possible"; CAROL manual mode, or an uphill forward walk on the ATG treadmill whenever cycling is paused or not yet cleared by the stepped bike return (§7.3).
 - HRmax default = 208 − 0.7 × age; user-overridable in Settings.
 
 ### 2.6 Equipment Specification — actual PowerBlock steps **[v1.2 — user-provided; ships as pre-filled Settings default]**
@@ -309,51 +309,86 @@ Lowering weight after a break or a twinge is a **first-class engine event**, not
 - **Mild** flags: decay automatically after 1 pain-free session on the pattern.
 - **Escalation rule (hard-coded, deterministic, not AI):** sharp flag persisting > 7 days, OR user tags "radiating / numbness / tingling" → app displays a fixed medical-advice notice and stops recommending the pattern until the user clears the flag manually. The AI layer is prohibited from softening or overriding this text.
 
-### 7.3 Dedicated lower-back recovery mode
+### 7.3 Back rebuild (lower-back recovery mode)
 
-A training modification, not a diagnosis or healing claim. Activation retains the
-existing warning-sign confirmation. Current or persisted leg symptoms pause training;
-weakness, saddle sensory changes and bladder/bowel changes retain urgent guidance.
+A training modification after a back incident, not a diagnosis or healing claim.
+Activation retains the existing warning-sign confirmation. Current or persisted leg
+symptoms pause training; weakness, saddle sensory changes and bladder/bowel changes
+retain urgent guidance.
 
-Recovery uses the normal morning check-in, queue, readiness, time budget, workout logger
-and muscle ledger. It has no mandatory phase dashboard, manual dose form, or daily
-exercise-selection task. Home shows a compact status; Settings keeps extra options in
-one collapsed section.
+Back rebuild changes only the hinge slot, the bike and the general preparation.
+Every other slot (squat, presses, rows, pull-ups, dips, arms, core) is the normal plan
+from the same queue, readiness, time budget, ladders, RIR and pain, partial-work,
+travel and deload gates. There is no second planner, closed catalogue, phase
+dashboard, manual dose form or daily selection task. Home shows one compact card
+(stage, what unlocks the next one, bike step); Settings has one `Back rebuild` switch
+and keeps extensions, the cycling pause and deadlift alternatives in one collapsed
+section. Lifting happens in the morning, so the general preparation is jumping jacks
+(step jacks or marching if impact bothers the back), then an uphill forward walk on
+the ATG treadmill; the loaded hinge is never the first thing in the session.
 
-The closed exercise catalogue restores the supported selection from PR #50:
-- supported floor press and chest-supported row;
-- curls and lateral raises, with torso support as needed;
-- assisted-as-needed unweighted pull-ups and bodyweight dips;
-- floor glute bridges and sliding hamstring curls on lower/full-body days;
-- a small gentle abdominal-activation dose on lower/full-body days when time permits.
+**Hinge slot, three stages:**
 
-The last three posterior/core tracks remain conservative and progression-frozen.
-Supported upper-body load/tempo progression remains eligible on GREEN days, independently
-of pending back-extension feedback. Pull-ups and dips can progress tempo then pause on
-their dedicated bodyweight tracks, with no added load or normal ladder advancement.
-Assisted-as-needed recovery pull-ups target at least 3 RIR, so completed sets can
-contribute conservative back/biceps effective-set credit under the ordinary ledger.
-Every track retains pain, readiness, deload, travel and completed-set gates.
+| Stage | Hinge work | Load (of the preserved pre-rebuild hinge load) | Effort |
+|-------|------------|-----------------------------------------------|--------|
+| 1 · Bridges & hamstring curls | DB floor glute bridge + sliding hamstring curl in the hinge position (the `Keep deadlift alternatives` tracks) | their own normal progression | normal |
+| 2 · Deadlift from blocks | DB deadlift from blocks, handles about mid-shin | starts at 50%, capped at 70% | RIR 3+ |
+| 3 · Romanian deadlift | DB Romanian deadlift | starts at 70%, capped at 100% | RIR 2 |
 
-Normal loaded squat/deadlift ladders, unsupported rows/presses and demanding core
-ladders remain excluded. Both posterior accessories survive 60-to-35 compression;
-all work still obeys the hard duration budget. Bridges credit glutes and sliding curls
-credit hamstrings only through the existing logged-set ledger.
+Loaded steps have their own tracks and never advance or overwrite the frozen normal
+hinge ladder. They run last in the session, never in a superset, with compound rest
+and warm-up, at most twice per rolling seven days and at least 48 hours apart. On
+other days, with any lower-back or hip flag, or in travel mode, stage-1 work fills the
+slot. A mild flag eases the rebuild tracks through the ordinary pain table (one load
+step); sharp pain removes all rebuild hinge work. Stage-1 tracks credit only
+glutes and hamstrings respectively; the loaded deadlifts use the hinge's muscle
+profile and may light the lumbar area in the Today exposure view.
 
-Back extensions are optional and off by default. When explicitly enabled, the existing
-unloaded hold-to-controlled-repetition dose uses same-day/next-morning feedback, at
-most twice per rolling week and at least 48 hours apart. These constraints apply only
-to back extensions. Neither completing extensions nor reaching their dose ceiling
-ends recovery or restores deadlifts. The apparatus is not represented as certified.
+**Next-morning check.** After a session with hinge-slot, extension or bike-return
+work, the next check-in asks one question: back compared with before the last session
+— Better, Same or Worse. It is required before planning when due and is applied
+before today's plan is built. There is no same-day question; a pain-flagged set on
+rebuild work makes the check a setback. Two same-or-better mornings advance a stage
+(in stages 2–3 only loaded sessions count, and the stage's cap must be reached). A
+worse morning steps back one stage and the stage it leaves resumes one load step
+lighter, never below its floor. Completing a session never advances anything by
+itself.
 
-Stationary cycling (Zone 2, REHIT, 4×4, finishers and nudges) pauses during recovery.
-The effective pause persists on exit, including older profiles, as in PR #51. Settings
-allows explicit resumption afterwards. Already-performed activity remains loggable.
+**Hand-off.** Finishing stage 3 ends Back rebuild automatically and continues the
+normal hinge ladder at DB RDL with the RDL-track load (at most the pre-rebuild load).
+Ending it manually continues at the rebuild's level instead of the old load: the
+elevated-start deadlift at the block load (or 50%) from stages 1–2, the DB RDL from
+stage 3. Outside Back rebuild, a mild lower-back regression of the hinge skips the
+floor DB deadlift and lands on the elevated start.
+
+**Optional back extensions** stay off by default. When enabled they join stages 1–2
+at the end of the session when the spacing above allows, unloaded (holds, then
+controlled reps), and share the next-morning check. Neither completing extensions nor
+reaching their dose ceiling ends Back rebuild or restores deadlifts. The apparatus is
+not represented as certified.
+
+**Stepped bike return.** Starting Back rebuild sets the bike to walk only: Zone 2 is an
+uphill forward walk on the ATG treadmill with the same dose and aerobic credit, while
+4×4, REHIT, finishers and nudges stay closed. A test ride of at least 10 minutes
+(logged as a Zone 2 ride) opens Zone 2 rides; a creditable Zone 2 ride of at least 30
+minutes opens 4×4; a creditable 4×4 opens REHIT. Each step opens after a same-or-better
+next morning; a worse morning steps back one step. Walks never count. The bike return
+continues after the rebuild finishes; a manual end completes it. The manual `Pause
+stationary cycling` switch outranks every step and keeps Zone 2 as a walk.
+Retrospective activity remains loggable.
+
+**McGill Big 3.** Independent of Back rebuild, the `McGill Big 3` setting (default on)
+adds a fixed curl-up, side bridge and bird dog entry of 10-second holds after the
+preparation in every strength session (§2.5). On rest and cardio-only days Home offers
+the same routine plus an easy 10–15-minute uphill walk with one Done tap; it never
+changes the daily plan.
+
+An active profile saved by the earlier recovery mode converts on load to stage 1 with
+the bike at walk only; its forced cycling pause is cleared.
 
 The separate `Keep deadlift alternatives` preference also replaces normal-training
 hinge slots with floor glute bridges and sliding hamstring curls. Their independent
 tracks start without transferring the old deadlift load and obey ordinary pain gates.
-Recovery itself always uses the bodyweight posterior variants.
 
 Evidence boundary: NICE NG59 supports self-management, continued normal
 activity, and exercise selected around the person's needs and capabilities;
@@ -361,7 +396,9 @@ the WHO 2023 guideline supports structured exercise as one component of care
 for chronic primary low-back pain. Neither establishes one back-extension
 protocol as a cure or a way to diagnose a herniated disc. NHS cauda-equina
 guidance supplies the emergency bladder/bowel, saddle-sensation, and weakness
-warning signs used by the activation gate.
+warning signs used by the activation gate. The staged hinge return, the
+next-morning symptom check and the Big 3 follow common spine-sparing coaching
+practice; they are training choices, not treatment or cure claims.
 
 Sources: https://www.nice.org.uk/guidance/ng59/chapter/recommendations ·
 https://www.who.int/publications/i/item/9789240081789 ·

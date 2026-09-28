@@ -497,18 +497,23 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
               const SizedBox(height: 8),
             ],
-            if (plan?.lowerBackRecoveryMode == true) ...[
+            if (plan?.lowerBackRecoveryMode == true &&
+                sessionTemplates[plan!.sessionId]?.isCardioOnly != true) ...[
               Card(
                 key: const Key('today-lower-back-recovery'),
                 color: Theme.of(context).colorScheme.secondaryContainer,
-                child: const ListTile(
-                  leading: Icon(Icons.health_and_safety),
-                  title: Text('Lower-back recovery mode'),
-                  subtitle: Text(
-                    'Weighted squats, unsupported rows or presses, loaded '
-                    'pull-ups, and demanding core steps are replaced. Use '
-                    'the symptom-gated dose and stop for worsening or '
-                    'spreading symptoms.',
+                child: ListTile(
+                  leading: const Icon(Icons.health_and_safety),
+                  title: Text(
+                    controller.lowerBackRecovery.active
+                        ? 'Back rebuild · Stage '
+                            '${controller.lowerBackRecovery.rebuildStageNumber}'
+                        : 'Back rebuild',
+                  ),
+                  subtitle: const Text(
+                    'Only the deadlift slot changes; its loaded lift comes '
+                    'last. Stop for sharp, spreading, numb, or tingling '
+                    'symptoms.',
                   ),
                 ),
               ),
