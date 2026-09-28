@@ -686,3 +686,69 @@ An incompatible or older draft can be explicitly discarded. A previously
 committed session log takes precedence if the process stopped before cleanup.
 This protects recorded work without adding an Android foreground service or
 asking for unrelated sensor or battery permissions.
+
+## Session 2026-09-28 (Back rebuild: normal training plus a staged hinge lane)
+
+Supersedes #52–59 and #75–80 for the lower-back recovery mode. #51 (state inside
+`UserSettings`, mutated only by dedicated controller methods) and #55 (fixed medical
+copy) still hold.
+
+84. **The takeover is replaced, not tuned.** Measured with the real engine, recovery
+    mode prescribed no sets at RIR 2 or harder, dropped all quad work, froze the
+    posterior work at bodyweight and paused all cycling; its only exit was manual,
+    straight onto a floor deadlift at a detraining-reduced old load. Back rebuild
+    changes only the hinge slot, the bike and the general prep; every other slot is
+    the normal plan. The closed catalogue, the recovery pull-up/dip/row tracks and
+    the abdominal-activation dose are no longer planned; their tracks, muscle maps
+    and progression rules remain for existing logs and states.
+85. **The hinge lane is staged and capped on separate tracks.** Stage 1 reuses the
+    deadlift-alternative bridge/curl tracks (#80) in the hinge position. Stage 2
+    (`DB deadlift from blocks`) and stage 3 (`DB Romanian deadlift`) own new tracks,
+    seeded at 50%/70% of the preserved pre-rebuild hinge load and clamped at
+    70%/100% at RIR 3+/RIR 2. Loaded steps run last, never in a superset, with
+    compound rest and warm-up, under the old extension spacing (two per rolling week,
+    48 hours apart); off days, lower-back or hip flags and travel fall back to stage-1
+    work. Unlike the old bodyweight accessories, the rebuild tracks go through the
+    ordinary pain table on mild flags (one load step lighter); sharp flags remove them.
+    Scoring, pain feasibility and assembly consume one `_BackRebuildHingePlan`, so
+    they cannot disagree about today's hinge.
+86. **One next-morning question replaces the same-day dialog.** The check-in asks
+    Better/Same/Worse whenever hinge-slot, extension or bike-return work from an
+    earlier day is pending, and applies it before planning, so today's plan already
+    reflects the new stage. A pain-flagged set on rebuild work stores a worse marker,
+    so that morning cannot count as good. Two good mornings advance a stage; stages
+    2–3 count only loaded sessions and also need the cap reached. A worse morning
+    steps back one stage and eases the left stage's track one step, never below its
+    floor.
+87. **The hand-off never restores the old load.** Finishing stage 3 sets the normal
+    hinge to ladder step 2 (DB RDL) at the RDL-track load, clamped to the stage cap
+    because progression can store one increment above it after a capped session. A
+    manual end uses step 0 (elevated start) with the block load or the 50% floor from
+    stages 1–2, or step 2 from stage 3, and completes the bike return. Outside the
+    rebuild, a mild lower-back regression skips step 1: with low PowerBlock handles
+    the floor DB deadlift is the most forward-bending start.
+88. **Cycling returns in steps, and Zone 2 can be a walk.** `CyclingAccess` (manual
+    pause first, then the bike step) is the one gate for candidate feasibility, S3/S7
+    swaps, finishers, nudges and logging. When rides are closed, S6 prescribes
+    `CardioProtocol.zone2Walk` (same `zone2Base` type and aerobic credit, walk
+    modality). A ride of at least 10 minutes, a creditable Zone 2 ride and a
+    creditable 4×4 each open the next step after a good morning; walks never count.
+    `modality` round-trips in cardio JSON with a bike default for older records.
+89. **Legacy profiles convert on read.** An active recovery state without
+    `rebuildStage` becomes stage 1 with the bike at walk only, and the same read
+    clears the old mode's forced `stationaryBikePaused`; inactive profiles keep an
+    explicit pause. A pending legacy morning answer maps to an accessory plus
+    extension exposure so it still lands somewhere. `bigThreeEnabled` defaults on
+    and `backRoutineDoneDay` to null.
+90. **The McGill Big 3 is a timed warm-up entry, not a progression track.**
+    `warmup:big3` follows the prep in its own 2/4/6 minutes for 20/35/60-minute
+    windows whenever the setting is on, with or without Back rebuild, and the hard
+    duration budget absorbs it. On rest and cardio-only days Home offers the Big 3
+    plus an easy uphill walk; the Done marker (`backRoutineDoneDay`) never touches
+    the plan, queue or ledger.
+91. **Reset day cannot leave phantom rebuild progress or the old load.** The day
+    rollback restores exercise states and the queue but not settings, where the
+    rebuild lives. It therefore strips today's pending exposure and spacing date
+    (a deleted session must not earn a good morning or block the loaded step), and
+    re-applies the hinge hand-off when the rebuild ended today, because the
+    restored snapshot can hold the frozen pre-rebuild hinge.

@@ -27,6 +27,19 @@ class StrengthPrepPolicy {
             'Strength plans require a 20, 35, or 60 minute hard window',
           ),
       };
+
+  /// McGill Big 3 entry after the warm-up (10-second holds). It follows the
+  /// preparation block in its own minutes and never shortens it.
+  static int bigThreeMinutes(int slotMinutes) => switch (slotMinutes) {
+        20 => 2,
+        35 => 4,
+        60 => 6,
+        _ => throw ArgumentError.value(
+            slotMinutes,
+            'slotMinutes',
+            'Strength plans require a 20, 35, or 60 minute hard window',
+          ),
+      };
 }
 
 /// Conservative, deterministic timing model for generated strength work.

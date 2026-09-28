@@ -369,9 +369,13 @@ class _AnalyticsController extends AppController {
   }
 
   @override
-  bool isHighIntensityUsableNow({DateTime? nowLocal}) =>
+  bool isHighIntensityUsableNow({
+    DateTime? nowLocal,
+    SessionTypeId? sessionId,
+  }) =>
       super.isHighIntensityUsableNow(
         nowLocal: nowLocal ?? nowOverride,
+        sessionId: sessionId,
       );
 
   @override

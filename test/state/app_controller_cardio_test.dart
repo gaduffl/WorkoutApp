@@ -171,18 +171,21 @@ void main() {
   });
 
   test(
-    'recovery completes and persists unaffected strength progression independently',
+    'Back rebuild completes and persists normal upper-body progression',
     () async {
       final now = DateTime.now();
       final day = DateTime(now.year, now.month, now.day);
+      final trained = day.subtract(const Duration(days: 2));
       for (final id in [SessionTypeId.s2, SessionTypeId.s5]) {
         final settings = UserSettings(
           lowerBackRecovery: LowerBackRecoveryState(
             active: true,
+            bikeReturnStep: BikeReturnStep.walkOnly,
             pendingNextMorningSessionDate: day.subtract(
               const Duration(days: 1),
             ),
             pendingSameDayResponse: LowerBackSymptomResponse.unchanged,
+            pendingRebuildExposure: BackRebuildExposure.accessory,
           ),
         );
         final originals = {
@@ -192,33 +195,40 @@ void main() {
             currentLoad: 90,
             ladderStepIndex: 2,
           ),
-          for (final e in [
-            floorPress,
-            lowerBackRecoveryChestSupportedRow,
-            dbCurl,
-            lateralRaise,
+          for (final pattern in [
+            MovementPattern.pushHorizontal,
+            MovementPattern.pullHorizontal,
+            MovementPattern.pushVertical,
           ])
+            pattern.name: ExerciseState(
+              trackKey: pattern.name,
+              pattern: pattern,
+              ladderStepIndex: pattern == MovementPattern.pushVertical ? 0 : 1,
+              currentLoad: 40,
+              lastTrainedDate: trained,
+            ),
+          MovementPattern.pullVertical.name: ExerciseState(
+            trackKey: MovementPattern.pullVertical.name,
+            pattern: MovementPattern.pullVertical,
+            ladderStepIndex: 2,
+            currentLoad: 10,
+            lastTrainedDate: trained,
+          ),
+          for (final e in [dbCurl, lateralRaise, dip])
             e.trackKey: ExerciseState(
               trackKey: e.trackKey,
               pattern: e.pattern,
               currentLoad: 20,
-              lastTrainedDate: day.subtract(const Duration(days: 2)),
+              lastTrainedDate: trained,
             ),
         };
         final output = const DecisionEngine().decide(
           DecisionEngineInput(
-      checkinHistory: const [],
+            checkinHistory: const [],
             checkin: CheckIn(
               date: day,
               timeMinutes: 60,
               subjective: 4,
-              pain: [
-                PainFlag(
-                  region: BodyRegion.lowerBack,
-                  severity: PainSeverity.mild,
-                  flaggedDate: day,
-                ),
-              ],
               timestamp: now,
             ),
             todaySnapshot: RecoverySnapshot(
@@ -252,17 +262,17 @@ void main() {
         final work = plan.exercises.where((e) => !e.isWarmup).toList();
         final expectedTracks = id == SessionTypeId.s2
             ? [
-                floorPress.trackKey,
-                lowerBackRecoveryChestSupportedRow.trackKey,
-                dbCurl.trackKey,
-                lateralRaise.trackKey,
+                MovementPattern.pushHorizontal.name,
+                MovementPattern.pullHorizontal.name,
+                MovementPattern.pushVertical.name,
+                MovementPattern.pullVertical.name,
               ]
-            : [dbCurl.trackKey, lateralRaise.trackKey];
+            : [dbCurl.trackKey, lateralRaise.trackKey, dip.trackKey];
         for (final key in expectedTracks) {
-          expect(
-            work.firstWhere((e) => e.trackKey == key).progressionEligible,
-            isTrue,
-          );
+          final exercise = work.firstWhere((e) => e.trackKey == key);
+          expect(exercise.progressionEligible, isTrue, reason: key);
+          expect(exercise.rirTarget, Rir.rir2, reason: key);
+          expect(exercise.loadTotal, greaterThan(0), reason: key);
         }
         await controller.completeSession(plan, [
           for (final e in work)
@@ -282,18 +292,21 @@ void main() {
         for (final key in expectedTracks) {
           final next = saved[key]!;
           expect(
-            next.currentLoad > 20 || next.microStepStage > 0,
+            next.currentLoad > originals[key]!.currentLoad ||
+                next.microStepStage > 0,
             isTrue,
             reason: key,
           );
         }
         expect(saved['hinge']!.currentLoad, 90);
         expect(saved['hinge']!.ladderStepIndex, 2);
+        // Upper-body sessions carry no hinge work, so yesterday's check is
+        // still waiting for the next check-in.
         expect(
           controller.lowerBackRecovery.pendingNextMorningSessionDate,
           settings.lowerBackRecovery.pendingNextMorningSessionDate,
         );
-        expect(controller.stationaryBikePaused, isTrue);
+        expect(controller.cyclingAccess.any, isFalse);
       }
     },
   );

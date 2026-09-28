@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../engine/schedule_fit_engine.dart';
 import '../../models/ladders.dart';
+import '../../models/lower_back_recovery.dart';
 import '../../models/movement_pattern.dart';
 import '../../notifications/notification_service.dart';
 import '../../models/oura_connection.dart';
@@ -211,18 +212,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Start lower-back recovery mode?'),
+        title: const Text('Start Back rebuild?'),
         content: const Text(
-          'This mode does not diagnose a disc injury or promise a cure. It '
-          'replaces high lumbar-load strength work with unweighted pull-ups, '
-          'supported upper-body work, glute bridges, sliding hamstring curls and '
-          'gentle core work. Unaffected strength work can progress. Stationary cycling pauses. Back extensions are optional. Because pain has persisted for weeks, '
-          'arrange an assessment with a qualified clinician.\n\n'
-          'Do not start this program if you have leg weakness, spreading leg '
-          'pain, numbness or tingling, saddle-area numbness, bladder/bowel '
-          'changes, fever, major trauma, or rapidly worsening pain. Seek '
-          'urgent medical care for bladder/bowel changes, saddle numbness, '
-          'or progressive weakness.',
+          'Back rebuild changes only your deadlift slot: loaded glute bridges '
+          'and hamstring curls first, then deadlifts from blocks, then '
+          'Romanian deadlifts, each after two good mornings. Everything else '
+          'stays your normal training. Zone 2 becomes an uphill walk until an '
+          'easy test ride feels fine the next morning. It does not diagnose '
+          'anything or promise a cure.\n\n'
+          'Do not start if you have leg weakness, spreading leg pain, '
+          'numbness or tingling, saddle-area numbness, bladder/bowel changes, '
+          'fever, major trauma, or rapidly worsening pain. Seek urgent '
+          'medical care for bladder/bowel changes, saddle numbness, or '
+          'progressive weakness.',
         ),
         actions: [
           TextButton(
@@ -237,18 +239,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    final now = DateTime.now();
-    final onset = await showDatePicker(
-      context: context,
-      helpText: 'When did the current pain start?',
-      initialDate: now.subtract(const Duration(days: 21)),
-      firstDate: DateTime(now.year - 2),
-      lastDate: now,
-    );
-    if (onset == null || !mounted) return;
     final controller = context.read<AppController>();
     await controller.activateLowerBackRecovery(
-      symptomOnsetDate: onset,
+      symptomOnsetDate: DateTime.now(),
       confirmedNoRedFlags: true,
     );
     if (mounted) {
@@ -260,20 +253,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('End recovery mode?'),
+        title: const Text('End Back rebuild?'),
         content: const Text(
-          'Normal loaded squat, hinge, press, row, pull-up, and core ladders '
-          'may return on the next plan. End the mode only if you intentionally '
-          'want to return to normal training. Cycling stays paused until you resume it in Settings.',
+          'Your deadlift continues from the rebuild\'s current level, not '
+          'your old load. All cycling becomes available again unless you '
+          'pause it below.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep mode active'),
+            child: const Text('Keep going'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('End mode'),
+            child: const Text('End'),
           ),
         ],
       ),
@@ -348,33 +341,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(height: 32),
             Text(
-              'Lower-back recovery',
+              'Back',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             SwitchListTile(
               key: const Key('settings-lower-back-recovery'),
               secondary: const Icon(Icons.health_and_safety_outlined),
-              title: const Text('Recovery mode'),
+              title: const Text('Back rebuild'),
               subtitle: Text(
                 controller.lowerBackRecovery.active
-                    ? 'Supported strength + glutes, hamstrings and gentle core. Unaffected exercises can progress.'
-                    : 'Replace high lumbar-load strength work and use symptom-gated recovery work',
+                    ? 'Stage ${controller.lowerBackRecovery.rebuildStageNumber} of '
+                        '${LowerBackRecoveryState.rebuildStageCount} · '
+                        '${controller.lowerBackRecovery.rebuildStageTitle}. '
+                        'Everything else is your normal training.'
+                    : 'Rebuild your deadlift in three steps after a back '
+                        'incident; everything else stays normal',
               ),
               value: controller.lowerBackRecovery.active,
               onChanged: (enabled) => enabled
                   ? _startLowerBackRecovery()
                   : _stopLowerBackRecovery(),
             ),
+            SwitchListTile(
+              key: const Key('settings-big-three'),
+              secondary: const Icon(Icons.self_improvement),
+              title: const Text('McGill Big 3'),
+              subtitle: const Text(
+                'Curl-up, side bridge and bird dog after the warm-up, and a '
+                'short back routine on days without lifting',
+              ),
+              value: controller.settings.bigThreeEnabled,
+              onChanged: (v) async {
+                await controller.saveSettings(
+                  controller.settings.copyWith(bigThreeEnabled: v),
+                );
+                if (mounted) {
+                  setState(() => _settings = controller.settings);
+                }
+              },
+            ),
             ExpansionTile(
               key: const Key('recovery-options'),
-              title: const Text('Recovery options'),
+              title: const Text('More back options'),
               children: [
                 if (controller.lowerBackRecovery.active)
                   SwitchListTile(
                     key: const Key('settings-recovery-extensions'),
                     title: const Text('Include back extensions'),
                     subtitle: const Text(
-                      'Optional, pain-tolerated work. Use after clinical advice; stop if symptoms worsen. A brief response after training and next morning controls this exercise only.',
+                      'Optional, pain-tolerated holds during stages 1–2. They share the next-morning check. Stop if symptoms worsen.',
                     ),
                     value: controller.settings.recoveryBackExtensionsEnabled,
                     onChanged: (v) async {
@@ -391,24 +406,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   key: const Key('settings-stationary-bike-paused'),
                   title: const Text('Pause stationary cycling'),
-                  subtitle: Text(
-                    controller.lowerBackRecovery.active
-                        ? 'Paused during recovery, including finishers and reminders.'
-                        : 'Resume only when cycling is comfortable, including afterwards.',
+                  subtitle: const Text(
+                    'No rides, intervals, finishers or reminders are planned. Zone 2 becomes an uphill walk.',
                   ),
                   value: controller.stationaryBikePaused,
-                  onChanged: controller.lowerBackRecovery.active
-                      ? null
-                      : (v) async {
-                          await controller.saveSettings(
-                            controller.settings.copyWith(
-                              stationaryBikePaused: v,
-                            ),
-                          );
-                          if (mounted) {
-                            setState(() => _settings = controller.settings);
-                            }
-                        },
+                  onChanged: (v) async {
+                    await controller.saveSettings(
+                      controller.settings.copyWith(
+                        stationaryBikePaused: v,
+                      ),
+                    );
+                    if (mounted) {
+                      setState(() => _settings = controller.settings);
+                    }
+                  },
                 ),
                 SwitchListTile(
                   key: const Key('settings-deadlift-alternative'),

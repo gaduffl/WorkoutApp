@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:morningcoach/engine/cycling_access.dart';
 import 'package:morningcoach/engine/decision_engine.dart';
 import 'package:morningcoach/engine/progression_engine.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
+import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/equipment.dart';
 import 'package:morningcoach/models/exercise_state.dart';
@@ -16,10 +18,27 @@ import 'package:morningcoach/models/user_settings.dart';
 
 void main() {
   final day = DateTime(2026, 9, 10);
-  DecisionEngineOutput plan({
-    UserSettings settings = const UserSettings(
-      lowerBackRecovery: LowerBackRecoveryState(active: true),
+  UserSettings rebuild({
+    BackRebuildStage stage = BackRebuildStage.bridges,
+    LowerBackRecoveryStage extensionStage =
+        LowerBackRecoveryStage.isometricHold,
+    BikeReturnStep bike = BikeReturnStep.walkOnly,
+    bool extensions = false,
+    bool bikePaused = false,
+  }) => UserSettings(
+    stationaryBikePaused: bikePaused,
+    recoveryBackExtensionsEnabled: extensions,
+    lowerBackRecovery: LowerBackRecoveryState(
+      active: true,
+      stage: extensionStage,
+      rebuildStage: stage,
+      bikeReturnStep: bike,
+      preRecoveryHingeLoad: 90,
     ),
+  );
+
+  DecisionEngineOutput plan({
+    UserSettings? settings,
     int minutes = 35,
     int subjective = 4,
     SessionTypeId id = SessionTypeId.s1,
@@ -59,13 +78,13 @@ void main() {
         ),
       },
       queueState: const QueueState(),
-      settings: settings,
+      settings: settings ?? rebuild(),
       today: day,
       forcedSessionId: id,
     ),
   );
 
-  test('default recovery makes a normal strength plan without extra forms', () {
+  test('Back rebuild plans every strength family inside every hard window', () {
     for (final id in [
       SessionTypeId.s1,
       SessionTypeId.s2,
@@ -73,47 +92,52 @@ void main() {
       SessionTypeId.s5,
     ]) {
       for (final minutes in [20, 35, 60]) {
-        final result = plan(id: id, minutes: minutes).trace.plan!;
-        expect(result.sessionId, id);
-        expect(result.estimatedDurationMin, lessThanOrEqualTo(minutes));
-        expect(
-          result.exercises.any(
-            (e) =>
-                e.trackKey == lowerBackRecoveryTrackKey ||
-                e.trackKey == 'hinge',
-          ),
-          isFalse,
-        );
-        if (id == SessionTypeId.s1 || id == SessionTypeId.s4) {
+        for (final stage in BackRebuildStage.values) {
+          final result = plan(
+            id: id,
+            minutes: minutes,
+            settings: rebuild(stage: stage),
+          ).trace.plan!;
+          expect(result.sessionId, id);
+          expect(result.lowerBackRecoveryMode, isTrue);
+          expect(result.estimatedDurationMin, lessThanOrEqualTo(minutes));
           expect(
-            result.exercises.map((e) => e.trackKey),
-            containsAll([
-              lowerBackRecoveryFloorGluteBridge.trackKey,
-              lowerBackRecoverySlidingHamstringCurl.trackKey,
-            ]),
+            result.exercises.any((e) => e.trackKey == 'hinge'),
+            isFalse,
+            reason: '${id.name} $minutes ${stage.name}',
           );
+          // A loaded rebuild deadlift is always the final work exercise.
+          final work = result.exercises.where((e) => !e.isWarmup).toList();
+          final loadedIndex = work.indexWhere(
+            (e) =>
+                e.trackKey == backRebuildBlockDeadlift.trackKey ||
+                e.trackKey == backRebuildRomanianDeadlift.trackKey,
+          );
+          if (loadedIndex >= 0) {
+            expect(loadedIndex, work.length - 1);
+          }
         }
       }
     }
-    expect(
-      plan().trace.plan!.exercises.map((e) => e.trackKey),
-      contains(recoveryAbdominalActivation.trackKey),
-    );
   });
 
-  test('leg symptoms still block recovery even on green days', () {
+  test('leg symptoms still block Back rebuild even on green days', () {
     for (final tag in PainTag.values) {
-      final output = plan(pain: [PainFlag(
-        region: BodyRegion.lowerBack,
-        severity: PainSeverity.mild,
-        flaggedDate: day,
-        tags: {tag},
-      )]);
+      final output = plan(
+        pain: [
+          PainFlag(
+            region: BodyRegion.lowerBack,
+            severity: PainSeverity.mild,
+            flaggedDate: day,
+            tags: {tag},
+          ),
+        ],
+      );
       expect(output.trace.plan, isNull, reason: tag.name);
     }
   });
 
-  test('readiness restrictions still stop upper strength progression', () {
+  test('readiness restrictions still stop strength progression', () {
     final result = plan(id: SessionTypeId.s2, subjective: 1).trace.plan!;
     expect(
       result.exercises
@@ -123,34 +147,104 @@ void main() {
     );
   });
 
-  test('cycling pause rejects forced cardio and optional finishers', () {
-    for (final id in [SessionTypeId.s3, SessionTypeId.s6, SessionTypeId.s7]) {
+  test('the bike return walks Zone 2 and keeps intervals closed', () {
+    final walk = plan(id: SessionTypeId.s6, minutes: 60).trace.plan!;
+    expect(walk.sessionId, SessionTypeId.s6);
+    expect(walk.cardioPrescription!.protocol.isWalk, isTrue);
+    expect(
+      walk.cardioPrescription!.protocol.type,
+      CardioProtocolType.zone2Base,
+    );
+    expect(walk.sessionName, contains('uphill walk'));
+
+    for (final id in [SessionTypeId.s3, SessionTypeId.s7]) {
       final result = plan(id: id, minutes: 60).trace.plan!;
       expect([
         SessionTypeId.s3,
-        SessionTypeId.s6,
         SessionTypeId.s7,
       ], isNot(contains(result.sessionId)));
-      expect(result.optionalRehitFinisherReserved, isFalse);
     }
+    final s2 = plan(id: SessionTypeId.s2, minutes: 60).trace.plan!;
+    expect(s2.optionalRehitFinisherReserved, isFalse);
+
+    final ride = plan(
+      id: SessionTypeId.s6,
+      minutes: 60,
+      settings: rebuild(bike: BikeReturnStep.zone2Ride),
+    ).trace.plan!;
+    expect(ride.cardioPrescription!.protocol.isWalk, isFalse);
+
+    final paused = plan(
+      id: SessionTypeId.s6,
+      minutes: 60,
+      settings: const UserSettings(stationaryBikePaused: true),
+    ).trace.plan!;
+    expect(paused.cardioPrescription!.protocol.isWalk, isTrue);
   });
 
-  test('legacy deadlift reentry stage cannot load a hinge in recovery', () {
+  test('cycling access follows the manual pause and each bike step', () {
+    expect(CyclingAccess.fromSettings(const UserSettings()).rehit, isTrue);
+    final paused = CyclingAccess.fromSettings(
+      const UserSettings(stationaryBikePaused: true),
+    );
+    expect(paused.any, isFalse);
+    expect(paused.allowsSession(SessionTypeId.s6, slotMinutes: 60), isTrue);
+
+    final expectations = {
+      BikeReturnStep.walkOnly: (false, false, false),
+      BikeReturnStep.zone2Ride: (true, false, false),
+      BikeReturnStep.fourByFour: (true, true, false),
+      BikeReturnStep.complete: (true, true, true),
+    };
+    for (final entry in expectations.entries) {
+      final access = CyclingAccess.fromSettings(rebuild(bike: entry.key));
+      expect(
+        (access.zone2Ride, access.fourByFour, access.rehit),
+        entry.value,
+        reason: entry.key.name,
+      );
+      expect(
+        access.allowsSession(SessionTypeId.s3, slotMinutes: 35),
+        entry.value.$2,
+      );
+      // Below 35 minutes the 4×4 slot can only become REHIT.
+      expect(
+        access.allowsSession(SessionTypeId.s3, slotMinutes: 20),
+        entry.value.$3,
+      );
+      expect(
+        access.allowsSession(SessionTypeId.s7, slotMinutes: 20),
+        entry.value.$3,
+      );
+    }
+    // The manual pause outranks a completed bike return.
+    expect(
+      CyclingAccess.fromSettings(
+        rebuild(bike: BikeReturnStep.complete, bikePaused: true),
+      ).any,
+      isFalse,
+    );
+  });
+
+  test('a legacy deadlift re-entry extension stage never loads a hinge', () {
     final result = plan(
-      settings: const UserSettings(
-        recoveryBackExtensionsEnabled: true,
-        lowerBackRecovery: LowerBackRecoveryState(
-          active: true,
-          stage: LowerBackRecoveryStage.deadliftReentry,
-          preRecoveryHingeLoad: 90,
-        ),
+      settings: rebuild(
+        extensions: true,
+        extensionStage: LowerBackRecoveryStage.deadliftReentry,
       ),
     ).trace.plan!;
+    final extension = result.exercises.singleWhere(
+      (e) => e.trackKey == lowerBackRecoveryTrackKey,
+    );
+    expect(extension.loadTotal, isNull);
     expect(
-      result.exercises
-          .where((e) => e.pattern == MovementPattern.hinge)
-          .every((e) => e.loadTotal == null),
-      isTrue,
+      result.exercises.where(
+        (e) =>
+            e.trackKey == 'hinge' ||
+            e.trackKey == backRebuildBlockDeadlift.trackKey ||
+            e.trackKey == backRebuildRomanianDeadlift.trackKey,
+      ),
+      isEmpty,
     );
   });
 
@@ -185,7 +279,9 @@ void main() {
       ],
     ).trace.plan!;
     expect(
-      painful.exercises.where((e) => !e.isWarmup && e.trackKey == bridgeHamstringCurl.trackKey),
+      painful.exercises.where(
+        (e) => !e.isWarmup && e.trackKey == bridgeHamstringCurl.trackKey,
+      ),
       hasLength(1),
     );
     expect(
@@ -197,7 +293,7 @@ void main() {
   });
 
   test(
-    'recovery pull-ups and dips progress tempo and pause without loaded ladders',
+    'legacy recovery pull-up and dip tracks keep tempo/pause-only progression',
     () {
       for (final e in [lowerBackRecoveryPullUp, lowerBackRecoveryDip]) {
         var state = ExerciseState(trackKey: e.trackKey, pattern: e.pattern);

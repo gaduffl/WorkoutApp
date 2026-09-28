@@ -271,12 +271,17 @@ AnalyticsEvent? analyticsEventFromJson(Map<String, dynamic> j) {
 Map<String, dynamic> cardioProtocolToJson(CardioProtocol protocol) => {
       'type': protocol.type.name,
       'name': protocol.name,
+      'modality': protocol.modality.name,
     };
 
 CardioProtocol cardioProtocolFromJson(Map<String, dynamic> j) =>
     CardioProtocol(
       type: CardioProtocolType.values.byName(j['type'] as String),
       name: j['name'] as String,
+      modality: CardioModality.values
+              .where((value) => value.name == j['modality'])
+              .firstOrNull ??
+          CardioModality.bike,
     );
 
 Map<String, dynamic> cardioPrescriptionToJson(
@@ -503,6 +508,8 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'stationaryBikePaused': u.stationaryBikePaused,
       'deadliftAlternative': u.deadliftAlternative,
       'recoveryBackExtensionsEnabled': u.recoveryBackExtensionsEnabled,
+      'bigThreeEnabled': u.bigThreeEnabled,
+      'backRoutineDoneDay': u.backRoutineDoneDay,
       'classicHeatmap': u.classicHeatmap,
       'notificationsEnabled': u.notificationsEnabled,
       'secondRehitNudgeEnabled': u.secondRehitNudgeEnabled,
@@ -519,7 +526,29 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
           lowerBackRecoveryStateToJson(u.lowerBackRecovery),
     };
 
-UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
+UserSettings userSettingsFromJson(Map<String, dynamic> j) {
+  final rawRecovery = j['lowerBackRecovery'];
+  final recoveryJson =
+      rawRecovery is Map ? rawRecovery.cast<String, dynamic>() : null;
+  // An active profile saved before Back rebuild had cycling force-paused by
+  // the old mode. It converts to Back rebuild, whose stepped bike return
+  // replaces that pause; any later manual pause is stored explicitly.
+  final convertsLegacyRecovery = recoveryJson != null &&
+      recoveryJson['active'] == true &&
+      !recoveryJson.containsKey('rebuildStage');
+  return _userSettingsFromJson(
+    j,
+    recoveryJson: recoveryJson,
+    convertsLegacyRecovery: convertsLegacyRecovery,
+  );
+}
+
+UserSettings _userSettingsFromJson(
+  Map<String, dynamic> j, {
+  required Map<String, dynamic>? recoveryJson,
+  required bool convertsLegacyRecovery,
+}) =>
+    UserSettings(
       equipment: equipmentConfigFromJson(j['equipment'] as Map<String, dynamic>),
       weeklyFloor: (j['weeklyFloor'] as Map<String, dynamic>)
           .map((k, v) => MapEntry(FloorCategory.values.byName(k), v as int)),
@@ -535,12 +564,14 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
       wakeWindow: j['wakeWindow'] as String,
       checkInCutoffHour: j['checkInCutoffHour'] as int,
       travelMode: j['travelMode'] as bool? ?? false,
-  stationaryBikePaused:
-      j['stationaryBikePaused'] as bool? ??
-      ((j['lowerBackRecovery'] as Map?)?['active'] == true),
-  deadliftAlternative: j['deadliftAlternative'] as bool? ?? false,
-  recoveryBackExtensionsEnabled:
-      j['recoveryBackExtensionsEnabled'] as bool? ?? false,
+      stationaryBikePaused: convertsLegacyRecovery
+          ? false
+          : j['stationaryBikePaused'] as bool? ?? false,
+      deadliftAlternative: j['deadliftAlternative'] as bool? ?? false,
+      recoveryBackExtensionsEnabled:
+          j['recoveryBackExtensionsEnabled'] as bool? ?? false,
+      bigThreeEnabled: j['bigThreeEnabled'] as bool? ?? true,
+      backRoutineDoneDay: j['backRoutineDoneDay'] as String?,
       classicHeatmap: j['classicHeatmap'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,
       secondRehitNudgeEnabled: j['secondRehitNudgeEnabled'] as bool? ?? false,
@@ -565,10 +596,8 @@ UserSettings userSettingsFromJson(Map<String, dynamic> j) => UserSettings(
         min: 1,
         max: 24,
       ),
-      lowerBackRecovery: j['lowerBackRecovery'] is Map
-          ? lowerBackRecoveryStateFromJson(
-              (j['lowerBackRecovery'] as Map).cast<String, dynamic>(),
-            )
+      lowerBackRecovery: recoveryJson != null
+          ? lowerBackRecoveryStateFromJson(recoveryJson)
           : const LowerBackRecoveryState(),
     );
 
@@ -599,6 +628,12 @@ Map<String, dynamic> lowerBackRecoveryStateToJson(
       'preRecoveryHingeLadderStepIndex':
           state.preRecoveryHingeLadderStepIndex,
       'lastReentryLoad': state.lastReentryLoad,
+      'rebuildStage': state.rebuildStage.name,
+      'rebuildGoodMornings': state.rebuildGoodMornings,
+      'bikeReturnStep': state.bikeReturnStep.name,
+      'pendingRebuildExposure': state.pendingRebuildExposure.name,
+      'pendingExtensionExposure': state.pendingExtensionExposure,
+      'pendingBikeExposure': state.pendingBikeExposure.name,
     };
 
 LowerBackRecoveryState lowerBackRecoveryStateFromJson(
@@ -617,8 +652,15 @@ LowerBackRecoveryState lowerBackRecoveryStateFromJson(
     final parsed = _tryParseOptionalDateTime(value);
     if (parsed != null) dates.add(parsed);
   }
+  final active = json['active'] as bool? ?? false;
+  final pendingDate = _tryParseOptionalDateTime(
+    json['pendingNextMorningSessionDate'],
+  );
+  // Before Back rebuild, only optional back-extension work created a pending
+  // morning response, and an active profile had cycling fully paused.
+  final legacy = !json.containsKey('rebuildStage');
   return LowerBackRecoveryState(
-    active: json['active'] as bool? ?? false,
+    active: active,
     activatedAt: _tryParseOptionalDateTime(json['activatedAt']),
     completedAt: _tryParseOptionalDateTime(json['completedAt']),
     symptomOnsetDate: _tryParseOptionalDateTime(json['symptomOnsetDate']),
@@ -634,9 +676,7 @@ LowerBackRecoveryState lowerBackRecoveryStateFromJson(
     consecutiveToleratedSessions:
         (json['consecutiveToleratedSessions'] as num?)?.toInt() ?? 0,
     recoverySessionDates: dates,
-    pendingNextMorningSessionDate: _tryParseOptionalDateTime(
-      json['pendingNextMorningSessionDate'],
-    ),
+    pendingNextMorningSessionDate: pendingDate,
     pendingSameDayResponse: enumValue(
       LowerBackSymptomResponse.values,
       json['pendingSameDayResponse'],
@@ -650,6 +690,27 @@ LowerBackRecoveryState lowerBackRecoveryStateFromJson(
     preRecoveryHingeLadderStepIndex:
         (json['preRecoveryHingeLadderStepIndex'] as num?)?.toInt(),
     lastReentryLoad: (json['lastReentryLoad'] as num?)?.toDouble(),
+    rebuildStage: enumValue(BackRebuildStage.values, json['rebuildStage']) ??
+        BackRebuildStage.bridges,
+    rebuildGoodMornings:
+        (json['rebuildGoodMornings'] as num?)?.toInt() ?? 0,
+    bikeReturnStep:
+        enumValue(BikeReturnStep.values, json['bikeReturnStep']) ??
+            (legacy && active
+                ? BikeReturnStep.walkOnly
+                : BikeReturnStep.complete),
+    pendingRebuildExposure: enumValue(
+          BackRebuildExposure.values,
+          json['pendingRebuildExposure'],
+        ) ??
+        (legacy && pendingDate != null
+            ? BackRebuildExposure.accessory
+            : BackRebuildExposure.none),
+    pendingExtensionExposure: json['pendingExtensionExposure'] as bool? ??
+        (legacy && pendingDate != null),
+    pendingBikeExposure:
+        enumValue(BikeExposure.values, json['pendingBikeExposure']) ??
+            BikeExposure.none,
   );
 }
 

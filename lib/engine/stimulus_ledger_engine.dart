@@ -1,6 +1,7 @@
 import '../models/cardio_protocol.dart';
 import '../models/bouldering_log.dart';
 import '../models/floor_category.dart';
+import '../models/ladders.dart';
 import '../models/lower_back_recovery.dart';
 import '../models/movement_pattern.dart';
 import '../models/plan.dart';
@@ -25,6 +26,14 @@ class ExerciseMuscleMap {
     ),
     'sub:hinge:alternative_hamstring_curl': _MuscleProfile(
       primary: {MajorMuscleGroup.hamstrings},
+    ),
+    'sub:hinge:back_rebuild_block_deadlift': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
+      secondary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:hinge:back_rebuild_romanian_deadlift': _MuscleProfile(
+      primary: {MajorMuscleGroup.hamstrings},
+      secondary: {MajorMuscleGroup.glutes},
     ),
     'sub:coreGrip:lower_back_abdominal_activation': _MuscleProfile(
       primary: {MajorMuscleGroup.coreGrip},
@@ -181,15 +190,17 @@ class ExerciseMuscleMap {
   }
 
   /// Direct lumbar exposure is intentionally separate from the hypertrophy
-  /// ledger's broad hinge profile. A deadlift or the dedicated extension can
-  /// light the lumbar anatomy in the worked-today view; named glute bridges
-  /// and hamstring curls do not inherit it merely because they occupy a hinge
-  /// slot.
+  /// ledger's broad hinge profile. A deadlift (normal or Back rebuild) or
+  /// the dedicated extension can light the lumbar anatomy in the
+  /// worked-today view; named glute bridges and hamstring curls do not
+  /// inherit it merely because they occupy a hinge slot.
   bool isDirectLumbarExposure({
     required String trackKey,
     required MovementPattern pattern,
   }) =>
       trackKey == lowerBackRecoveryTrackKey ||
+      trackKey == backRebuildBlockDeadlift.trackKey ||
+      trackKey == backRebuildRomanianDeadlift.trackKey ||
       (trackKey == MovementPattern.hinge.name &&
           pattern == MovementPattern.hinge);
 }

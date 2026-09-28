@@ -10,6 +10,7 @@ import '../data/repository.dart';
 import '../data/serializers.dart';
 import '../engine/analytics_engine.dart';
 import '../engine/cardio_engine.dart';
+import '../engine/cycling_access.dart';
 import '../engine/decision_engine.dart';
 import '../engine/equipment_engine.dart';
 import '../engine/intensity_recovery_policy.dart';
@@ -117,7 +118,12 @@ class AppController extends ChangeNotifier {
   LowerBackRecoveryState get lowerBackRecovery =>
       settings.lowerBackRecovery;
 
-  bool get stationaryBikePaused => settings.stationaryBikePaused || lowerBackRecovery.active;
+  /// The manual "Pause stationary cycling" switch.
+  bool get stationaryBikePaused => settings.stationaryBikePaused;
+
+  /// The cycling that may be planned or logged prospectively right now
+  /// (manual pause and Back rebuild's stepped bike return).
+  CyclingAccess get cyclingAccess => CyclingAccess.fromSettings(settings);
 
   bool get lowerBackMorningResponseDue {
     final sessionDate =
@@ -130,9 +136,17 @@ class AppController extends ChangeNotifier {
 
   /// A restored trace or a manual deload can briefly predate the current
   /// Today plan. Recheck every hard gate at the action/UI boundary so an old
-  /// S3/S7 prescription cannot bypass recovery, pain, deload, or travel.
-  bool isHighIntensityUsableNow({DateTime? nowLocal}) {
-    if (stationaryBikePaused) return false;
+  /// S3/S7 prescription cannot bypass recovery, pain, deload, travel, or the
+  /// cycling pause and stepped bike return. Without a [sessionId] the most
+  /// restrictive (REHIT) gate applies.
+  bool isHighIntensityUsableNow({
+    DateTime? nowLocal,
+    SessionTypeId? sessionId,
+  }) {
+    final access = cyclingAccess;
+    if (sessionId == SessionTypeId.s3 ? !access.fourByFour : !access.rehit) {
+      return false;
+    }
     final observedAt = nowLocal ?? DateTime.now();
     final trace = todayTrace;
     final currentTrace = trace != null && _isSameDate(trace.date, observedAt)
@@ -172,8 +186,9 @@ class AppController extends ChangeNotifier {
             ))) {
       return false;
     }
-    if (stationaryBikePaused &&
-        sessionTemplates[plan.sessionId]?.isCardioOnly == true) {
+    if (plan.sessionId == SessionTypeId.s6 &&
+        plan.cardioPrescription?.protocol.isWalk != true &&
+        !cyclingAccess.zone2Ride) {
       return false;
     }
     if (settings.deadliftAlternative &&
@@ -189,9 +204,23 @@ class AppController extends ChangeNotifier {
         )) {
       return false;
     }
+    // A loaded rebuild step from another stage (for example after a worse
+    // morning stepped the lane back) must not be performed from a stale plan.
+    final stageStep = _lowerBackRecoveryEngine.loadedStepFor(lowerBackRecovery);
+    if (plan.exercises.any(
+      (e) =>
+          (e.trackKey == backRebuildBlockDeadlift.trackKey ||
+              e.trackKey == backRebuildRomanianDeadlift.trackKey) &&
+          (!lowerBackRecovery.active || e.trackKey != stageStep?.trackKey),
+    )) {
+      return false;
+    }
     return (plan.sessionId != SessionTypeId.s3 &&
           plan.sessionId != SessionTypeId.s7) ||
-      isHighIntensityUsableNow(nowLocal: nowLocal);
+      isHighIntensityUsableNow(
+        nowLocal: nowLocal,
+        sessionId: plan.sessionId,
+      );
   }
 
   /// Loaded from whole local calendar days so the shared recovery policy can
@@ -457,7 +486,8 @@ class AppController extends ChangeNotifier {
             false,
         firstSession: firstSession,
         contraindicatingPainActive:
-            highIntensitySafety.contraindicatingPainActive || stationaryBikePaused,
+            highIntensitySafety.contraindicatingPainActive ||
+                !cyclingAccess.rehit,
         painEscalationActive: painEscalationActive,
         globalDeloadActive: false,
         patternDeloadActive: patternDeloadActive,
@@ -801,7 +831,7 @@ class AppController extends ChangeNotifier {
   /// The rest-day REHIT reminder decision: is today going unused, is a short
   /// high-intensity exposure safe, and when would it fit?
   RestDayRehitResult restDayRehitEligibilityAt(DateTime nowLocal) {
-    if (stationaryBikePaused) {
+    if (!cyclingAccess.rehit) {
       return RestDayRehitResult(
         closedReasons: const [
           RestDayRehitClosedReason.contraindicatingPainActive,
@@ -1036,11 +1066,12 @@ class AppController extends ChangeNotifier {
     final travelModeChanged = settings.travelMode != newSettings.travelMode ||
         settings.stationaryBikePaused != newSettings.stationaryBikePaused ||
         settings.deadliftAlternative != newSettings.deadliftAlternative ||
+        settings.bigThreeEnabled != newSettings.bigThreeEnabled ||
         settings.recoveryBackExtensionsEnabled != newSettings.recoveryBackExtensionsEnabled;
     // The REHIT day marker is internal state, not an editable preference.
     // Preserve a marker written while a settings screen held an older copy.
     settings = newSettings.copyWith(
-      stationaryBikePaused: lowerBackRecovery.active || newSettings.stationaryBikePaused,
+      backRoutineDoneDay: settings.backRoutineDoneDay,
       secondRehitNudgeScheduledDay: settings.secondRehitNudgeScheduledDay,
       secondRehitNudgeScheduledFor: settings.secondRehitNudgeScheduledFor,
       restDayRehitNudgeScheduledDay: settings.restDayRehitNudgeScheduledDay,
@@ -1069,7 +1100,6 @@ class AppController extends ChangeNotifier {
     }
     final now = today();
     settings = settings.copyWith(
-      stationaryBikePaused: true,
       recoveryBackExtensionsEnabled: false,
       lowerBackRecovery: _lowerBackRecoveryEngine.activate(
         now: now,
@@ -1086,13 +1116,17 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ends Back rebuild on request. The deadlift resumes at the rebuild's
+  /// current, graded level (never the frozen pre-rebuild state), and all
+  /// cycling becomes available unless the manual pause is on.
   Future<void> deactivateLowerBackRecovery() async {
-    if (!settings.lowerBackRecovery.active) return;
+    final current = settings.lowerBackRecovery;
+    if (!current.active) return;
+    await _handOffHingeFromRebuild(current, finished: false);
     settings = settings.copyWith(
-      stationaryBikePaused: stationaryBikePaused,
       recoveryBackExtensionsEnabled: false,
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
-        settings.lowerBackRecovery,
+        current,
         now: today(),
       ),
     );
@@ -1105,31 +1139,172 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Applies the one-tap next-morning check to every pending Back rebuild
+  /// exposure: hinge stage, optional back extensions and the bike return.
   Future<void> recordLowerBackNextMorningResponse(
     LowerBackSymptomResponse response,
   ) async {
-    final previous = settings.lowerBackRecovery;
-    var next = _lowerBackRecoveryEngine.recordNextMorningResponse(
-      previous,
-      response: response,
-      responseDate: today(),
-    );
-    if (identical(next, previous)) return;
-    if (previous.active && (!next.active || next.stage == LowerBackRecoveryStage.deadliftReentry)) {
-      next = next.copyWith(
-        active: true,
-        stage: LowerBackRecoveryStage.dynamicUnloaded,
-        consecutiveToleratedSessions: 0,
-        clearCompletedAt: true,
-        clearLastReentryLoad: true,
-      );
-    }
-    settings = settings.copyWith(lowerBackRecovery: next);
-    await repo.saveSettings(settings);
+    await _applyBackCheck(response);
     if (todayTrace != null && !sessionLoggedToday) {
       await _refreshPendingPlanForSettings();
       return;
     }
+    notifyListeners();
+  }
+
+  Future<void> _applyBackCheck(LowerBackSymptomResponse response) async {
+    final previous = settings.lowerBackRecovery;
+    final stageStep = _lowerBackRecoveryEngine.loadedStepFor(previous);
+    final outcome = _lowerBackRecoveryEngine.recordNextMorningResponse(
+      previous,
+      response: response,
+      responseDate: today(),
+      stageCapReached: _lowerBackRecoveryEngine.stageCapReached(
+        previous,
+        stageStep == null ? null : exerciseStates[stageStep.trackKey],
+        settings.equipment,
+      ),
+    );
+    if (identical(outcome.state, previous)) return;
+    final steppedBackFrom = outcome.steppedBackFrom;
+    if (steppedBackFrom != null) {
+      await _easeRebuildTrackAfterSetback(previous, steppedBackFrom);
+    }
+    if (outcome.finished) {
+      await _handOffHingeFromRebuild(previous, finished: true);
+    }
+    settings = settings.copyWith(lowerBackRecovery: outcome.state);
+    await repo.saveSettings(settings);
+  }
+
+  /// After a worse morning the lane drops a stage; the stage it left keeps
+  /// its track but resumes one load step lighter (never below its floor).
+  Future<void> _easeRebuildTrackAfterSetback(
+    LowerBackRecoveryState rebuild,
+    BackRebuildStage stage,
+  ) async {
+    final exercise = _lowerBackRecoveryEngine.loadedStepFor(
+      rebuild.copyWith(rebuildStage: stage),
+    );
+    if (exercise == null) return;
+    final state = exerciseStates[exercise.trackKey];
+    if (state == null || state.currentLoad <= 0) return;
+    final totals = const EquipmentEngine()
+        .twoDbAchievableTotals(settings.equipment, allowUneven: true);
+    final floor = _lowerBackRecoveryEngine.stageFloorLoad(
+      rebuild,
+      exercise,
+      settings.equipment,
+    );
+    final lighter = const EquipmentEngine()
+        .nextAchievableBelow(state.currentLoad, totals);
+    final next = state.clone()
+      ..currentLoad = lighter < floor ? floor : lighter
+      ..microStepStage = 0
+      ..lastPrescriptionChange = 'Eased one step after a worse morning';
+    exerciseStates = {...exerciseStates, exercise.trackKey: next};
+    await repo.saveExerciseState(next);
+  }
+
+  /// Hands the hinge back to the normal ladder at the rebuild's graded
+  /// level: the Romanian deadlift once stage 3 is reached (DB RDL step),
+  /// otherwise the elevated-start deadlift at the block load. The frozen
+  /// pre-rebuild state is never restored directly.
+  Future<void> _handOffHingeFromRebuild(
+    LowerBackRecoveryState rebuild, {
+    required bool finished,
+  }) async {
+    const romanianDeadliftStepIndex = 2;
+    const elevatedStartStepIndex = 0;
+    final romanian =
+        finished || rebuild.rebuildStage == BackRebuildStage.romanianDeadlift;
+    final exercise =
+        romanian ? backRebuildRomanianDeadlift : backRebuildBlockDeadlift;
+    final track = exerciseStates[exercise.trackKey];
+    // Progression can store one increment above the stage cap after a
+    // capped session; the hand-off never exceeds what the stage allowed.
+    final cap = _lowerBackRecoveryEngine.stageCapLoad(
+      rebuild,
+      exercise,
+      settings.equipment,
+    );
+    final trained = track != null && track.currentLoad > 0
+        ? track.currentLoad
+        : _lowerBackRecoveryEngine.stageFloorLoad(
+            rebuild,
+            exercise,
+            settings.equipment,
+          );
+    final load = trained > cap ? cap : trained;
+    final totals = const EquipmentEngine()
+        .twoDbAchievableTotals(settings.equipment, allowUneven: true);
+    final key = MovementPattern.hinge.name;
+    final hinge = (exerciseStates[key] ??
+            ExerciseState(trackKey: key, pattern: MovementPattern.hinge))
+        .clone()
+      ..ladderStepIndex =
+          romanian ? romanianDeadliftStepIndex : elevatedStartStepIndex
+      ..currentLoad = const EquipmentEngine().roundDownToAchievable(
+        load,
+        totals,
+      )
+      ..status = ExerciseStatus.progress
+      ..microStepStage = 0
+      ..consecutiveHoldCount = 0
+      ..deloadSessionsRemaining = 0
+      ..preDeloadLoad = null
+      ..preDeloadLadderStepIndex = null
+      ..awaitingUndershootCheck = false
+      ..lastTrainedDate = track?.lastTrainedDate ?? today()
+      ..lastPrescriptionChange = finished
+          ? 'Back rebuild complete: continuing from your Romanian deadlift'
+          : 'Back rebuild ended: continuing at its current level';
+    exerciseStates = {...exerciseStates, key: hinge};
+    await repo.saveExerciseState(hinge);
+  }
+
+  /// What unlocks the next Back rebuild stage, including whether the loaded
+  /// deadlift has reached its stage cap yet.
+  String get backRebuildNextStepLabel {
+    final rebuild = lowerBackRecovery;
+    final step = _lowerBackRecoveryEngine.loadedStepFor(rebuild);
+    if (step == null) {
+      return 'Next: deadlift from blocks after 2 good mornings';
+    }
+    final next = rebuild.rebuildStage == BackRebuildStage.blockDeadlift
+        ? 'Romanian deadlift'
+        : 'normal deadlifts';
+    final capReached = _lowerBackRecoveryEngine.stageCapReached(
+      rebuild,
+      exerciseStates[step.trackKey],
+      settings.equipment,
+    );
+    final cap = rebuild.rebuildStage == BackRebuildStage.blockDeadlift
+        ? '70%'
+        : 'your old load';
+    return capReached
+        ? 'Next: $next after 2 good mornings'
+        : 'Next: $next once this lift reaches $cap';
+  }
+
+  /// Local day marker for the back routine on days without lifting.
+  bool get backRoutineDoneToday =>
+      settings.backRoutineDoneDay == repo.ymd(today());
+
+  /// The Big 3 back routine card on days without lifting: after today's
+  /// check-in, when the plan is a rest or cardio day.
+  bool get backRoutineOfferedToday {
+    if (!settings.bigThreeEnabled) return false;
+    final trace = todayTrace;
+    if (trace == null || !_isSameDate(trace.date, today())) return false;
+    final plan = trace.plan;
+    return plan == null ||
+        sessionTemplates[plan.sessionId]?.isCardioOnly == true;
+  }
+
+  Future<void> markBackRoutineDone() async {
+    settings = settings.copyWith(backRoutineDoneDay: repo.ymd(today()));
+    await repo.saveSettings(settings);
     notifyListeners();
   }
 
@@ -1279,13 +1454,23 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// [backCheck] answers the pending Back rebuild next-morning question and
+  /// is required whenever [lowerBackMorningResponseDue]. It is recorded
+  /// before planning so today's plan already reflects the stage it sets.
   Future<DecisionTrace> submitCheckIn({
     required int timeMinutes,
     required int subjective,
     List<PainFlag> pain = const [],
     RecoverySnapshot? recovery,
+    LowerBackSymptomResponse? backCheck,
   }) async {
     await _assertPrimaryPlanUnlocked();
+    if (lowerBackMorningResponseDue) {
+      if (backCheck == null) {
+        throw ArgumentError.notNull('backCheck');
+      }
+      await _applyBackCheck(backCheck);
+    }
     final now = today();
     await _ensureDayStartSnapshot(now);
     _preCheckInSnapshot ??= Map.of(exerciseStates);
@@ -1525,6 +1710,8 @@ class AppController extends ChangeNotifier {
       await repo.saveQueueState(queueState);
     }
 
+    await _undoTodaysBackRebuildRecords(now);
+
     // Remove today's dated rows (check-in, recovery, trace, session logs).
     await repo.deleteDayData(now);
     await repo.deleteDayStartSnapshot();
@@ -1534,6 +1721,39 @@ class AppController extends ChangeNotifier {
     todayTrace = null;
     unawaited(syncNotifications());
     notifyListeners();
+  }
+
+  /// "Reset day" deletes today's sessions, so their Back rebuild exposures
+  /// must not reach tomorrow's check or the loaded-step spacing. A rebuild
+  /// ended today re-applies its hinge hand-off, because the rollback above
+  /// can restore the frozen pre-rebuild hinge.
+  Future<void> _undoTodaysBackRebuildRecords(DateTime day) async {
+    final rebuild = settings.lowerBackRecovery;
+    final pending = rebuild.pendingNextMorningSessionDate;
+    final pendingToday = pending != null && _isSameDate(pending, day);
+    final keptDates = rebuild.recoverySessionDates
+        .where((date) => !_isSameDate(date, day))
+        .toList();
+    if (pendingToday ||
+        keptDates.length != rebuild.recoverySessionDates.length) {
+      settings = settings.copyWith(
+        lowerBackRecovery: rebuild.copyWith(
+          recoverySessionDates: keptDates,
+          clearPendingResponse: pendingToday,
+        ),
+      );
+      await repo.saveSettings(settings);
+    }
+    final completedAt = rebuild.completedAt;
+    if (!rebuild.active &&
+        rebuild.activatedAt != null &&
+        completedAt != null &&
+        _isSameDate(completedAt, day)) {
+      await _handOffHingeFromRebuild(
+        rebuild,
+        finished: rebuild.rebuildStage == BackRebuildStage.romanianDeadlift,
+      );
+    }
   }
 
   /// Manual progression override: jump a compound pattern to a chosen ladder
@@ -1693,7 +1913,6 @@ class AppController extends ChangeNotifier {
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
-    LowerBackSymptomResponse? lowerBackSameDayResponse,
   }) {
     return _completeSession(
       plan,
@@ -1704,7 +1923,6 @@ class AppController extends ChangeNotifier {
       cardioCompletion: cardioCompletion,
       rehitFinisherCompletion: rehitFinisherCompletion,
       endedEarly: endedEarly,
-      lowerBackSameDayResponse: lowerBackSameDayResponse,
       isSupplemental: false,
     );
   }
@@ -1721,7 +1939,6 @@ class AppController extends ChangeNotifier {
     CardioCompletion? cardioCompletion,
     CardioCompletion? rehitFinisherCompletion,
     bool endedEarly = false,
-    LowerBackSymptomResponse? lowerBackSameDayResponse,
   }) async {
     assert(!isUnplanned || isSupplemental);
     if (!isSupplemental) {
@@ -1731,15 +1948,6 @@ class AppController extends ChangeNotifier {
       throw StateError(
         'This session no longer matches the current recovery/safety settings. Regenerate the plan.',
       );
-    }
-    final completedLowerBackRecovery = loggedSets.any(
-      (setLog) =>
-          !setLog.isWarmup &&
-          setLog.value > 0 &&
-          setLog.trackKey == lowerBackRecoveryTrackKey,
-    );
-    if (completedLowerBackRecovery && lowerBackSameDayResponse == null) {
-      throw ArgumentError.notNull('lowerBackSameDayResponse');
     }
     const cardioEngine = CardioEngine();
     final cardioOnly = sessionTemplates[plan.sessionId]?.isCardioOnly == true;
@@ -2059,27 +2267,7 @@ class AppController extends ChangeNotifier {
       await repo.saveSessionLog(log);
       _recentLogs = [..._recentLogs, log];
       _scheduleLogs = [..._scheduleLogs, log];
-      if (completedLowerBackRecovery) {
-        final recoveryExercise = plan.exercises.firstWhere(
-          (exercise) => exercise.trackKey == lowerBackRecoveryTrackKey,
-        );
-        final recoveryPainFlagged = loggedSets.any(
-          (setLog) =>
-              setLog.trackKey == lowerBackRecoveryTrackKey &&
-              setLog.painFlag,
-        );
-        settings = settings.copyWith(
-          lowerBackRecovery: _lowerBackRecoveryEngine.recordSession(
-            settings.lowerBackRecovery,
-            sessionDate: now,
-            sameDayResponse: recoveryPainFlagged
-                ? LowerBackSymptomResponse.worse
-                : lowerBackSameDayResponse!,
-            performedLoad: recoveryExercise.loadTotal,
-          ),
-        );
-        await repo.saveSettings(settings);
-      }
+      await _recordBackRebuildExposure(plan, log, now);
       await recordAnalyticsEvent(
         AnalyticsEventType.sessionCompleted,
         at: completedAt,
@@ -2122,6 +2310,79 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  /// Marks rebuild hinge work and bike work for tomorrow's check. Only
+  /// completed positive work counts; a pain-flagged rebuild set makes that
+  /// check a setback regardless of the morning answer.
+  Future<void> _recordBackRebuildExposure(
+    SessionPlan plan,
+    SessionLog log,
+    DateTime day,
+  ) async {
+    final before = settings.lowerBackRecovery;
+    var rebuild = before;
+    if (rebuild.active && plan.lowerBackRecoveryMode) {
+      final work = log.setLogs
+          .where((setLog) => !setLog.isWarmup && setLog.value > 0)
+          .toList();
+      final hingeWork =
+          work.where((setLog) => isBackRebuildHingeTrack(setLog.trackKey));
+      final loaded = hingeWork.any(
+        (setLog) =>
+            setLog.trackKey == backRebuildBlockDeadlift.trackKey ||
+            setLog.trackKey == backRebuildRomanianDeadlift.trackKey,
+      );
+      final extension = work.any(
+        (setLog) => setLog.trackKey == lowerBackRecoveryTrackKey,
+      );
+      rebuild = _lowerBackRecoveryEngine.recordRebuildSession(
+        rebuild,
+        sessionDate: day,
+        exposure: loaded
+            ? BackRebuildExposure.loaded
+            : hingeWork.isEmpty
+                ? BackRebuildExposure.none
+                : BackRebuildExposure.accessory,
+        extension: extension,
+        painFlagged: log.setLogs.any(
+          (setLog) =>
+              setLog.painFlag &&
+              (isBackRebuildHingeTrack(setLog.trackKey) ||
+                  setLog.trackKey == lowerBackRecoveryTrackKey),
+        ),
+      );
+    }
+    rebuild = _lowerBackRecoveryEngine.recordBikeSession(
+      rebuild,
+      sessionDate: day,
+      exposure: _bikeExposureFor(log.cardioCompletion),
+    );
+    if (rebuild == before) return;
+    settings = settings.copyWith(lowerBackRecovery: rebuild);
+    await repo.saveSettings(settings);
+  }
+
+  /// The bike-return exposure a logged completion represents. Walks are not
+  /// cycling; a ride shorter than the test minimum does not count.
+  BikeExposure _bikeExposureFor(CardioCompletion? completion) {
+    if (completion == null || completion.protocol.isWalk) {
+      return BikeExposure.none;
+    }
+    final credited = completion.meetsCreditableDose;
+    switch (completion.protocol.type) {
+      case CardioProtocolType.rehit when credited:
+        return BikeExposure.rehit;
+      case CardioProtocolType.norwegian4x4 when credited:
+        return BikeExposure.fourByFour;
+      case CardioProtocolType.zone2Base when credited:
+        return BikeExposure.zone2Ride;
+      default:
+        return completion.completedDurationSeconds >=
+                LowerBackRecoveryEngine.minimumTestRideSeconds
+            ? BikeExposure.easyRide
+            : BikeExposure.none;
+    }
+  }
+
   /// Logs a structured cardio attempt (S3 4×4, S6 Zone 2, or S7 REHIT).
   /// Partial attempts are persisted but do not earn category/queue credit.
   Future<void> logCardioSession(
@@ -2129,11 +2390,14 @@ class AppController extends ChangeNotifier {
     required CardioCompletion completion,
     SessionPlan? plan,
   }) async {
-    if (stationaryBikePaused) {
-      throw StateError('Stationary cycling is paused in Settings.');
+    final walk = plan?.cardioPrescription?.protocol.isWalk == true;
+    if (id == SessionTypeId.s6 && !walk && !cyclingAccess.zone2Ride) {
+      throw StateError(
+        'Zone 2 rides are not open yet: stationary cycling is paused or still returning in steps.',
+      );
     }
     if ((id == SessionTypeId.s3 || id == SessionTypeId.s7) &&
-        !isHighIntensityUsableNow()) {
+        !isHighIntensityUsableNow(sessionId: id)) {
       throw StateError(
         'This session no longer matches the current recovery/safety settings. Regenerate the plan.',
       );
@@ -2248,10 +2512,12 @@ class AppController extends ChangeNotifier {
   }) async {
     const cardioEngine = CardioEngine();
     final minutes = (completion.completedDurationSeconds + 59) ~/ 60;
+    final walk = completion.protocol.isWalk;
     final prescription = cardioEngine.prescriptionFor(
       sessionId: SessionTypeId.s6,
       durationMinutes: minutes,
       heartRateMaxBpm: settings.hrMax,
+      walk: walk,
     );
     cardioEngine.validateSessionMatch(
       sessionId: SessionTypeId.s6,
@@ -2264,7 +2530,9 @@ class AppController extends ChangeNotifier {
     await _completeSession(
       SessionPlan(
         sessionId: SessionTypeId.s6,
-        sessionName: sessionTypes[SessionTypeId.s6]!.name,
+        sessionName: walk
+            ? '${sessionTypes[SessionTypeId.s6]!.name} · uphill walk'
+            : sessionTypes[SessionTypeId.s6]!.name,
         tier: SessionTier.full,
         exercises: const [],
         estimatedDurationMin: minutes,

@@ -94,6 +94,32 @@ void main() {
     );
   });
 
+  testWidgets('Back section shows the rebuild stage and saves Big 3 at once',
+      (tester) async {
+    final controller = await pumpSettings(
+      tester,
+      settings: const UserSettings(
+        lowerBackRecovery: LowerBackRecoveryState(
+          active: true,
+          rebuildStage: BackRebuildStage.romanianDeadlift,
+        ),
+      ),
+    );
+    final bigThree = find.byKey(const Key('settings-big-three'));
+    await tester.scrollUntilVisible(bigThree, 400);
+    expect(
+      find.textContaining('Stage 3 of 3 · Romanian deadlift'),
+      findsOneWidget,
+    );
+    expect(tester.widget<SwitchListTile>(bigThree).value, isTrue);
+
+    await tester.tap(bigThree);
+    await tester.pump();
+    expect(controller.saveCalls, 1);
+    expect(controller.settings.bigThreeEnabled, isFalse);
+    expect(tester.widget<SwitchListTile>(bigThree).value, isFalse);
+  });
+
   testWidgets('blank HR override and API key explicitly clear saved values',
       (tester) async {
     final controller = await pumpSettings(

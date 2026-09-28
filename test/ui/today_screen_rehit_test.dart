@@ -903,7 +903,10 @@ class _EligibilityController extends AppController {
   }
 
   @override
-  bool isHighIntensityUsableNow({DateTime? nowLocal}) =>
+  bool isHighIntensityUsableNow({
+    DateTime? nowLocal,
+    SessionTypeId? sessionId,
+  }) =>
       highIntensityUsable;
 
   void publishTrace(DecisionTrace trace) {

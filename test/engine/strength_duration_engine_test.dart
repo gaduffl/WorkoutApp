@@ -401,13 +401,60 @@ void main() {
         }
         expect(atg.instruction, contains('Replaces general movement prep.'));
         expect(atg.instruction, isNot(contains('shoulder/scapular rehearsal')));
+        // The ATG block replaces general movement prep. The McGill Big 3
+        // entry that follows it is not general prep.
         expect(
           plan.exercises.where(
-            (exercise) => exercise.trackKey.startsWith('warmup:'),
+            (exercise) =>
+                exercise.trackKey.startsWith('warmup:') &&
+                exercise.trackKey != 'warmup:big3',
           ),
           isEmpty,
         );
       }
+    });
+
+    test('McGill Big 3 follows the prep in its own minutes and can be off',
+        () {
+      expect(StrengthPrepPolicy.bigThreeMinutes(20), 2);
+      expect(StrengthPrepPolicy.bigThreeMinutes(35), 4);
+      expect(StrengthPrepPolicy.bigThreeMinutes(60), 6);
+      for (final entry in {20: 2, 35: 4, 60: 6}.entries) {
+        for (final id in [
+          SessionTypeId.s1,
+          SessionTypeId.s2,
+          SessionTypeId.s4,
+          SessionTypeId.s5,
+        ]) {
+          final plan = decide(time: entry.key, forced: id).trace.plan!;
+          final prepIndex = plan.exercises.indexWhere(
+            (exercise) =>
+                exercise.trackKey == 'atg_block' ||
+                exercise.trackKey == 'warmup:${id.name}',
+          );
+          final bigThree = plan.exercises.indexWhere(
+            (exercise) => exercise.trackKey == 'warmup:big3',
+          );
+          expect(bigThree, prepIndex + 1, reason: '${id.name} ${entry.key}');
+          final entryExercise = plan.exercises[bigThree];
+          expect(entryExercise.isWarmup, isTrue);
+          expect(entryExercise.metric, ExerciseMetric.minutes);
+          expect(entryExercise.targetRange, (entry.value, entry.value));
+          expect(entryExercise.instruction, contains('Side bridge'));
+          expect(entryExercise.instruction, contains('Bird dog'));
+          expect(entryExercise.instruction, contains('Curl-up'));
+          expect(plan.estimatedDurationMin, lessThanOrEqualTo(entry.key));
+        }
+      }
+      final withoutBigThree = decide(
+        time: 35,
+        forced: SessionTypeId.s1,
+        settings: const UserSettings(bigThreeEnabled: false),
+      ).trace.plan!;
+      expect(
+        withoutBigThree.exercises.map((exercise) => exercise.trackKey),
+        isNot(contains('warmup:big3')),
+      );
     });
 
     test('the zero-minute hard window remains a rest outcome', () {

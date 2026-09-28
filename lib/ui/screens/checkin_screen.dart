@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/lower_back_recovery.dart';
 import '../../models/pain.dart';
 import '../../models/recovery_snapshot.dart';
 import '../../state/app_controller.dart';
@@ -17,6 +18,7 @@ class CheckInScreen extends StatefulWidget {
 class _CheckInScreenState extends State<CheckInScreen> {
   int? _time;
   int _feel = 3;
+  LowerBackSymptomResponse? _backCheck;
   final Map<BodyRegion, PainSeverity> _pain = {};
   final Map<BodyRegion, Set<PainTag>> _painTags = {};
   final _hrvController = TextEditingController();
@@ -105,6 +107,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Future<void> _submit() async {
     if (_time == null || _submitting) return;
     final controller = context.read<AppController>();
+    if (controller.lowerBackMorningResponseDue && _backCheck == null) return;
     final now = controller.today();
     final pain = _pain.entries
         .map((e) => PainFlag(
@@ -144,6 +147,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       subjective: _feel,
       pain: pain,
       recovery: recovery,
+      backCheck: controller.lowerBackMorningResponseDue ? _backCheck : null,
     );
 
     if (!mounted) return;
@@ -151,8 +155,58 @@ class _CheckInScreenState extends State<CheckInScreen> {
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => TodayScreen(trace: trace)));
   }
 
+  Widget _backCheckSection(BuildContext context) {
+    const options = [
+      (LowerBackSymptomResponse.better, 'Better'),
+      (LowerBackSymptomResponse.unchanged, 'Same'),
+      (LowerBackSymptomResponse.worse, 'Worse'),
+    ];
+    return Column(
+      key: const Key('checkin-back-check'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Back after your last session?',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Compared with before it. This moves Back rebuild forward or back.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final (response, label) in options)
+              ChoiceChip(
+                key: Key('checkin-back-${response.name}'),
+                label: Text(label),
+                selected: _backCheck == response,
+                onSelected: (_) => setState(() => _backCheck = response),
+              ),
+          ],
+        ),
+        if (_backCheck == LowerBackSymptomResponse.worse) ...[
+          const SizedBox(height: 6),
+          Text(
+            'The rebuild steps back one stage. Stop and seek care for new '
+            'spreading pain, numbness, tingling, weakness, or bladder/bowel '
+            'changes.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final backCheckDue =
+        context.watch<AppController>().lowerBackMorningResponseDue;
+    final canSubmit =
+        _time != null && !_submitting && (!backCheckDue || _backCheck != null);
     return Scaffold(
       appBar: AppBar(title: const Text('Ready to plan today?')),
       body: SafeArea(
@@ -161,6 +215,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (backCheckDue) _backCheckSection(context),
               Text('Time available today', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Wrap(
@@ -308,7 +363,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: (_time == null || _submitting) ? null : _submit,
+                  onPressed: canSubmit ? _submit : null,
                   child: _submitting
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Get my plan'),
