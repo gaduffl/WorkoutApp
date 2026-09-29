@@ -91,7 +91,7 @@ Each ladder step also has micro-progressions in order: **load → reps (within r
 
 **Rep display:** the prescription always shows the range (6–10 or 8–15), never a single number; load stays fixed until the progress trigger fires (§6.2) — the user's job between progressions is to close the rep gap.
 
-**Rest defaults:** compounds 90 s (superset partner fills the rest), accessories 60 s; timer pre-set accordingly. Back rebuild's loaded deadlift (§7.3) is never supersetted and always runs last.
+**Rest defaults:** compounds 90 s (superset partner fills the rest), accessories 60 s; timer pre-set accordingly. Back rebuild's staged squat and deadlift (§7.3) are never supersetted; they follow all other work, and a loaded deadlift always runs last.
 
 **Cardio prescriptions (engine-emitted targets):**
 - S3 Norwegian 4×4: 4 × (4 min @ 85–95% HRmax + 3 min easy spin), plus 5 min warm-up / 3 min cool-down ≈ 36 min.
@@ -316,49 +316,67 @@ Activation retains the existing warning-sign confirmation. Current or persisted 
 symptoms pause training; weakness, saddle sensory changes and bladder/bowel changes
 retain urgent guidance.
 
-Back rebuild changes only the hinge slot, the bike and the general preparation.
-Every other slot (squat, presses, rows, pull-ups, dips, arms, core) is the normal plan
-from the same queue, readiness, time budget, ladders, RIR and pain, partial-work,
-travel and deload gates. There is no second planner, closed catalogue, phase
-dashboard, manual dose form or daily selection task. Home shows one compact card
+Back rebuild changes only the hinge and squat slots, three ladder steps that load the
+lower back, the bike and the general preparation. The bent-over DB row (row step 0),
+standing presses (overhead steps 1–3) and the L-sit (core step 1) become a
+chest-supported DB row, a seated DB press with the back against a backrest and a plank,
+each on its own track; the frozen normal tracks resume after the rebuild under the
+ordinary detraining rules. Every other slot and step (other rows and presses, push-ups
+and bench, pull-ups, dips, arms, planks and hangs, knee health) is the normal plan from
+the same queue, readiness, time budget, ladders, RIR and pain, partial-work, travel and
+deload gates. There is no second planner, closed catalogue, phase dashboard, manual
+dose form or daily selection task. Home shows one compact card
 (stage, what unlocks the next one, bike step); Settings has one `Back rebuild` switch
 and keeps extensions, the cycling pause and deadlift alternatives in one collapsed
 section. Lifting happens in the morning, so the general preparation is jumping jacks
 (step jacks or marching if impact bothers the back), then an uphill forward walk on
-the ATG treadmill; the loaded hinge is never the first thing in the session.
+the ATG treadmill; a staged lift is never the first thing in the session.
 
-**Hinge slot, three stages:**
+**Hinge and squat slots, three stages:**
 
-| Stage | Hinge work | Load (of the preserved pre-rebuild hinge load) | Effort |
-|-------|------------|-----------------------------------------------|--------|
-| 1 · Bridges & hamstring curls | DB floor glute bridge + sliding hamstring curl in the hinge position (the `Keep deadlift alternatives` tracks) | their own normal progression | normal |
-| 2 · Deadlift from blocks | DB deadlift from blocks, handles about mid-shin | starts at 50%, capped at 70% | RIR 3+ |
-| 3 · Romanian deadlift | DB Romanian deadlift | starts at 70%, capped at 100% | RIR 2 |
+| Stage | Hinge work | Squat work | Load | Effort |
+|-------|------------|------------|------|--------|
+| 1 · Bridges, hamstring curls & split squats | DB floor glute bridge + sliding hamstring curl (the `Keep deadlift alternatives` tracks) | split squat, dumbbells at the sides | their own normal progression | normal; split squat RIR 3+ |
+| 2 · Deadlift from blocks & squat to a box | DB deadlift from blocks, handles about mid-shin | goblet squat to a box at the depth where the back stays neutral | deadlift 50–70% of the preserved pre-rebuild hinge load; squat 60–80% of the frozen normal squat load | RIR 3+ |
+| 3 · Romanian deadlift & goblet squat | DB Romanian deadlift | goblet squat | deadlift 70–100%; squat 80–100% | RIR 2 |
 
-Loaded steps have their own tracks and never advance or overwrite the frozen normal
-hinge ladder. They run last in the session, never in a superset, with compound rest
-and warm-up, at most twice per rolling seven days and at least 48 hours apart. On
-other days, with any lower-back or hip flag, or in travel mode, stage-1 work fills the
-slot. A mild flag eases the rebuild tracks through the ordinary pain table (one load
-step); sharp pain removes all rebuild hinge work. Stage-1 tracks credit only
-glutes and hamstrings respectively; the loaded deadlifts use the hinge's muscle
-profile and may light the lumbar area in the Today exposure view.
+Each load window starts at its floor and is capped at its top. The squat reference is
+the frozen normal squat track: its load on the goblet step, or half the pair total on a
+two-dumbbell step as a conservative single-dumbbell equivalent. Without a reference a
+window collapses to the lightest achievable load.
 
-**Next-morning check.** After a session with hinge-slot, extension or bike-return
-work, the next check-in asks one question: back compared with before the last session
-— Better, Same or Worse. It is required before planning when due and is applied
-before today's plan is built. There is no same-day question; a pain-flagged set on
-rebuild work makes the check a setback. Two same-or-better mornings advance a stage
-(in stages 2–3 only loaded sessions count, and the stage's cap must be reached). A
-worse morning steps back one stage and the stage it leaves resumes one load step
-lighter, never below its floor. Completing a session never advances anything by
+Staged lifts have their own tracks and never advance or overwrite the frozen normal
+hinge and squat ladders. They are never in a superset, keep compound rest and
+warm-up, and follow all other work: on lower days the glute bridge leads in (the
+budgeter may trim it in a short window), joined by the hamstring curl when no loaded
+deadlift is due, then the squat, then a loaded deadlift last. Loaded deadlifts run at
+most twice per rolling seven days and at least 48 hours apart. On other days, with any
+lower-back or hip flag, or in travel mode, stage-1 work fills the hinge slot; the same
+flags and travel put the squat on the split squat (bodyweight in travel mode). A mild
+flag eases the rebuild tracks through the ordinary pain table (one load step); sharp
+pain removes the staged work of every pattern it affects, so sharp lower-back pain
+removes all rebuild hinge and squat work. Stage-1 hinge tracks credit only glutes and
+hamstrings respectively and the squats credit quads and glutes; the loaded deadlifts
+use the hinge's muscle profile and may light the lumbar area in the Today exposure
+view, the squats never do.
+
+**Next-morning check.** After a session with staged hinge or squat work, extension or
+bike-return work, the next check-in asks one question: back compared with before the
+last session — Better, Same or Worse. It is required before planning when due and is
+applied before today's plan is built. There is no same-day question; a pain-flagged
+set on rebuild work makes the check a setback. Two same-or-better mornings advance a
+stage (in stages 2–3 only mornings after a loaded deadlift count, and both the
+deadlift and the squat must have reached their stage caps). A worse morning steps
+back one stage and the stage it leaves resumes both capped lifts one load step
+lighter, never below their floors. Completing a session never advances anything by
 itself.
 
 **Hand-off.** Finishing stage 3 ends Back rebuild automatically and continues the
-normal hinge ladder at DB RDL with the RDL-track load (at most the pre-rebuild load).
-Ending it manually continues at the rebuild's level instead of the old load: the
-elevated-start deadlift at the block load (or 50%) from stages 1–2, the DB RDL from
-stage 3. Outside Back rebuild, a mild lower-back regression of the hinge skips the
+normal hinge ladder at DB RDL with the RDL-track load and the normal squat ladder at
+the goblet squat with the goblet-track load, each at most its stage cap. Ending it
+manually continues at the rebuild's level instead of the old loads: the elevated-start
+deadlift at the block load (or 50%) and the goblet squat at the box-squat load (or
+60%) from stages 1–2, the DB RDL and the goblet-squat load from stage 3. Outside Back rebuild, a mild lower-back regression of the hinge skips the
 floor DB deadlift and lands on the elevated start.
 
 **Optional back extensions** stay off by default. When enabled they join stages 1–2

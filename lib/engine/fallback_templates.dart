@@ -123,12 +123,12 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Travel mode is active: no equipment, progress through reps or hold duration, tempo, and range of motion; load progression is paused.';
     case RuleKey.lowerBackRecoveryActive:
       return lang == AppLanguage.de
-          ? 'Back rebuild Stufe 1: Glute Bridges mit Kurzhantel und Sliding Hamstring Curls ersetzen vorerst das Kreuzheben.'
-          : 'Back rebuild stage 1: dumbbell glute bridges and sliding hamstring curls replace deadlifts for now.';
+          ? 'Back rebuild Stufe 1: Glute Bridges, Sliding Hamstring Curls und Split Squats ersetzen vorerst Kreuzheben und Goblet Squats.'
+          : 'Back rebuild stage 1: glute bridges, sliding hamstring curls and split squats replace deadlifts and goblet squats for now.';
     case RuleKey.lowerBackRecoveryLoadMinimized:
       return lang == AppLanguage.de
-          ? 'Back rebuild ist aktiv: nur der Kreuzheben-Platz ändert sich; der Rest des heutigen Plans ist normales Training.'
-          : 'Back rebuild is on: only the deadlift slot changes; the rest of today\'s plan is normal training.';
+          ? 'Back rebuild ist aktiv: Kreuzheben und Kniebeuge laufen in Stufen; vorgebeugtes Rudern, stehendes Drücken und L-Sits werden zu brustgestütztem Rudern, sitzendem Drücken und Planks. Der Rest ist normales Training.'
+          : 'Back rebuild is on: the deadlift and squat are staged; bent-over rows, standing presses and L-sits become chest-supported rows, seated presses and planks. The rest is normal training.';
     case RuleKey.lowerBackRecoverySpacing:
       return lang == AppLanguage.de
           ? '${p['exercise'] ?? 'Das Kreuzheben'} ist heute nicht fällig (48-Stunden-Abstand, höchstens zweimal pro Woche, Rücken- oder Hüftschmerz oder Reise); Glute Bridges und Hamstring Curls füllen den Platz.'

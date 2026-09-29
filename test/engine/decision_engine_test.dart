@@ -196,7 +196,7 @@ void main() {
         forcedSessionId: id,
       ));
 
-  test('Back rebuild stage 1 keeps the normal plan and swaps only the hinge',
+  test('Back rebuild stage 1 stages the squat and hinge and keeps the rest',
       () {
     final output = plannedFor(SessionTypeId.s1);
     final plan = output.trace.plan!;
@@ -204,28 +204,39 @@ void main() {
 
     expect(plan.lowerBackRecoveryMode, isTrue);
     expect(plan.sessionName, 'Lower Strength');
-    final squat = work.singleWhere(
-      (e) => e.trackKey == MovementPattern.squat.name,
+    expect(
+      work.any(
+        (e) =>
+            e.trackKey == MovementPattern.squat.name ||
+            e.trackKey == MovementPattern.hinge.name,
+      ),
+      isFalse,
     );
-    expect(squat.loadTotal, greaterThan(0));
-    expect(squat.rirTarget, Rir.rir2);
-    expect(squat.progressionEligible, isTrue);
-    expect(work.any((e) => e.trackKey == MovementPattern.hinge.name), isFalse);
-
-    final bridge = work.singleWhere(
-      (e) => e.trackKey == alternativeGluteBridge.trackKey,
-    );
-    final curl = work.singleWhere(
-      (e) => e.trackKey == alternativeHamstringCurl.trackKey,
-    );
+    // Bridges and curls first, then the split squat: no staged lift opens
+    // the morning session.
+    expect(work.map((e) => e.trackKey), [
+      alternativeGluteBridge.trackKey,
+      alternativeHamstringCurl.trackKey,
+      backRebuildSplitSquat.trackKey,
+    ]);
+    final bridge = work[0];
     expect(bridge.loadTotal, isNotNull);
     expect(bridge.dumbbellCount, 1);
-    for (final exercise in [bridge, curl]) {
+    for (final exercise in work.take(2)) {
       expect(exercise.rirTarget, Rir.rir2);
       expect(exercise.progressionEligible, isTrue);
       expect(exercise.instruction, isNotNull);
     }
-    // The frozen normal hinge ladder is untouched.
+    final splitSquat = work[2];
+    expect(splitSquat.name, 'Split squat (dumbbells at sides)');
+    expect(splitSquat.rirTarget, Rir.rir3plus);
+    expect(splitSquat.dumbbellCount, 2);
+    expect(splitSquat.isCompoundWork, isTrue);
+    expect(splitSquat.supersetGroup, isNull);
+    expect(splitSquat.progressionEligible, isTrue);
+    expect(splitSquat.instruction, contains('Dumbbells at your sides'));
+    // The frozen normal squat and hinge ladders are untouched.
+    expect(output.patchedExerciseStates['squat']!.currentLoad, 24);
     expect(output.patchedExerciseStates['hinge']!.currentLoad, 90);
     expect(
       output.trace.firedRules.map((rule) => rule.key),
@@ -240,8 +251,8 @@ void main() {
   });
 
   test(
-      'Back rebuild keeps every non-hinge slot identical to the normal plan, '
-      'even from advanced ladders', () {
+      'Back rebuild keeps unstaged slots normal apart from the back-supported '
+      'swaps, even from advanced ladders', () {
     final advancedStates = <String, ExerciseState>{
       for (final entry in ladders.entries)
         entry.key.name: ExerciseState(
@@ -262,10 +273,14 @@ void main() {
           lastTrainedDate: today.subtract(const Duration(days: 3)),
         ),
     };
-    Set<String> nonHinge(DecisionEngineOutput output) => {
+    // At these steps only the standing press loads the lower back: the row
+    // is braced and the core step is a hang.
+    const staged = {MovementPattern.hinge, MovementPattern.squat};
+    Set<String> unstaged(DecisionEngineOutput output) => {
           for (final e in output.trace.plan!.exercises)
             if (!e.isWarmup &&
-                e.pattern != MovementPattern.hinge &&
+                !staged.contains(e.pattern) &&
+                e.pattern != MovementPattern.pushVertical &&
                 e.trackKey != lowerBackRecoveryTrackKey)
               '${e.trackKey}|${e.name}|${e.sets}|${e.loadTotal}|${e.rirTarget}',
         };
@@ -287,21 +302,140 @@ void main() {
         time: 60,
         states: advancedStates,
       );
-      expect(nonHinge(rebuild), nonHinge(normal), reason: sessionId.name);
-      expect(nonHinge(rebuild), isNotEmpty, reason: sessionId.name);
+      final plan = rebuild.trace.plan!;
+      expect(unstaged(rebuild), unstaged(normal), reason: sessionId.name);
       expect(
-        rebuild.trace.plan!.exercises.any(
-          (e) => e.trackKey == MovementPattern.hinge.name,
+        plan.exercises.any(
+          (e) =>
+              e.trackKey == MovementPattern.hinge.name ||
+              e.trackKey == MovementPattern.squat.name ||
+              e.trackKey == MovementPattern.pushVertical.name,
         ),
         isFalse,
         reason: sessionId.name,
       );
+      if (sessionId == SessionTypeId.s2) {
+        expect(
+          plan.exercises.map((e) => e.trackKey),
+          contains(backRebuildSeatedPress.trackKey),
+        );
+      }
+      if (sessionId == SessionTypeId.s5) {
+        // S5's named lateral raise and dip are not standing presses.
+        expect(
+          plan.exercises.map((e) => e.trackKey),
+          containsAll([lateralRaise.trackKey, dip.trackKey]),
+        );
+      }
       expect(
-        rebuild.trace.plan!.estimatedDurationMin,
+        plan.estimatedDurationMin,
         lessThanOrEqualTo(60),
         reason: sessionId.name,
       );
     }
+  });
+
+  test('Back rebuild swaps bent-over rows, standing presses and L-sits', () {
+    final beginnerStates = {
+      ...baseStates(),
+      for (final entry in {
+        MovementPattern.pullHorizontal: 0,
+        MovementPattern.pushVertical: 1,
+        MovementPattern.coreGrip: 1,
+        MovementPattern.pushHorizontal: 0,
+        MovementPattern.pullVertical: 1,
+      }.entries)
+        entry.key.name: ExerciseState(
+          trackKey: entry.key.name,
+          pattern: entry.key,
+          ladderStepIndex: entry.value,
+          currentLoad: 20,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
+    };
+    List<PlannedExercise> work(DecisionEngineOutput output) => output
+        .trace.plan!.exercises
+        .where((e) => !e.isWarmup)
+        .toList();
+
+    final normal = work(plannedFor(
+      SessionTypeId.s2,
+      time: 60,
+      settings: const UserSettings(),
+      states: beginnerStates,
+    ));
+    expect(
+      normal.map((e) => e.name),
+      containsAll(['DB row', 'Standing DB press', 'L-sit progression']),
+    );
+
+    final rebuild = work(plannedFor(
+      SessionTypeId.s2,
+      time: 60,
+      states: beginnerStates,
+    ));
+    final names = rebuild.map((e) => e.name).toList();
+    expect(
+      names,
+      containsAll([
+        'Chest-supported DB row (bolster)',
+        'Seated DB press (back supported)',
+        'Plank',
+        'Push-up',
+        'Pull-up',
+      ]),
+    );
+    for (final unsafe in ['DB row', 'Standing DB press', 'L-sit progression']) {
+      expect(names, isNot(contains(unsafe)));
+    }
+    final row = rebuild.singleWhere(
+      (e) => e.trackKey == lowerBackRecoveryChestSupportedRow.trackKey,
+    );
+    final press = rebuild.singleWhere(
+      (e) => e.trackKey == backRebuildSeatedPress.trackKey,
+    );
+    // They fill primary slots: compound work, paired with their partners.
+    expect(row.isCompoundWork, isTrue);
+    expect(press.isCompoundWork, isTrue);
+    expect(row.supersetGroup, isNotNull);
+    expect(press.supersetGroup, isNotNull);
+    expect(row.instruction, contains('Chest on the bolster'));
+    expect(press.instruction, contains('backrest'));
+    final plank = rebuild.singleWhere(
+      (e) => e.trackKey == backRebuildPlank.trackKey,
+    );
+    expect(plank.metric, ExerciseMetric.seconds);
+    expect(plank.isCompoundWork, isFalse);
+
+    // Already back-supported steps stay on their normal tracks.
+    final supportedStates = {
+      ...beginnerStates,
+      for (final entry in {
+        MovementPattern.pullHorizontal: 1,
+        MovementPattern.pushVertical: 0,
+        MovementPattern.coreGrip: 2,
+      }.entries)
+        entry.key.name: ExerciseState(
+          trackKey: entry.key.name,
+          pattern: entry.key,
+          ladderStepIndex: entry.value,
+          currentLoad: 20,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
+    };
+    final kept = work(plannedFor(
+      SessionTypeId.s2,
+      time: 60,
+      states: supportedStates,
+    )).map((e) => e.trackKey);
+    expect(
+      kept,
+      containsAll([
+        MovementPattern.pullHorizontal.name,
+        MovementPattern.pushVertical.name,
+        MovementPattern.coreGrip.name,
+      ]),
+    );
   });
 
   test('stage 2 prescribes a capped block deadlift last in the session', () {
@@ -325,11 +459,24 @@ void main() {
       backRebuildBlockDeadlift.trackKey,
       reason: 'a feeder or ramp set precedes the deadlift',
     );
-    expect(work.any((e) => e.trackKey == MovementPattern.squat.name), isTrue);
-    expect(
-      work.any((e) => e.trackKey == alternativeGluteBridge.trackKey),
-      isFalse,
-    );
+    // The box squat comes right before the deadlift: 60% of the frozen 24 lb
+    // goblet squat, rounded down to an achievable dumbbell.
+    final box = work[work.length - 2];
+    expect(box.trackKey, backRebuildBoxSquat.trackKey);
+    expect(box.name, 'Goblet squat to a box');
+    expect(box.loadTotal, 12);
+    expect(box.rirTarget, Rir.rir3plus);
+    expect(box.isCompoundWork, isTrue);
+    expect(box.supersetGroup, isNull);
+    expect(box.instruction, contains('box or bench'));
+    expect(work.any((e) => e.trackKey == MovementPattern.squat.name), isFalse);
+    // A glute bridge leads in, so the squat is not the first lift; the
+    // hamstring curl waits for days without the loaded deadlift.
+    expect(work.map((e) => e.trackKey), [
+      alternativeGluteBridge.trackKey,
+      backRebuildBoxSquat.trackKey,
+      backRebuildBlockDeadlift.trackKey,
+    ]);
     final reentry = output.trace.firedRules.singleWhere(
       (rule) => rule.key == RuleKey.lowerBackRecoveryReentry,
     );
@@ -355,16 +502,53 @@ void main() {
           .loadTotal,
       60,
     );
+    final squatAboveCap = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+      states: {
+        ...baseStates(),
+        backRebuildBoxSquat.trackKey: ExerciseState(
+          trackKey: backRebuildBoxSquat.trackKey,
+          pattern: MovementPattern.squat,
+          currentLoad: 24,
+          lastTrainedDate: today.subtract(const Duration(days: 3)),
+        ),
+      },
+    );
+    // Capped at 80% of the goblet squat: 19.2 lb rounds down to 18.
+    expect(
+      squatAboveCap.trace.plan!.exercises
+          .singleWhere(
+            (e) => !e.isWarmup && e.trackKey == backRebuildBoxSquat.trackKey,
+          )
+          .loadTotal,
+      18,
+    );
 
     final romanian = plannedFor(
       SessionTypeId.s4,
       time: 60,
       settings: rebuildSettings(stage: BackRebuildStage.romanianDeadlift),
     ).trace.plan!;
-    final rdl = romanian.exercises.where((e) => !e.isWarmup).last;
+    final romanianWork =
+        romanian.exercises.where((e) => !e.isWarmup).toList();
+    final rdl = romanianWork.last;
     expect(rdl.trackKey, backRebuildRomanianDeadlift.trackKey);
     expect(rdl.loadTotal, 60);
     expect(rdl.rirTarget, Rir.rir2);
+    // Full-depth goblet squat at 80% of 24 (19.2, rounded to 18), after the
+    // upper-body work and before the deadlift.
+    final goblet = romanianWork[romanianWork.length - 2];
+    expect(goblet.trackKey, backRebuildGobletSquat.trackKey);
+    expect(goblet.loadTotal, 18);
+    expect(goblet.rirTarget, Rir.rir2);
+    expect(goblet.visualId, 'dumbbellGobletSquat');
+    expect(
+      romanianWork.indexWhere(
+        (e) => e.pattern == MovementPattern.pushHorizontal,
+      ),
+      lessThan(romanianWork.indexOf(goblet)),
+    );
   });
 
   test('the loaded step waits for spacing while bridges and curls fill in', () {
@@ -408,7 +592,10 @@ void main() {
     ).trace.plan!;
     final mildTracks = mild.exercises.map((e) => e.trackKey).toList();
     expect(mildTracks, isNot(contains(backRebuildBlockDeadlift.trackKey)));
+    expect(mildTracks, isNot(contains(backRebuildBoxSquat.trackKey)));
+    // Both slots fall back to stage-1 work.
     expect(mildTracks, contains(alternativeGluteBridge.trackKey));
+    expect(mildTracks, contains(backRebuildSplitSquat.trackKey));
 
     final sharp = plannedFor(
       SessionTypeId.s1,
@@ -429,19 +616,30 @@ void main() {
       alternativeGluteBridge.trackKey,
       alternativeHamstringCurl.trackKey,
       backRebuildBlockDeadlift.trackKey,
+      backRebuildSplitSquat.trackKey,
+      backRebuildBoxSquat.trackKey,
       lowerBackRecoveryTrackKey,
       MovementPattern.hinge.name,
+      MovementPattern.squat.name,
     ]) {
       expect(sharpTracks, isNot(contains(key)));
     }
-    expect(sharpTracks, contains(MovementPattern.squat.name));
+    // With nothing lower-body left, the plan moves to a session with work.
+    expect(sharp.sessionId, isNot(SessionTypeId.s1));
+    expect(sharp.exercises.where((e) => !e.isWarmup), isNotEmpty);
   });
 
-  test('any mild hinge flag keeps the deadlift off and eases the bridge', () {
+  test('any mild hinge flag keeps the loaded lifts off and eases stage 1', () {
     final states = {
       alternativeGluteBridge.trackKey: ExerciseState(
         trackKey: alternativeGluteBridge.trackKey,
         pattern: MovementPattern.hinge,
+        currentLoad: 40,
+        lastTrainedDate: today.subtract(const Duration(days: 3)),
+      ),
+      backRebuildSplitSquat.trackKey: ExerciseState(
+        trackKey: backRebuildSplitSquat.trackKey,
+        pattern: MovementPattern.squat,
         currentLoad: 40,
         lastTrainedDate: today.subtract(const Duration(days: 3)),
       ),
@@ -474,7 +672,48 @@ void main() {
       );
       // One achievable step lighter, as the pain table does elsewhere.
       expect(bridgeLoad(flagged), 35, reason: region.name);
+      expect(tracks, isNot(contains(backRebuildBoxSquat.trackKey)));
+      final splitSquat = flagged.exercises.singleWhere(
+        (e) => !e.isWarmup && e.trackKey == backRebuildSplitSquat.trackKey,
+      );
+      // Matched pairs only (no uneven dumbbells): 40 -> 36.
+      expect(splitSquat.loadTotal, 36, reason: region.name);
+      expect(splitSquat.instruction, contains('pain-free range'));
+      expect(splitSquat.instruction, contains('Dumbbells at your sides'));
     }
+  });
+
+  test('knee pain and travel reach the staged squat too', () {
+    final kneeSharp = plannedFor(
+      SessionTypeId.s1,
+      pain: [
+        PainFlag(
+          region: BodyRegion.kneeLeft,
+          severity: PainSeverity.sharp,
+          flaggedDate: today,
+        ),
+      ],
+    ).trace.plan!;
+    final kneeTracks = kneeSharp.exercises.map((e) => e.trackKey).toList();
+    expect(kneeTracks, isNot(contains(backRebuildSplitSquat.trackKey)));
+    expect(kneeTracks, isNot(contains(MovementPattern.squat.name)));
+    expect(kneeTracks, contains(alternativeGluteBridge.trackKey));
+
+    final travel = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings(stage: BackRebuildStage.romanianDeadlift)
+          .copyWith(travelMode: true),
+    ).trace.plan!;
+    final squat = travel.exercises.singleWhere(
+      (e) => !e.isWarmup && e.pattern == MovementPattern.squat,
+    );
+    expect(squat.trackKey, backRebuildSplitSquat.trackKey);
+    expect(squat.name, 'Split squat (bodyweight)');
+    expect(squat.isTravel, isTrue);
+    expect(
+      travel.exercises.map((e) => e.trackKey),
+      isNot(contains(backRebuildRomanianDeadlift.trackKey)),
+    );
   });
 
   test('optional back extensions join stages 1–2 at the end, unweighted', () {
@@ -512,7 +751,7 @@ void main() {
     expect(
       stageOne.exercises.map((e) => e.trackKey),
       containsAll([
-        MovementPattern.squat.name,
+        backRebuildSplitSquat.trackKey,
         alternativeGluteBridge.trackKey,
       ]),
     );
@@ -524,8 +763,8 @@ void main() {
     ).trace.plan!;
     expect(stageTwo.estimatedDurationMin, lessThanOrEqualTo(20));
     expect(
-      stageTwo.exercises.where((e) => !e.isWarmup).last.trackKey,
-      backRebuildBlockDeadlift.trackKey,
+      stageTwo.exercises.where((e) => !e.isWarmup).map((e) => e.trackKey),
+      [backRebuildBoxSquat.trackKey, backRebuildBlockDeadlift.trackKey],
     );
   });
 
@@ -577,10 +816,17 @@ void main() {
         alternativeHamstringCurl.trackKey,
         backRebuildBlockDeadlift.trackKey,
         backRebuildRomanianDeadlift.trackKey,
+        backRebuildSplitSquat.trackKey,
+        backRebuildBoxSquat.trackKey,
+        backRebuildGobletSquat.trackKey,
+        lowerBackRecoveryChestSupportedRow.trackKey,
+        backRebuildSeatedPress.trackKey,
+        backRebuildPlank.trackKey,
       ]) {
         expect(tracks, isNot(contains(key)), reason: sessionId.name);
       }
       expect(tracks, contains(MovementPattern.hinge.name));
+      expect(tracks, contains(MovementPattern.squat.name));
     }
   });
 

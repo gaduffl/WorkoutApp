@@ -71,8 +71,19 @@ void main() {
     Finder inCard(Finder finder) =>
         find.descendant(of: card, matching: finder);
     expect(inCard(find.text('Back rebuild · Stage 2 of 3')), findsOneWidget);
-    expect(inCard(find.text('Deadlift from blocks')), findsOneWidget);
-    expect(inCard(find.textContaining('reaches 70%')), findsOneWidget);
+    expect(
+      inCard(find.text('Deadlift from blocks & squat to a box')),
+      findsOneWidget,
+    );
+    // Neither staged lift has reached its cap yet.
+    expect(
+      inCard(
+        find.textContaining(
+          'once the deadlift reaches 70% and the squat reaches 80%',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(inCard(find.textContaining('good mornings 1/2')), findsOneWidget);
     expect(inCard(find.textContaining('15-min easy ride')), findsOneWidget);
 

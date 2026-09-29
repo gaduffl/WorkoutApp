@@ -101,12 +101,16 @@ void main() {
           expect(result.sessionId, id);
           expect(result.lowerBackRecoveryMode, isTrue);
           expect(result.estimatedDurationMin, lessThanOrEqualTo(minutes));
+          final label = '${id.name} $minutes ${stage.name}';
           expect(
-            result.exercises.any((e) => e.trackKey == 'hinge'),
+            result.exercises.any(
+              (e) => e.trackKey == 'hinge' || e.trackKey == 'squat',
+            ),
             isFalse,
-            reason: '${id.name} $minutes ${stage.name}',
+            reason: label,
           );
-          // A loaded rebuild deadlift is always the final work exercise.
+          // A loaded rebuild deadlift is always the final work exercise and
+          // the staged squat comes right before it (or last without it).
           final work = result.exercises.where((e) => !e.isWarmup).toList();
           final loadedIndex = work.indexWhere(
             (e) =>
@@ -114,7 +118,31 @@ void main() {
                 e.trackKey == backRebuildRomanianDeadlift.trackKey,
           );
           if (loadedIndex >= 0) {
-            expect(loadedIndex, work.length - 1);
+            expect(loadedIndex, work.length - 1, reason: label);
+          }
+          final squatIndex = work.indexWhere(
+            (e) => isBackRebuildSquatTrack(e.trackKey),
+          );
+          // S1 always trains legs; a 20-minute S4 may pick its push/pull
+          // pair instead; upper and arm days never squat.
+          if (id == SessionTypeId.s1) {
+            expect(squatIndex, greaterThanOrEqualTo(0), reason: label);
+          }
+          if (id == SessionTypeId.s2 || id == SessionTypeId.s5) {
+            expect(squatIndex, -1, reason: label);
+          }
+          if (squatIndex >= 0) {
+            expect(
+              squatIndex,
+              loadedIndex >= 0 ? loadedIndex - 1 : work.length - 1,
+              reason: label,
+            );
+            expect(work[squatIndex].trackKey, switch (stage) {
+              BackRebuildStage.bridges => backRebuildSplitSquat.trackKey,
+              BackRebuildStage.blockDeadlift => backRebuildBoxSquat.trackKey,
+              BackRebuildStage.romanianDeadlift =>
+                backRebuildGobletSquat.trackKey,
+            }, reason: label);
           }
         }
       }

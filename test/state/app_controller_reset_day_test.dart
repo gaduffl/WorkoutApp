@@ -206,6 +206,16 @@ void main() {
             pattern: MovementPattern.hinge,
             currentLoad: 48,
           ),
+          'squat': ExerciseState(
+            trackKey: 'squat',
+            pattern: MovementPattern.squat,
+            currentLoad: 50,
+          ),
+          backRebuildBoxSquat.trackKey: ExerciseState(
+            trackKey: backRebuildBoxSquat.trackKey,
+            pattern: MovementPattern.squat,
+            currentLoad: 30,
+          ),
         }
         ..settings = controller.settings.copyWith(
           lowerBackRecovery: LowerBackRecoveryState(
@@ -227,6 +237,7 @@ void main() {
 
       await controller.deactivateLowerBackRecovery();
       expect(controller.exerciseStates['hinge']!.currentLoad, 48);
+      expect(controller.exerciseStates['squat']!.currentLoad, 30);
 
       await controller.resetDay();
 
@@ -234,6 +245,9 @@ void main() {
       expect(controller.lowerBackRecovery.active, isFalse);
       expect(hinge.ladderStepIndex, 0);
       expect(hinge.currentLoad, 48);
+      // The squat keeps its box-squat level too, never the old 50 lb.
+      expect(controller.exerciseStates['squat']!.ladderStepIndex, 0);
+      expect(controller.exerciseStates['squat']!.currentLoad, 30);
     });
   });
 

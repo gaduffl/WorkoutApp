@@ -79,9 +79,9 @@ class AiExplainer {
       case RuleKey.travelModeActive:
         return 'no-equipment travel mode active; use reps or hold duration, tempo, and range of motion while load progression stays paused';
       case RuleKey.lowerBackRecoveryActive:
-        return 'Back rebuild stage 1: dumbbell glute bridges and sliding hamstring curls replace deadlifts until two good mornings';
+        return 'Back rebuild stage 1: glute bridges, sliding hamstring curls and split squats replace deadlifts and goblet squats until two good mornings';
       case RuleKey.lowerBackRecoveryLoadMinimized:
-        return 'Back rebuild is on: only the deadlift slot changes and everything else is normal training at normal effort';
+        return 'Back rebuild is on: the deadlift and squat are staged, and bent-over rows, standing presses and L-sits become chest-supported rows, seated presses and planks; everything else is normal training at normal effort';
       case RuleKey.lowerBackRecoverySpacing:
         return 'the rebuild deadlift is not due today (48-hour spacing, twice-a-week cap, a back or hip flag, or travel), so bridges and hamstring curls fill the slot';
       case RuleKey.lowerBackRecoveryReentry:

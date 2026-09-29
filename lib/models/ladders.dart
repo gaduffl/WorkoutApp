@@ -175,6 +175,10 @@ class SubstituteExercise {
   /// Progresses on reps at bodyweight, then in free-entered added weight.
   final bool backpackLoaded;
 
+  /// Single-leg/single-arm work: excludes uneven dumbbell pairs, as on the
+  /// ladders (§2.6 rule 3).
+  final bool unilateral;
+
   const SubstituteExercise({
     required this.slug,
     required this.name,
@@ -184,6 +188,7 @@ class SubstituteExercise {
     this.metric = ExerciseMetric.reps,
     this.targetRange,
     this.backpackLoaded = false,
+    this.unilateral = false,
   });
 
   String get trackKey => 'sub:${pattern.name}:$slug';
@@ -196,6 +201,7 @@ class SubstituteExercise {
         visualId: visualId,
         dumbbells: dumbbells,
         backpackLoaded: backpackLoaded,
+        unilateral: unilateral,
       );
 }
 
@@ -284,6 +290,55 @@ const backRebuildRomanianDeadlift = SubstituteExercise(
   targetRange: (8, 10),
 );
 
+/// Back rebuild's squat stages, each on its own track so the capped stage
+/// loads never advance or overwrite the frozen normal squat ladder. The split
+/// squat keeps the dumbbells at the sides, the least forward pull on the
+/// lower back; the box sets a depth at which the back stays neutral.
+const backRebuildSplitSquat = SubstituteExercise(
+  slug: 'back_rebuild_split_squat',
+  name: 'Split squat (dumbbells at sides)',
+  pattern: MovementPattern.squat,
+  dumbbells: 2,
+  unilateral: true,
+  targetRange: (8, 12),
+);
+
+const backRebuildBoxSquat = SubstituteExercise(
+  slug: 'back_rebuild_box_squat',
+  name: 'Goblet squat to a box',
+  pattern: MovementPattern.squat,
+  dumbbells: 1,
+  targetRange: (8, 10),
+);
+
+const backRebuildGobletSquat = SubstituteExercise(
+  slug: 'back_rebuild_goblet_squat',
+  name: 'Goblet squat',
+  pattern: MovementPattern.squat,
+  dumbbells: 1,
+  visualId: 'dumbbellGobletSquat',
+  targetRange: (8, 10),
+);
+
+/// Back-supported stand-ins used while Back rebuild is active, on their own
+/// tracks: a seated press for standing presses and a plank for the L-sit.
+/// Bent-over rows use [lowerBackRecoveryChestSupportedRow].
+const backRebuildSeatedPress = SubstituteExercise(
+  slug: 'back_rebuild_seated_press',
+  name: 'Seated DB press (back supported)',
+  pattern: MovementPattern.pushVertical,
+  dumbbells: 2,
+  visualId: 'seatedDumbbellShoulderPress',
+);
+
+const backRebuildPlank = SubstituteExercise(
+  slug: 'back_rebuild_plank',
+  name: 'Plank',
+  pattern: MovementPattern.coreGrip,
+  metric: ExerciseMetric.seconds,
+  targetRange: (20, 60),
+);
+
 /// Hinge-slot tracks prescribed by Back rebuild: stage-1 bridges and curls
 /// (shared with the deadlift-alternative tracks) and the loaded deadlifts.
 bool isBackRebuildHingeTrack(String trackKey) =>
@@ -291,6 +346,15 @@ bool isBackRebuildHingeTrack(String trackKey) =>
     trackKey == alternativeHamstringCurl.trackKey ||
     trackKey == backRebuildBlockDeadlift.trackKey ||
     trackKey == backRebuildRomanianDeadlift.trackKey;
+
+bool isBackRebuildSquatTrack(String trackKey) =>
+    trackKey == backRebuildSplitSquat.trackKey ||
+    trackKey == backRebuildBoxSquat.trackKey ||
+    trackKey == backRebuildGobletSquat.trackKey;
+
+/// Every staged Back rebuild track, hinge and squat.
+bool isBackRebuildTrack(String trackKey) =>
+    isBackRebuildHingeTrack(trackKey) || isBackRebuildSquatTrack(trackKey);
 
 const alternativeGluteBridge = SubstituteExercise(
   slug: 'alternative_glute_bridge',
@@ -411,6 +475,18 @@ const Map<String, LadderStep> travelNamedSteps = {
     name: 'Bench / chair dip (bodyweight)',
     visualId: 'benchDip',
   ),
+  'sub:squat:back_rebuild_split_squat': LadderStep(
+    name: 'Split squat (bodyweight)',
+    visualId: 'bodyweightSplitSquat',
+  ),
+  'sub:pushVertical:back_rebuild_seated_press': LadderStep(
+    name: 'Pike push-up',
+  ),
+  'sub:coreGrip:back_rebuild_plank': LadderStep(
+    name: 'Plank',
+    metric: ExerciseMetric.seconds,
+    targetRange: (20, 45),
+  ),
 };
 
 /// Keyed by [SubstituteExercise.trackKey] so plan assembly can resolve a
@@ -429,6 +505,11 @@ final Map<String, SubstituteExercise> substituteRegistry = {
     recoveryAbdominalActivation,
     backRebuildBlockDeadlift,
     backRebuildRomanianDeadlift,
+    backRebuildSplitSquat,
+    backRebuildBoxSquat,
+    backRebuildGobletSquat,
+    backRebuildSeatedPress,
+    backRebuildPlank,
     alternativeGluteBridge,
     alternativeHamstringCurl,
     ...s5NamedAccessories,

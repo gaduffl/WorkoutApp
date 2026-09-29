@@ -264,8 +264,9 @@ void main() {
       90,
     );
     expect(
-      engine.stageCapReached(
+      engine.liftAtCap(
         block,
+        backRebuildBlockDeadlift,
         ExerciseState(
           trackKey: backRebuildBlockDeadlift.trackKey,
           pattern: MovementPattern.hinge,
@@ -275,7 +276,10 @@ void main() {
       ),
       isTrue,
     );
-    expect(engine.stageCapReached(block, null, equipment), isFalse);
+    expect(
+      engine.liftAtCap(block, backRebuildBlockDeadlift, null, equipment),
+      isFalse,
+    );
 
     final unknown = activeState(
       rebuildStage: BackRebuildStage.blockDeadlift,
@@ -285,6 +289,140 @@ void main() {
       engine.stageCapLoad(unknown, backRebuildBlockDeadlift, equipment),
       12,
     );
+  });
+
+  test('squat stages derive their windows from the frozen normal squat', () {
+    final stageTwo = activeState(rebuildStage: BackRebuildStage.blockDeadlift);
+    final goblet50 = ExerciseState(
+      trackKey: MovementPattern.squat.name,
+      pattern: MovementPattern.squat,
+      currentLoad: 50,
+    );
+    expect(engine.squatStepFor(activeState()), backRebuildSplitSquat);
+    expect(engine.squatStepFor(stageTwo), backRebuildBoxSquat);
+    expect(
+      engine.squatStepFor(
+        activeState(rebuildStage: BackRebuildStage.romanianDeadlift),
+      ),
+      backRebuildGobletSquat,
+    );
+    double floor(SubstituteExercise e, ExerciseState? squat) =>
+        engine.stageFloorLoad(stageTwo, e, equipment, normalSquat: squat);
+    double cap(SubstituteExercise e, ExerciseState? squat) =>
+        engine.stageCapLoad(stageTwo, e, equipment, normalSquat: squat);
+    expect(floor(backRebuildBoxSquat, goblet50), 30);
+    expect(cap(backRebuildBoxSquat, goblet50), 40);
+    expect(floor(backRebuildGobletSquat, goblet50), 40);
+    expect(cap(backRebuildGobletSquat, goblet50), 50);
+
+    // A two-dumbbell squat step counts half its total as the goblet load.
+    final dbSquat = ExerciseState(
+      trackKey: MovementPattern.squat.name,
+      pattern: MovementPattern.squat,
+      ladderStepIndex: 1,
+      currentLoad: 100,
+    );
+    expect(engine.squatReferenceLoad(dbSquat), 50);
+    expect(cap(backRebuildBoxSquat, dbSquat), 40);
+
+    // No squat history: both ends sit at the lightest dumbbell.
+    final lightest = engine.stageTotals(backRebuildBoxSquat, equipment).first;
+    expect(cap(backRebuildBoxSquat, null), lightest);
+    // Split squats have no window; they progress on their own track.
+    expect(engine.hasStageWindow(backRebuildSplitSquat), isFalse);
+    expect(
+      engine.liftAtCap(stageTwo, backRebuildSplitSquat, null, equipment),
+      isTrue,
+    );
+  });
+
+  test('leaving stages 2–3 needs both staged lifts at their caps', () {
+    final stageTwo = activeState(rebuildStage: BackRebuildStage.blockDeadlift);
+    final states = <String, ExerciseState>{
+      MovementPattern.squat.name: ExerciseState(
+        trackKey: MovementPattern.squat.name,
+        pattern: MovementPattern.squat,
+        currentLoad: 50,
+      ),
+      backRebuildBlockDeadlift.trackKey: ExerciseState(
+        trackKey: backRebuildBlockDeadlift.trackKey,
+        pattern: MovementPattern.hinge,
+        currentLoad: 60,
+      ),
+    };
+    expect(engine.stageCapsReached(stageTwo, states, equipment), isFalse);
+    states[backRebuildBoxSquat.trackKey] = ExerciseState(
+      trackKey: backRebuildBoxSquat.trackKey,
+      pattern: MovementPattern.squat,
+      currentLoad: 40,
+    );
+    expect(engine.stageCapsReached(stageTwo, states, equipment), isTrue);
+    states[backRebuildBlockDeadlift.trackKey] = ExerciseState(
+      trackKey: backRebuildBlockDeadlift.trackKey,
+      pattern: MovementPattern.hinge,
+      currentLoad: 50,
+    );
+    expect(engine.stageCapsReached(stageTwo, states, equipment), isFalse);
+    // Stage 1 has no caps.
+    expect(engine.stageCapsReached(activeState(), const {}, equipment), isTrue);
+  });
+
+  test('bent-over rows, standing presses and L-sits get supported swaps', () {
+    ExerciseState at(MovementPattern pattern, int step) => ExerciseState(
+      trackKey: pattern.name,
+      pattern: pattern,
+      ladderStepIndex: step,
+    );
+    expect(
+      engine.supportedSwapFor(MovementPattern.pullHorizontal, null),
+      lowerBackRecoveryChestSupportedRow,
+    );
+    for (final step in [1, 2]) {
+      expect(
+        engine.supportedSwapFor(
+          MovementPattern.pullHorizontal,
+          at(MovementPattern.pullHorizontal, step),
+        ),
+        isNull,
+      );
+    }
+    expect(
+      engine.supportedSwapFor(
+        MovementPattern.pushVertical,
+        at(MovementPattern.pushVertical, 0),
+      ),
+      isNull,
+    );
+    for (final step in [1, 2, 3]) {
+      expect(
+        engine.supportedSwapFor(
+          MovementPattern.pushVertical,
+          at(MovementPattern.pushVertical, step),
+        ),
+        backRebuildSeatedPress,
+      );
+    }
+    for (final step in [0, 1, 2, 3, 4]) {
+      expect(
+        engine.supportedSwapFor(
+          MovementPattern.coreGrip,
+          at(MovementPattern.coreGrip, step),
+        ),
+        step == 1 ? backRebuildPlank : isNull,
+        reason: 'core step $step',
+      );
+    }
+    for (final pattern in [
+      MovementPattern.squat,
+      MovementPattern.hinge,
+      MovementPattern.pushHorizontal,
+      MovementPattern.pullVertical,
+      MovementPattern.kneeHealth,
+    ]) {
+      expect(engine.supportedSwapFor(pattern, null), isNull);
+    }
+    // The split squat never mixes uneven dumbbells.
+    expect(backRebuildSplitSquat.ladderStep.unilateral, isTrue);
   });
 
   test('back extensions stay unweighted and never become a deadlift', () {
