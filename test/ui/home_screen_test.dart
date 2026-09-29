@@ -82,6 +82,13 @@ void main() {
       find.descendant(of: routine, matching: find.textContaining('Big 3')),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: routine,
+        matching: find.textContaining('3 holds of 10 s, short rest'),
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const Key('home-back-routine-done')));
     await tester.pump();
     expect(controller.backRoutineDoneCalls, 1);

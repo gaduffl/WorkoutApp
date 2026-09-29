@@ -156,8 +156,10 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: done
             ? null
             : const Text(
-                'McGill Big 3 (curl-up, side bridge, bird dog): 10-second '
-                'holds, 3-2-1, about 6 min. Then an easy 10–15 min uphill walk.',
+                'McGill Big 3: curl-up, then side bridge and bird dog on each '
+                'side. For each: 3 holds of 10 s, short rest, 2 holds, short '
+                'rest, 1 hold (about 6 min). Then an easy 10–15 min uphill '
+                'walk.',
               ),
         trailing: done
             ? null

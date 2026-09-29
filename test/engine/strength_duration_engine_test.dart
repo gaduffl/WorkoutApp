@@ -443,6 +443,13 @@ void main() {
           expect(entryExercise.instruction, contains('Side bridge'));
           expect(entryExercise.instruction, contains('Bird dog'));
           expect(entryExercise.instruction, contains('Curl-up'));
+          // The set structure is spelled out, never a bare "3-2-1".
+          expect(entryExercise.instruction, contains('holds of 10 s'));
+          expect(entryExercise.instruction, isNot(contains('3-2-1')));
+          expect(entryExercise.instruction, isNot(contains('3 then 1')));
+          if (entry.value > 2) {
+            expect(entryExercise.instruction, contains('short rest'));
+          }
           expect(plan.estimatedDurationMin, lessThanOrEqualTo(entry.key));
         }
       }
