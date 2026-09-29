@@ -298,7 +298,7 @@ class DecisionEngine {
 
     // --- Step 2: candidate filtering and target-status calculation ---
     final cyclingAccess = CyclingAccess.fromSettings(input.settings);
-    final backRebuild = _backRebuildHingePlan(input, patchedStates);
+    final backRebuild = _backRebuildPlan(input, patchedStates);
     final feasible = _feasibleCandidates(checkin.timeMinutes)
         .where(
           (id) => cyclingAccess.allowsSession(
@@ -970,19 +970,27 @@ class DecisionEngine {
           continue;
         }
 
-        // Back rebuild owns the hinge slot: sharp pain removes its
-        // bridge/curl and loaded deadlift tracks entirely, while a mild flag
-        // eases them through the ordinary pain table below. The canonical
-        // hinge slot only remains as the optional back-extension marker.
-        final backRebuildHingeTrack =
-            backRebuild != null && isBackRebuildHingeTrack(trackKey);
-        final backRebuildLoadedStep = backRebuildHingeTrack &&
+        // Back rebuild owns the hinge and squat slots: sharp pain removes
+        // their staged tracks entirely, while a mild flag eases them through
+        // the ordinary pain table below. The canonical hinge slot only
+        // remains as the optional back-extension marker.
+        final backRebuildTrack =
+            backRebuild != null && isBackRebuildTrack(trackKey);
+        final backRebuildLoadedStep = backRebuildTrack &&
             (trackKey == backRebuildBlockDeadlift.trackKey ||
                 trackKey == backRebuildRomanianDeadlift.trackKey);
+        final backRebuildSquat =
+            backRebuildTrack && isBackRebuildSquatTrack(trackKey);
+        // Deadlifts and goblet squats have stage load windows.
+        final backRebuildWindowed = backRebuildTrack &&
+            lowerBackRecoveryEngine.hasStageWindow(namedExercise!);
+        final backRebuildSwap = backRebuild != null &&
+            namedExercise != null &&
+            backRebuild.supportedSwaps[pattern] == namedExercise;
         final backRebuildExtensionSlot = backRebuild != null &&
             pattern == MovementPattern.hinge &&
             namedExercise == null;
-        if (backRebuildHingeTrack && flag?.severity == PainSeverity.sharp) {
+        if (backRebuildTrack && flag?.severity == PainSeverity.sharp) {
           continue;
         }
         if (backRebuildExtensionSlot) {
@@ -1023,22 +1031,25 @@ class DecisionEngine {
         int exerciseSets = cutSets.toInt();
         var exerciseLoadMultiplier = loadMultiplier;
         var exerciseRir = rirFloor;
-        if (backRebuildLoadedStep) {
-          // Loaded rebuild steps stay conservative: RIR 3 from blocks,
-          // RIR 2–3 on Romanian deadlifts. Readiness may only make it easier.
-          final stageRir = trackKey == backRebuildBlockDeadlift.trackKey
-              ? Rir.rir3plus
-              : Rir.rir2;
+        if (backRebuildLoadedStep || backRebuildSquat) {
+          // Staged lifts stay conservative: RIR 3 for split squats and the
+          // stage-2 lifts from blocks and to a box, RIR 2 in stage 3.
+          // Readiness may only make it easier.
+          final stageRir = trackKey == backRebuildRomanianDeadlift.trackKey ||
+                  trackKey == backRebuildGobletSquat.trackKey
+              ? Rir.rir2
+              : Rir.rir3plus;
           if (exerciseRir.index < stageRir.index) exerciseRir = stageRir;
-          if (state.currentLoad <= 0) {
-            state = state.clone()
-              ..currentLoad = lowerBackRecoveryEngine.stageFloorLoad(
-                input.settings.lowerBackRecovery,
-                namedExercise!,
-                input.settings.equipment,
-              );
-            patchedStates[trackKey] = state;
-          }
+        }
+        if (backRebuildWindowed && state.currentLoad <= 0) {
+          state = state.clone()
+            ..currentLoad = lowerBackRecoveryEngine.stageFloorLoad(
+              input.settings.lowerBackRecovery,
+              namedExercise,
+              input.settings.equipment,
+              normalSquat: patchedStates[MovementPattern.squat.name],
+            );
+          patchedStates[trackKey] = state;
         }
         var persistLoad = false;
         var painReentryPrescription = false;
@@ -1154,11 +1165,12 @@ class DecisionEngine {
               skipFloorDeadlift: flag?.region == BodyRegion.lowerBack,
             );
           }
-          if (backRebuildLoadedStep) {
+          if (backRebuildWindowed) {
             final cap = lowerBackRecoveryEngine.stageCapLoad(
               input.settings.lowerBackRecovery,
-              namedExercise!,
+              namedExercise,
               input.settings.equipment,
+              normalSquat: patchedStates[MovementPattern.squat.name],
             );
             if (prescriptionState.currentLoad > cap) {
               prescriptionState = prescriptionState.clone()
@@ -1182,7 +1194,7 @@ class DecisionEngine {
             (timedDeloadTarget == null
                 ? null
                 : (timedDeloadTarget, timedDeloadTarget));
-        final backRebuildInstruction = backRebuildHingeTrack
+        final backRebuildInstruction = backRebuildTrack || backRebuildSwap
             ? _backRebuildInstruction(prescriptionState.trackKey)
             : null;
         final painActionInstruction = switch (action.kind) {
@@ -1202,9 +1214,14 @@ class DecisionEngine {
           equipmentConfig: input.settings.equipment,
           substitutedFrom: substitutedFrom,
           progressionEligible: progressionEligible,
-          // Rebuild deadlifts fill the primary hinge slot, so they keep the
-          // compound rest, minimum-set protection and feeder warm-up.
-          isCompoundWork: isGenuineCompound || backRebuildLoadedStep,
+          // Rebuild deadlifts and squats and the supported row and press
+          // fill primary slots, so they keep the compound rest, minimum-set
+          // protection and warm-up.
+          isCompoundWork: isGenuineCompound ||
+              (template.compoundPatterns.contains(pattern) &&
+                  (backRebuildLoadedStep ||
+                      backRebuildSquat ||
+                      backRebuildSwap)),
           microProgressionCueEligible: !suppressMicroProgressionCue,
           persistLoadOnCompletion: persistLoad,
           isPainReentryTest:
@@ -1214,19 +1231,21 @@ class DecisionEngine {
               ? prescriptionStep.metric == ExerciseMetric.seconds
                   ? 'Pain re-entry check: one easy 10-second hold, keep at least 4 RIR and stop if pain returns'
                   : 'Pain re-entry test: 1 x 8 at 50% load, keep at least 4 RIR and stop if pain returns'
-              : painActionInstruction ??
-                    (backRebuildInstruction == null
-                        ? null
-                        : [
-                            backRebuildInstruction,
-                            if (progressionEligible &&
-                                !suppressMicroProgressionCue)
-                              _microProgressionInstruction(
-                                prescriptionState,
-                                prescriptionStep.metric,
-                                enabled: true,
-                              ),
-                          ].whereType<String>().join(' ')),
+              : backRebuildInstruction == null
+                  ? painActionInstruction
+                  // A pain note never hides how to perform a rebuild lift.
+                  : [
+                      painActionInstruction,
+                      backRebuildInstruction,
+                      if (painActionInstruction == null &&
+                          progressionEligible &&
+                          !suppressMicroProgressionCue)
+                        _microProgressionInstruction(
+                          prescriptionState,
+                          prescriptionStep.metric,
+                          enabled: true,
+                        ),
+                    ].whereType<String>().join(' '),
         );
 
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
@@ -1319,14 +1338,14 @@ class DecisionEngine {
       // §2.5 superset pairing: templates order compounds as antagonist pairs
       // (squat+hinge, push+pull). Pair consecutive compound WORK exercises
       // into superset groups; accessories and any odd remainder run straight.
-      // A Back rebuild deadlift always runs last and alone, so it is never
-      // folded into a superset.
+      // Back rebuild's staged squat and deadlift run alone with full rest,
+      // so they are never folded into a superset.
       final compoundWork = <int>[];
       for (var i = 0; i < exercises.length; i++) {
         final e = exercises[i];
         if (!e.isWarmup &&
             e.isCompoundWork &&
-            !isBackRebuildHingeTrack(e.trackKey)) {
+            !(backRebuild != null && isBackRebuildTrack(e.trackKey))) {
           compoundWork.add(i);
         }
       }
@@ -1520,21 +1539,23 @@ class DecisionEngine {
     return currentPain || persistedPain;
   }
 
-  /// Today's hinge-slot decision for an active Back rebuild. Scoring, pain
+  /// Today's Back rebuild decision for an active rebuild: the hinge and
+  /// squat stage work and the swaps that spare the lower back. Scoring, pain
   /// feasibility and plan assembly all consume this one value.
-  _BackRebuildHingePlan? _backRebuildHingePlan(
+  _BackRebuildPlan? _backRebuildPlan(
     DecisionEngineInput input,
     Map<String, ExerciseState> states,
   ) {
     final state = input.settings.lowerBackRecovery;
     if (!state.active) return null;
     final stageStep = lowerBackRecoveryEngine.loadedStepFor(state);
-    // Any flag on a region that loads the hinge (lower back or hip; today's
-    // or a persisted freeze) keeps the loaded deadlift off the plan; bridges
-    // and curls fill the slot instead.
+    // Any flag on a region that loads the hinge and squat (lower back or
+    // hip; today's or a persisted freeze) keeps the loaded lifts off the
+    // plan: bridges and curls fill the hinge slot and the squat falls back
+    // to the stage-1 split squat. Travel does the same.
     bool affectsHinge(BodyRegion region) =>
         region.affectedPatterns.contains(MovementPattern.hinge);
-    final hingeFlagged = input.checkin.pain.any(
+    final backOrHipFlagged = input.checkin.pain.any(
           (flag) => affectsHinge(flag.region),
         ) ||
         states.values.any(
@@ -1545,55 +1566,85 @@ class DecisionEngine {
         );
     final loadedDue = stageStep != null &&
         !input.settings.travelMode &&
-        !hingeFlagged &&
+        !backOrHipFlagged &&
         lowerBackRecoveryEngine.isSessionDue(state, input.today);
-    return _BackRebuildHingePlan(
+    return _BackRebuildPlan(
       state: state,
       loadedStep: loadedDue ? stageStep : null,
       waitingLoadedStep: loadedDue ? null : stageStep,
+      squatStep: backOrHipFlagged || input.settings.travelMode
+          ? backRebuildSplitSquat
+          : lowerBackRecoveryEngine.squatStepFor(state),
+      supportedSwaps: {
+        for (final pattern in const [
+          MovementPattern.pullHorizontal,
+          MovementPattern.pushVertical,
+          MovementPattern.coreGrip,
+        ])
+          if (lowerBackRecoveryEngine.supportedSwapFor(
+                pattern,
+                states[pattern.name],
+              )
+              case final swap?)
+            pattern: swap,
+      },
       extensionEnabled: input.settings.recoveryBackExtensionsEnabled &&
           state.rebuildStage != BackRebuildStage.romanianDeadlift,
     );
   }
 
-  /// Replaces the canonical hinge slot with Back rebuild's hinge work. Stage-1
-  /// bridges and curls keep the hinge position; a loaded deadlift step and
-  /// the optional back-extension marker move to the end of the session.
+  /// Rewrites a strength template for Back rebuild. Bent-over rows,
+  /// standing presses and L-sits become stand-ins that spare the lower back;
+  /// the other work keeps its order and comes first. The staged lower-body
+  /// work follows: glute bridges lead in on every lower day (with hamstring
+  /// curls when no loaded deadlift is due; the budgeter may trim them in a
+  /// short window), then the squat, and a loaded deadlift last. The
+  /// optional back-extension marker ends the list.
   List<_TemplateSlot> _backRebuildSlots(
     List<_TemplateSlot> slots,
-    _BackRebuildHingePlan rebuild,
+    _BackRebuildPlan rebuild,
   ) {
-    final hingeIndex = slots.indexWhere(
-      (slot) => slot.$1 == MovementPattern.hinge && slot.$3 == null,
-    );
-    if (hingeIndex < 0) return slots;
-    final usesCompoundSetCount = slots[hingeIndex].$2;
+    bool canonical(_TemplateSlot slot, MovementPattern pattern) =>
+        slot.$1 == pattern && slot.$3 == null;
+    final squatSlot = slots
+        .where((slot) => canonical(slot, MovementPattern.squat))
+        .firstOrNull;
+    final hingeSlot = slots
+        .where((slot) => canonical(slot, MovementPattern.hinge))
+        .firstOrNull;
     final others = [
       for (final slot in slots)
-        if (!(slot.$1 == MovementPattern.hinge && slot.$3 == null)) slot,
+        if (!canonical(slot, MovementPattern.squat) &&
+            !canonical(slot, MovementPattern.hinge))
+          slot.$3 == null && rebuild.supportedSwaps[slot.$1] != null
+              ? (slot.$1, slot.$2, rebuild.supportedSwaps[slot.$1])
+              : slot,
     ];
-    final loaded = rebuild.loadedStep;
-    final accessories = loaded != null
-        ? const <_TemplateSlot>[]
-        : [
-            (
-              MovementPattern.hinge,
-              usesCompoundSetCount,
-              alternativeGluteBridge as SubstituteExercise?,
-            ),
-            (
-              MovementPattern.hinge,
-              usesCompoundSetCount,
-              alternativeHamstringCurl as SubstituteExercise?,
-            ),
-          ];
+    final loaded = hingeSlot == null ? null : rebuild.loadedStep;
     return [
-      ...others.take(hingeIndex),
-      ...accessories,
-      ...others.skip(hingeIndex),
-      if (loaded != null)
-        (MovementPattern.hinge, usesCompoundSetCount, loaded),
-      if (rebuild.extensionEnabled)
+      ...others,
+      if (hingeSlot != null) ...[
+        (
+          MovementPattern.hinge,
+          hingeSlot.$2,
+          alternativeGluteBridge as SubstituteExercise?,
+        ),
+        if (loaded == null)
+          (
+            MovementPattern.hinge,
+            hingeSlot.$2,
+            alternativeHamstringCurl as SubstituteExercise?,
+          ),
+      ],
+      if (squatSlot != null)
+        (
+          MovementPattern.squat,
+          squatSlot.$2,
+          rebuild.squatStep as SubstituteExercise?,
+        ),
+      if (hingeSlot != null && loaded != null)
+        (MovementPattern.hinge, hingeSlot.$2, loaded),
+      if (hingeSlot != null && rebuild.extensionEnabled)
         (MovementPattern.hinge, false, null as SubstituteExercise?),
     ];
   }
@@ -1706,6 +1757,18 @@ class DecisionEngine {
           'Last exercise today. Set the blocks so the handles start about mid-shin. Hinge at the hips with a long, neutral back and stop each set when your back position changes. Capped at 70% of your old deadlift load. Stop for sharp, spreading, numb, or tingling symptoms.',
         'sub:hinge:back_rebuild_romanian_deadlift' =>
           'Last exercise today. Start standing, soft knees, push the hips back and stop the descent before your lower back rounds. End the set when your back position changes. Capped at your old deadlift load. Stop for sharp, spreading, numb, or tingling symptoms.',
+        'sub:squat:back_rebuild_split_squat' =>
+          'Dumbbells at your sides, torso tall. Lower the back knee toward the floor under control and keep your lower back neutral. Pick a weight that leaves 3 reps in reserve; the app keeps what you log. Stop if symptoms worsen or spread.',
+        'sub:squat:back_rebuild_box_squat' =>
+          'Hold the dumbbell at your chest and sit back to a box or bench at the height where your lower back stays flat; touch it lightly without relaxing onto it. Capped at 80% of your old squat load. Stop for sharp, spreading, numb, or tingling symptoms.',
+        'sub:squat:back_rebuild_goblet_squat' =>
+          'Hold the dumbbell at your chest. Go only as deep as your lower back stays neutral and stop above the point where your pelvis tucks under. Capped at your old squat load. Stop for sharp, spreading, numb, or tingling symptoms.',
+        'sub:pullHorizontal:lower_back_chest_supported_row' =>
+          'Chest on the bolster or an incline bench for the whole set; row without lifting the torso. Replaces the bent-over row during Back rebuild.',
+        'sub:pushVertical:back_rebuild_seated_press' =>
+          'Sit with your back against a backrest and press without arching away from it. Replaces standing presses during Back rebuild; the app keeps what you log.',
+        'sub:coreGrip:back_rebuild_plank' =>
+          'Forearms and toes, body in one straight line; brace lightly and do not let the hips sag. Replaces the L-sit during Back rebuild.',
         _ => null,
       };
 
@@ -1737,7 +1800,8 @@ class DecisionEngine {
       isWarmup: true,
       instruction: '$instruction'
           'Relax for one breath between holds. Keep the spine neutral and '
-          'brace lightly. Build over weeks by adding holds, not longer ones.',
+          'brace lightly; skip any hold that brings on back pain. Build over '
+          'weeks by adding holds, not longer ones.',
       progressionEligible: false,
     );
   }
@@ -1784,7 +1848,8 @@ class DecisionEngine {
   /// compressed-pair selection, and travel-equipment filtering. Keeping this
   /// shared with the pain-feasibility gate prevents selection from approving
   /// a template that assembly would later reduce to zero work. During Back
-  /// rebuild only the hinge slot changes.
+  /// rebuild the hinge and squat are staged and lumbar-loading steps swap
+  /// to stand-ins that spare the lower back.
   List<_TemplateSlot> _workSlotsForSession({
     required SessionTypeId sessionId,
     required SessionTier tier,
@@ -1792,7 +1857,7 @@ class DecisionEngine {
     required TrainingTargets targets,
     required double stimulusSetMultiplier,
     required bool travelMode,
-    required _BackRebuildHingePlan? backRebuild,
+    required _BackRebuildPlan? backRebuild,
     bool deadliftAlternative = false,
   }) {
     final template = sessionTemplates[sessionId]!;
@@ -1852,7 +1917,7 @@ class DecisionEngine {
     required StimulusLedgerSnapshot ledger,
     required TrainingTargets targets,
     required double slotStimulusMultiplier,
-    required _BackRebuildHingePlan? backRebuild,
+    required _BackRebuildPlan? backRebuild,
   }) {
     final template = sessionTemplates[candidate.id]!;
     if (template.isCardioOnly ||
@@ -1950,21 +2015,28 @@ class DecisionEngine {
       return const _PainAdjustedSlotResolution(hasWork: false);
     }
 
-    if (input.settings.lowerBackRecovery.active && pattern == MovementPattern.hinge) {
-      if (namedExercise == null) {
-        // Back rebuild keeps the canonical hinge slot only as the optional
-        // back-extension marker.
-        final due = input.settings.recoveryBackExtensionsEnabled &&
-            input.settings.lowerBackRecovery.rebuildStage !=
-                BackRebuildStage.romanianDeadlift &&
-            !input.settings.travelMode &&
-            flag?.severity != PainSeverity.sharp &&
-            lowerBackRecoveryEngine.isSessionDue(
-              input.settings.lowerBackRecovery,
-              input.today,
-            );
-        return _PainAdjustedSlotResolution(hasWork: due);
-      }
+    final rebuildActive = input.settings.lowerBackRecovery.active;
+    if (rebuildActive &&
+        pattern == MovementPattern.hinge &&
+        namedExercise == null) {
+      // Back rebuild keeps the canonical hinge slot only as the optional
+      // back-extension marker.
+      final due = input.settings.recoveryBackExtensionsEnabled &&
+          input.settings.lowerBackRecovery.rebuildStage !=
+              BackRebuildStage.romanianDeadlift &&
+          !input.settings.travelMode &&
+          flag?.severity != PainSeverity.sharp &&
+          lowerBackRecoveryEngine.isSessionDue(
+            input.settings.lowerBackRecovery,
+            input.today,
+          );
+      return _PainAdjustedSlotResolution(hasWork: due);
+    }
+    if (rebuildActive &&
+        namedExercise != null &&
+        isBackRebuildTrack(namedExercise.trackKey)) {
+      // Staged hinge and squat tracks: sharp pain removes them, as in plan
+      // assembly; a mild flag only eases them.
       if (flag?.severity == PainSeverity.sharp) return const _PainAdjustedSlotResolution(hasWork: false);
       if (input.settings.travelMode && _travelStepFor(pattern, namedExercise) == null) return const _PainAdjustedSlotResolution(hasWork: false);
       final prescription = progressionEngine.resolveTodaysPrescription(
@@ -2460,7 +2532,7 @@ class DecisionEngine {
         'Start with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. ';
     final String instruction;
     if (backRebuild && !painAware) {
-      // Morning lifting: walk upright first so the loaded hinge comes well
+      // Morning lifting: walk upright first so the staged lifts come well
       // after the start of the session, never straight out of bed.
       instruction = travelMode
           ? 'Start with jumping jacks; use low-impact step jacks or marching if jumping or impact bothers your back. Then walk briskly uphill or march tall with arms swinging'
@@ -2670,8 +2742,8 @@ typedef _TemplateSlot = (
   SubstituteExercise?,
 );
 
-/// Today's Back rebuild hinge-slot decision (see `_backRebuildHingePlan`).
-class _BackRebuildHingePlan {
+/// Today's Back rebuild decision (see `_backRebuildPlan`).
+class _BackRebuildPlan {
   final LowerBackRecoveryState state;
 
   /// The stage's loaded deadlift, when it is due today.
@@ -2681,13 +2753,22 @@ class _BackRebuildHingePlan {
   /// (spacing, a pending check, a lower-back or hip flag, or travel).
   final SubstituteExercise? waitingLoadedStep;
 
+  /// Today's squat: the stage's squat, or the stage-1 split squat with a
+  /// lower-back or hip flag or in travel mode.
+  final SubstituteExercise squatStep;
+
+  /// Back-supported stand-ins keyed by the normal pattern they replace.
+  final Map<MovementPattern, SubstituteExercise> supportedSwaps;
+
   /// Optional back extensions belong to stages 1–2.
   final bool extensionEnabled;
 
-  const _BackRebuildHingePlan({
+  const _BackRebuildPlan({
     required this.state,
     required this.loadedStep,
     required this.waitingLoadedStep,
+    required this.squatStep,
+    required this.supportedSwaps,
     required this.extensionEnabled,
   });
 }

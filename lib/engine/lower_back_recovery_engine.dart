@@ -28,8 +28,10 @@ class BackCheckOutcome {
 
 /// Pure, symptom-response-gated progression for Back rebuild.
 ///
-/// Only the hinge slot and the bike return have stages. Completion never
-/// advances anything by itself: a same-or-better next morning is required.
+/// The hinge and squat slots and the bike return have stages; bent-over
+/// rows, standing presses and L-sits swap to back-supported stand-ins.
+/// Completion never advances anything by itself: a same-or-better next
+/// morning is required.
 class LowerBackRecoveryEngine {
   const LowerBackRecoveryEngine();
 
@@ -47,6 +49,12 @@ class LowerBackRecoveryEngine {
   static const blockDeadliftCap = 0.7;
   static const romanianDeadliftFloor = 0.7;
   static const romanianDeadliftCap = 1.0;
+
+  /// Squat stage windows as fractions of the frozen normal squat load.
+  static const boxSquatFloor = 0.6;
+  static const boxSquatCap = 0.8;
+  static const gobletSquatFloor = 0.8;
+  static const gobletSquatCap = 1.0;
 
   static const goodMorningsToAdvance = 2;
 
@@ -109,47 +117,148 @@ class LowerBackRecoveryEngine {
         BackRebuildStage.romanianDeadlift => backRebuildRomanianDeadlift,
       };
 
-  List<double> _hingeTotals(EquipmentConfig equipment) =>
-      _equipmentEngine.twoDbAchievableTotals(equipment, allowUneven: true);
+  /// The squat of the current stage: split squats, then a goblet squat to a
+  /// box, then a full goblet squat.
+  SubstituteExercise squatStepFor(LowerBackRecoveryState state) =>
+      switch (state.rebuildStage) {
+        BackRebuildStage.bridges => backRebuildSplitSquat,
+        BackRebuildStage.blockDeadlift => backRebuildBoxSquat,
+        BackRebuildStage.romanianDeadlift => backRebuildGobletSquat,
+      };
+
+  /// The back-supported stand-in for a normal ladder step that loads the
+  /// lower back, or null when the step already spares it: the bent-over DB
+  /// row (row step 0), standing presses (overhead steps 1–3) and the L-sit
+  /// (core step 1). Planning and the stale-plan check share this rule.
+  SubstituteExercise? supportedSwapFor(
+    MovementPattern pattern,
+    ExerciseState? normalState,
+  ) {
+    final step = normalState?.ladderStepIndex ?? 0;
+    return switch (pattern) {
+      MovementPattern.pullHorizontal when step == 0 =>
+        lowerBackRecoveryChestSupportedRow,
+      MovementPattern.pushVertical when step >= 1 => backRebuildSeatedPress,
+      MovementPattern.coreGrip when step == 1 => backRebuildPlank,
+      _ => null,
+    };
+  }
+
+  /// The normal squat's load as a goblet (single-dumbbell) load. A
+  /// two-dumbbell step counts half its total, a conservative equivalent.
+  /// The normal squat track stays frozen while Back rebuild is active.
+  double squatReferenceLoad(ExerciseState? normalSquat) {
+    if (normalSquat == null || normalSquat.currentLoad <= 0) return 0;
+    return normalSquat.ladderStepIndex == 0
+        ? normalSquat.currentLoad
+        : normalSquat.currentLoad / 2;
+  }
+
+  /// Achievable loads of a capped stage lift: dumbbell pairs for the
+  /// deadlifts, a single dumbbell for the goblet squats.
+  List<double> stageTotals(
+    SubstituteExercise exercise,
+    EquipmentConfig equipment,
+  ) => exercise.dumbbells == 1
+      ? _equipmentEngine.singleDbAchievableTotals(equipment)
+      : _equipmentEngine.twoDbAchievableTotals(
+          equipment,
+          allowUneven: !exercise.unilateral,
+        );
+
+  /// Whether [exercise] has a stage load window (the loaded deadlifts and
+  /// the goblet squats; split squats and bridges progress freely).
+  bool hasStageWindow(SubstituteExercise exercise) =>
+      exercise.trackKey == backRebuildBlockDeadlift.trackKey ||
+      exercise.trackKey == backRebuildRomanianDeadlift.trackKey ||
+      exercise.trackKey == backRebuildBoxSquat.trackKey ||
+      exercise.trackKey == backRebuildGobletSquat.trackKey;
 
   double _stageLoad(
     LowerBackRecoveryState state,
     SubstituteExercise exercise,
     EquipmentConfig equipment, {
+    required ExerciseState? normalSquat,
     required bool cap,
   }) {
-    final totals = _hingeTotals(equipment);
-    final reference = state.preRecoveryHingeLoad ?? 0;
+    final totals = stageTotals(exercise, equipment);
+    final squat = isBackRebuildSquatTrack(exercise.trackKey);
+    final reference = squat
+        ? squatReferenceLoad(normalSquat)
+        : state.preRecoveryHingeLoad ?? 0;
     if (reference <= 0) return totals.first;
-    final fraction = exercise.trackKey == backRebuildBlockDeadlift.trackKey
+    final key = exercise.trackKey;
+    final fraction = key == backRebuildBlockDeadlift.trackKey
         ? (cap ? blockDeadliftCap : blockDeadliftFloor)
-        : (cap ? romanianDeadliftCap : romanianDeadliftFloor);
+        : key == backRebuildRomanianDeadlift.trackKey
+        ? (cap ? romanianDeadliftCap : romanianDeadliftFloor)
+        : key == backRebuildBoxSquat.trackKey
+        ? (cap ? boxSquatCap : boxSquatFloor)
+        : (cap ? gobletSquatCap : gobletSquatFloor);
     return _equipmentEngine.roundDownToAchievable(reference * fraction, totals);
   }
 
-  /// Starting load of a stage track that has never been trained.
+  /// Starting load of a stage track that has never been trained. Squats
+  /// derive it from [normalSquat], deadlifts from the preserved hinge load.
   double stageFloorLoad(
     LowerBackRecoveryState state,
     SubstituteExercise exercise,
-    EquipmentConfig equipment,
-  ) => _stageLoad(state, exercise, equipment, cap: false);
+    EquipmentConfig equipment, {
+    ExerciseState? normalSquat,
+  }) => _stageLoad(
+    state,
+    exercise,
+    equipment,
+    normalSquat: normalSquat,
+    cap: false,
+  );
 
   /// Highest load the stage may prescribe.
   double stageCapLoad(
     LowerBackRecoveryState state,
     SubstituteExercise exercise,
-    EquipmentConfig equipment,
-  ) => _stageLoad(state, exercise, equipment, cap: true);
+    EquipmentConfig equipment, {
+    ExerciseState? normalSquat,
+  }) => _stageLoad(
+    state,
+    exercise,
+    equipment,
+    normalSquat: normalSquat,
+    cap: true,
+  );
 
-  bool stageCapReached(
+  /// Whether one stage lift has reached its cap.
+  bool liftAtCap(
     LowerBackRecoveryState state,
+    SubstituteExercise exercise,
     ExerciseState? trackState,
+    EquipmentConfig equipment, {
+    ExerciseState? normalSquat,
+  }) {
+    if (!hasStageWindow(exercise)) return true;
+    final load = trackState?.currentLoad ?? 0;
+    return load >=
+        stageCapLoad(state, exercise, equipment, normalSquat: normalSquat);
+  }
+
+  /// Whether both lifts of the current stage have reached their caps, a
+  /// condition for leaving stages 2–3. Stage 1 has no caps.
+  bool stageCapsReached(
+    LowerBackRecoveryState state,
+    Map<String, ExerciseState> states,
     EquipmentConfig equipment,
   ) {
-    final exercise = loadedStepFor(state);
-    if (exercise == null) return true;
-    final load = trackState?.currentLoad ?? 0;
-    return load >= stageCapLoad(state, exercise, equipment);
+    final hinge = loadedStepFor(state);
+    if (hinge == null) return true;
+    final squat = squatStepFor(state);
+    return liftAtCap(state, hinge, states[hinge.trackKey], equipment) &&
+        liftAtCap(
+          state,
+          squat,
+          states[squat.trackKey],
+          equipment,
+          normalSquat: states[MovementPattern.squat.name],
+        );
   }
 
   /// The optional back-extension prescription when due. It never becomes a

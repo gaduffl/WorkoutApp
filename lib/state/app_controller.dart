@@ -204,16 +204,47 @@ class AppController extends ChangeNotifier {
         )) {
       return false;
     }
-    // A loaded rebuild step from another stage (for example after a worse
-    // morning stepped the lane back) must not be performed from a stale plan.
-    final stageStep = _lowerBackRecoveryEngine.loadedStepFor(lowerBackRecovery);
-    if (plan.exercises.any(
-      (e) =>
-          (e.trackKey == backRebuildBlockDeadlift.trackKey ||
-              e.trackKey == backRebuildRomanianDeadlift.trackKey) &&
-          (!lowerBackRecovery.active || e.trackKey != stageStep?.trackKey),
-    )) {
-      return false;
+    // A staged lift from another stage (for example after a worse morning
+    // stepped the rebuild back) must not be performed from a stale plan.
+    final rebuild = lowerBackRecovery;
+    final stageDeadlift = _lowerBackRecoveryEngine.loadedStepFor(rebuild);
+    final stageSquat = _lowerBackRecoveryEngine.squatStepFor(rebuild);
+    bool staleStagedLift(PlannedExercise e) {
+      final deadlift = e.trackKey == backRebuildBlockDeadlift.trackKey ||
+          e.trackKey == backRebuildRomanianDeadlift.trackKey;
+      final loadedSquat = e.trackKey == backRebuildBoxSquat.trackKey ||
+          e.trackKey == backRebuildGobletSquat.trackKey;
+      if (!deadlift && !loadedSquat) return false;
+      if (!rebuild.active) return true;
+      return deadlift
+          ? e.trackKey != stageDeadlift?.trackKey
+          : e.trackKey != stageSquat.trackKey;
+    }
+
+    if (plan.exercises.any(staleStagedLift)) return false;
+    // A plan made before the current rules may still hold a normal squat or
+    // deadlift, or a row, press or L-sit the rebuild now swaps out.
+    if (rebuild.active) {
+      final forbidden = {
+        MovementPattern.squat.name,
+        MovementPattern.hinge.name,
+        for (final pattern in const [
+          MovementPattern.pullHorizontal,
+          MovementPattern.pushVertical,
+          MovementPattern.coreGrip,
+        ])
+          if (_lowerBackRecoveryEngine.supportedSwapFor(
+                pattern,
+                exerciseStates[pattern.name],
+              ) !=
+              null)
+            pattern.name,
+      };
+      if (plan.exercises.any(
+        (e) => !e.isWarmup && forbidden.contains(e.trackKey),
+      )) {
+        return false;
+      }
     }
     return (plan.sessionId != SessionTypeId.s3 &&
           plan.sessionId != SessionTypeId.s7) ||
@@ -1122,7 +1153,7 @@ class AppController extends ChangeNotifier {
   Future<void> deactivateLowerBackRecovery() async {
     final current = settings.lowerBackRecovery;
     if (!current.active) return;
-    await _handOffHingeFromRebuild(current, finished: false);
+    await _handOffFromRebuild(current, finished: false);
     settings = settings.copyWith(
       recoveryBackExtensionsEnabled: false,
       lowerBackRecovery: _lowerBackRecoveryEngine.deactivate(
@@ -1154,14 +1185,13 @@ class AppController extends ChangeNotifier {
 
   Future<void> _applyBackCheck(LowerBackSymptomResponse response) async {
     final previous = settings.lowerBackRecovery;
-    final stageStep = _lowerBackRecoveryEngine.loadedStepFor(previous);
     final outcome = _lowerBackRecoveryEngine.recordNextMorningResponse(
       previous,
       response: response,
       responseDate: today(),
-      stageCapReached: _lowerBackRecoveryEngine.stageCapReached(
+      stageCapReached: _lowerBackRecoveryEngine.stageCapsReached(
         previous,
-        stageStep == null ? null : exerciseStates[stageStep.trackKey],
+        exerciseStates,
         settings.equipment,
       ),
     );
@@ -1171,120 +1201,166 @@ class AppController extends ChangeNotifier {
       await _easeRebuildTrackAfterSetback(previous, steppedBackFrom);
     }
     if (outcome.finished) {
-      await _handOffHingeFromRebuild(previous, finished: true);
+      await _handOffFromRebuild(previous, finished: true);
     }
     settings = settings.copyWith(lowerBackRecovery: outcome.state);
     await repo.saveSettings(settings);
   }
 
-  /// After a worse morning the lane drops a stage; the stage it left keeps
-  /// its track but resumes one load step lighter (never below its floor).
+  /// After a worse morning the rebuild drops a stage; the stage it left
+  /// keeps its deadlift and squat tracks but resumes each one load step
+  /// lighter (never below its floor).
   Future<void> _easeRebuildTrackAfterSetback(
     LowerBackRecoveryState rebuild,
     BackRebuildStage stage,
   ) async {
-    final exercise = _lowerBackRecoveryEngine.loadedStepFor(
-      rebuild.copyWith(rebuildStage: stage),
-    );
-    if (exercise == null) return;
-    final state = exerciseStates[exercise.trackKey];
-    if (state == null || state.currentLoad <= 0) return;
-    final totals = const EquipmentEngine()
-        .twoDbAchievableTotals(settings.equipment, allowUneven: true);
-    final floor = _lowerBackRecoveryEngine.stageFloorLoad(
-      rebuild,
-      exercise,
-      settings.equipment,
-    );
-    final lighter = const EquipmentEngine()
-        .nextAchievableBelow(state.currentLoad, totals);
-    final next = state.clone()
-      ..currentLoad = lighter < floor ? floor : lighter
-      ..microStepStage = 0
-      ..lastPrescriptionChange = 'Eased one step after a worse morning';
-    exerciseStates = {...exerciseStates, exercise.trackKey: next};
-    await repo.saveExerciseState(next);
+    final atStage = rebuild.copyWith(rebuildStage: stage);
+    final normalSquat = exerciseStates[MovementPattern.squat.name];
+    for (final exercise in [
+      _lowerBackRecoveryEngine.loadedStepFor(atStage),
+      _lowerBackRecoveryEngine.squatStepFor(atStage),
+    ]) {
+      if (exercise == null ||
+          !_lowerBackRecoveryEngine.hasStageWindow(exercise)) {
+        continue;
+      }
+      final state = exerciseStates[exercise.trackKey];
+      if (state == null || state.currentLoad <= 0) continue;
+      final totals =
+          _lowerBackRecoveryEngine.stageTotals(exercise, settings.equipment);
+      final floor = _lowerBackRecoveryEngine.stageFloorLoad(
+        rebuild,
+        exercise,
+        settings.equipment,
+        normalSquat: normalSquat,
+      );
+      final lighter = const EquipmentEngine()
+          .nextAchievableBelow(state.currentLoad, totals);
+      final next = state.clone()
+        ..currentLoad = lighter < floor ? floor : lighter
+        ..microStepStage = 0
+        ..lastPrescriptionChange = 'Eased one step after a worse morning';
+      exerciseStates = {...exerciseStates, exercise.trackKey: next};
+      await repo.saveExerciseState(next);
+    }
   }
 
-  /// Hands the hinge back to the normal ladder at the rebuild's graded
-  /// level: the Romanian deadlift once stage 3 is reached (DB RDL step),
-  /// otherwise the elevated-start deadlift at the block load. The frozen
-  /// pre-rebuild state is never restored directly.
-  Future<void> _handOffHingeFromRebuild(
+  /// Hands the hinge and squat back to their normal ladders at the
+  /// rebuild's graded level: the Romanian deadlift (DB RDL step) and the
+  /// goblet squat once stage 3 is reached, otherwise the elevated-start
+  /// deadlift at the block load and the goblet squat at the box-squat load.
+  /// Loads never exceed the stage caps; the frozen pre-rebuild states are
+  /// never restored directly.
+  Future<void> _handOffFromRebuild(
     LowerBackRecoveryState rebuild, {
     required bool finished,
   }) async {
     const romanianDeadliftStepIndex = 2;
     const elevatedStartStepIndex = 0;
+    const gobletSquatStepIndex = 0;
     final romanian =
         finished || rebuild.rebuildStage == BackRebuildStage.romanianDeadlift;
-    final exercise =
-        romanian ? backRebuildRomanianDeadlift : backRebuildBlockDeadlift;
-    final track = exerciseStates[exercise.trackKey];
-    // Progression can store one increment above the stage cap after a
-    // capped session; the hand-off never exceeds what the stage allowed.
-    final cap = _lowerBackRecoveryEngine.stageCapLoad(
-      rebuild,
-      exercise,
-      settings.equipment,
+    final normalSquat = exerciseStates[MovementPattern.squat.name];
+
+    double stageLoad(SubstituteExercise exercise) {
+      final track = exerciseStates[exercise.trackKey];
+      // Progression can store one increment above the stage cap after a
+      // capped session; the hand-off never exceeds what the stage allowed.
+      final cap = _lowerBackRecoveryEngine.stageCapLoad(
+        rebuild,
+        exercise,
+        settings.equipment,
+        normalSquat: normalSquat,
+      );
+      final trained = track != null && track.currentLoad > 0
+          ? track.currentLoad
+          : _lowerBackRecoveryEngine.stageFloorLoad(
+              rebuild,
+              exercise,
+              settings.equipment,
+              normalSquat: normalSquat,
+            );
+      return const EquipmentEngine().roundDownToAchievable(
+        trained > cap ? cap : trained,
+        _lowerBackRecoveryEngine.stageTotals(exercise, settings.equipment),
+      );
+    }
+
+    ExerciseState handedOff(
+      MovementPattern pattern,
+      SubstituteExercise exercise,
+      int ladderStepIndex,
+    ) =>
+        (exerciseStates[pattern.name] ??
+                ExerciseState(trackKey: pattern.name, pattern: pattern))
+            .clone()
+          ..ladderStepIndex = ladderStepIndex
+          ..currentLoad = stageLoad(exercise)
+          ..status = ExerciseStatus.progress
+          ..microStepStage = 0
+          ..consecutiveHoldCount = 0
+          ..deloadSessionsRemaining = 0
+          ..preDeloadLoad = null
+          ..preDeloadLadderStepIndex = null
+          ..awaitingUndershootCheck = false
+          ..lastTrainedDate =
+              exerciseStates[exercise.trackKey]?.lastTrainedDate ?? today()
+          ..lastPrescriptionChange = finished
+              ? 'Back rebuild complete: continuing from its last stage'
+              : 'Back rebuild ended: continuing at its current level';
+
+    final hinge = handedOff(
+      MovementPattern.hinge,
+      romanian ? backRebuildRomanianDeadlift : backRebuildBlockDeadlift,
+      romanian ? romanianDeadliftStepIndex : elevatedStartStepIndex,
     );
-    final trained = track != null && track.currentLoad > 0
-        ? track.currentLoad
-        : _lowerBackRecoveryEngine.stageFloorLoad(
-            rebuild,
-            exercise,
-            settings.equipment,
-          );
-    final load = trained > cap ? cap : trained;
-    final totals = const EquipmentEngine()
-        .twoDbAchievableTotals(settings.equipment, allowUneven: true);
-    final key = MovementPattern.hinge.name;
-    final hinge = (exerciseStates[key] ??
-            ExerciseState(trackKey: key, pattern: MovementPattern.hinge))
-        .clone()
-      ..ladderStepIndex =
-          romanian ? romanianDeadliftStepIndex : elevatedStartStepIndex
-      ..currentLoad = const EquipmentEngine().roundDownToAchievable(
-        load,
-        totals,
-      )
-      ..status = ExerciseStatus.progress
-      ..microStepStage = 0
-      ..consecutiveHoldCount = 0
-      ..deloadSessionsRemaining = 0
-      ..preDeloadLoad = null
-      ..preDeloadLadderStepIndex = null
-      ..awaitingUndershootCheck = false
-      ..lastTrainedDate = track?.lastTrainedDate ?? today()
-      ..lastPrescriptionChange = finished
-          ? 'Back rebuild complete: continuing from your Romanian deadlift'
-          : 'Back rebuild ended: continuing at its current level';
-    exerciseStates = {...exerciseStates, key: hinge};
+    final squat = handedOff(
+      MovementPattern.squat,
+      romanian ? backRebuildGobletSquat : backRebuildBoxSquat,
+      gobletSquatStepIndex,
+    );
+    exerciseStates = {
+      ...exerciseStates,
+      hinge.trackKey: hinge,
+      squat.trackKey: squat,
+    };
     await repo.saveExerciseState(hinge);
+    await repo.saveExerciseState(squat);
   }
 
-  /// What unlocks the next Back rebuild stage, including whether the loaded
-  /// deadlift has reached its stage cap yet.
+  /// What unlocks the next Back rebuild stage, including which staged lift
+  /// has not reached its cap yet.
   String get backRebuildNextStepLabel {
     final rebuild = lowerBackRecovery;
-    final step = _lowerBackRecoveryEngine.loadedStepFor(rebuild);
-    if (step == null) {
-      return 'Next: deadlift from blocks after 2 good mornings';
+    final deadlift = _lowerBackRecoveryEngine.loadedStepFor(rebuild);
+    if (deadlift == null) {
+      return 'Next: deadlift from blocks and box squats after 2 good mornings';
     }
-    final next = rebuild.rebuildStage == BackRebuildStage.blockDeadlift
-        ? 'Romanian deadlift'
-        : 'normal deadlifts';
-    final capReached = _lowerBackRecoveryEngine.stageCapReached(
-      rebuild,
-      exerciseStates[step.trackKey],
-      settings.equipment,
-    );
-    final cap = rebuild.rebuildStage == BackRebuildStage.blockDeadlift
-        ? '70%'
-        : 'your old load';
-    return capReached
+    final squat = _lowerBackRecoveryEngine.squatStepFor(rebuild);
+    final stageTwo = rebuild.rebuildStage == BackRebuildStage.blockDeadlift;
+    final next = stageTwo
+        ? 'Romanian deadlift and full squats'
+        : 'normal deadlifts and squats';
+    final missing = [
+      if (!_lowerBackRecoveryEngine.liftAtCap(
+        rebuild,
+        deadlift,
+        exerciseStates[deadlift.trackKey],
+        settings.equipment,
+      ))
+        stageTwo ? 'the deadlift reaches 70%' : 'the deadlift reaches your old load',
+      if (!_lowerBackRecoveryEngine.liftAtCap(
+        rebuild,
+        squat,
+        exerciseStates[squat.trackKey],
+        settings.equipment,
+        normalSquat: exerciseStates[MovementPattern.squat.name],
+      ))
+        stageTwo ? 'the squat reaches 80%' : 'the squat reaches your old load',
+    ];
+    return missing.isEmpty
         ? 'Next: $next after 2 good mornings'
-        : 'Next: $next once this lift reaches $cap';
+        : 'Next: $next once ${missing.join(' and ')}';
   }
 
   /// Local day marker for the back routine on days without lifting.
@@ -1749,7 +1825,7 @@ class AppController extends ChangeNotifier {
         rebuild.activatedAt != null &&
         completedAt != null &&
         _isSameDate(completedAt, day)) {
-      await _handOffHingeFromRebuild(
+      await _handOffFromRebuild(
         rebuild,
         finished: rebuild.rebuildStage == BackRebuildStage.romanianDeadlift,
       );
@@ -2324,9 +2400,10 @@ class AppController extends ChangeNotifier {
       final work = log.setLogs
           .where((setLog) => !setLog.isWarmup && setLog.value > 0)
           .toList();
-      final hingeWork =
-          work.where((setLog) => isBackRebuildHingeTrack(setLog.trackKey));
-      final loaded = hingeWork.any(
+      // Any staged hinge or squat work waits for the next-morning check.
+      final rebuildWork =
+          work.where((setLog) => isBackRebuildTrack(setLog.trackKey));
+      final loaded = rebuildWork.any(
         (setLog) =>
             setLog.trackKey == backRebuildBlockDeadlift.trackKey ||
             setLog.trackKey == backRebuildRomanianDeadlift.trackKey,
@@ -2339,14 +2416,14 @@ class AppController extends ChangeNotifier {
         sessionDate: day,
         exposure: loaded
             ? BackRebuildExposure.loaded
-            : hingeWork.isEmpty
+            : rebuildWork.isEmpty
                 ? BackRebuildExposure.none
                 : BackRebuildExposure.accessory,
         extension: extension,
         painFlagged: log.setLogs.any(
           (setLog) =>
               setLog.painFlag &&
-              (isBackRebuildHingeTrack(setLog.trackKey) ||
+              (isBackRebuildTrack(setLog.trackKey) ||
                   setLog.trackKey == lowerBackRecoveryTrackKey),
         ),
       );

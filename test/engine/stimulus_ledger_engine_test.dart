@@ -444,6 +444,71 @@ void main() {
       );
     });
 
+    test('staged squats and back-supported swaps keep explicit credit', () {
+      Map<MajorMuscleGroup, double> dose(SubstituteExercise exercise) {
+        final result = engine.buildFromSessionLogs(
+          logs: [
+            strengthLog(
+              id: exercise.slug,
+              templateId: SessionTypeId.s1,
+              sets: [
+                set(
+                  trackKey: exercise.trackKey,
+                  pattern: exercise.pattern,
+                  name: exercise.name,
+                  rir: Rir.rir3plus,
+                ),
+              ],
+            ),
+          ],
+          asOf: asOf,
+        );
+        return {
+          for (final muscle in MajorMuscleGroup.values)
+            if (result.muscle(muscle).effectiveSets7d > 0)
+              muscle: result.muscle(muscle).effectiveSets7d,
+        };
+      }
+
+      for (final squat in [
+        backRebuildSplitSquat,
+        backRebuildBoxSquat,
+        backRebuildGobletSquat,
+      ]) {
+        expect(
+          dose(squat),
+          {MajorMuscleGroup.quads: 1.0, MajorMuscleGroup.glutes: 0.5},
+          reason: squat.slug,
+        );
+        final exposure = const MuscleExposureEngine().fromCompleted(
+          logs: [
+            strengthLog(
+              id: '${squat.slug}-exposure',
+              templateId: SessionTypeId.s1,
+              sets: [
+                set(
+                  trackKey: squat.trackKey,
+                  pattern: squat.pattern,
+                  name: squat.name,
+                ),
+              ],
+            ),
+          ],
+        );
+        // Squats never light the lumbar area, staged or not.
+        expect(exposure.lowerBack, 0, reason: squat.slug);
+      }
+      expect(
+        dose(backRebuildSeatedPress),
+        {MajorMuscleGroup.delts: 1.0, MajorMuscleGroup.triceps: 0.5},
+      );
+      expect(dose(backRebuildPlank), {MajorMuscleGroup.coreGrip: 1.0});
+      expect(
+        dose(lowerBackRecoveryChestSupportedRow),
+        {MajorMuscleGroup.back: 1.0, MajorMuscleGroup.biceps: 0.5},
+      );
+    });
+
     test('unknown substitute tracks do not inherit their broad pattern', () {
       final log = strengthLog(
         id: 'unknown-named',

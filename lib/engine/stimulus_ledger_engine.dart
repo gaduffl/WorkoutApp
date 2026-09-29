@@ -35,6 +35,25 @@ class ExerciseMuscleMap {
       primary: {MajorMuscleGroup.hamstrings},
       secondary: {MajorMuscleGroup.glutes},
     ),
+    'sub:squat:back_rebuild_split_squat': _MuscleProfile(
+      primary: {MajorMuscleGroup.quads},
+      secondary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:squat:back_rebuild_box_squat': _MuscleProfile(
+      primary: {MajorMuscleGroup.quads},
+      secondary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:squat:back_rebuild_goblet_squat': _MuscleProfile(
+      primary: {MajorMuscleGroup.quads},
+      secondary: {MajorMuscleGroup.glutes},
+    ),
+    'sub:pushVertical:back_rebuild_seated_press': _MuscleProfile(
+      primary: {MajorMuscleGroup.delts},
+      secondary: {MajorMuscleGroup.triceps},
+    ),
+    'sub:coreGrip:back_rebuild_plank': _MuscleProfile(
+      primary: {MajorMuscleGroup.coreGrip},
+    ),
     'sub:coreGrip:lower_back_abdominal_activation': _MuscleProfile(
       primary: {MajorMuscleGroup.coreGrip},
     ),

@@ -191,7 +191,7 @@ void main() {
     },
   );
 
-  test('a worse morning eases the stage track by one load step', () async {
+  test('a worse morning eases both stage lifts by one load step', () async {
     final controller = controllerWith(
       rebuild(
         stage: BackRebuildStage.blockDeadlift,
@@ -206,6 +206,12 @@ void main() {
           currentLoad: 60,
           lastTrainedDate: yesterday,
         ),
+        backRebuildBoxSquat.trackKey: ExerciseState(
+          trackKey: backRebuildBoxSquat.trackKey,
+          pattern: MovementPattern.squat,
+          currentLoad: 18,
+          lastTrainedDate: yesterday,
+        ),
       },
     );
     await controller.recordLowerBackNextMorningResponse(
@@ -216,7 +222,13 @@ void main() {
       controller.exerciseStates[backRebuildBlockDeadlift.trackKey]!.currentLoad,
       50,
     );
+    // One single-dumbbell step lighter, above the 12 lb floor.
+    expect(
+      controller.exerciseStates[backRebuildBoxSquat.trackKey]!.currentLoad,
+      15,
+    );
     expect(controller.exerciseStates['hinge']!.currentLoad, 90);
+    expect(controller.exerciseStates['squat']!.currentLoad, 24);
   });
 
   test('finishing hands the hinge to the normal ladder at the RDL', () async {
@@ -237,6 +249,12 @@ void main() {
           currentLoad: 100,
           lastTrainedDate: yesterday,
         ),
+        backRebuildGobletSquat.trackKey: ExerciseState(
+          trackKey: backRebuildGobletSquat.trackKey,
+          pattern: MovementPattern.squat,
+          currentLoad: 25,
+          lastTrainedDate: yesterday,
+        ),
       },
     );
     await controller.recordLowerBackNextMorningResponse(
@@ -253,7 +271,61 @@ void main() {
     expect(hinge.lastTrainedDate, yesterday);
     expect(hinge.lastPrescriptionChange, contains('Back rebuild complete'));
     expect((await controller.repo.loadExerciseStates())['hinge'], isNotNull);
+    // The squat continues as a normal goblet squat, capped at its old load.
+    final squat = controller.exerciseStates['squat']!;
+    expect(squat.ladderStepIndex, 0);
+    expect(squat.currentLoad, 24);
+    expect(squat.lastPrescriptionChange, contains('Back rebuild complete'));
+    expect(
+      (await controller.repo.loadExerciseStates())['squat']!.currentLoad,
+      24,
+    );
   });
+
+  test(
+    'stage 3 does not finish until the squat also reaches its cap',
+    () async {
+      final controller = controllerWith(
+        rebuild(
+          stage: BackRebuildStage.romanianDeadlift,
+          goodMornings: 1,
+          pendingDate: yesterday,
+          exposure: BackRebuildExposure.loaded,
+        ),
+        states: {
+          ...baseStates(),
+          backRebuildRomanianDeadlift.trackKey: ExerciseState(
+            trackKey: backRebuildRomanianDeadlift.trackKey,
+            pattern: MovementPattern.hinge,
+            currentLoad: 90,
+            lastTrainedDate: yesterday,
+          ),
+          backRebuildGobletSquat.trackKey: ExerciseState(
+            trackKey: backRebuildGobletSquat.trackKey,
+            pattern: MovementPattern.squat,
+            currentLoad: 20,
+            lastTrainedDate: yesterday,
+          ),
+        },
+      );
+      await controller.recordLowerBackNextMorningResponse(
+        LowerBackSymptomResponse.better,
+      );
+      expect(controller.lowerBackRecovery.active, isTrue);
+      expect(
+        controller.lowerBackRecovery.rebuildStage,
+        BackRebuildStage.romanianDeadlift,
+      );
+      expect(controller.lowerBackRecovery.rebuildGoodMornings, 2);
+      expect(
+        controller.backRebuildNextStepLabel,
+        'Next: normal deadlifts and squats once the squat reaches your old '
+        'load',
+      );
+      expect(controller.exerciseStates['hinge']!.ladderStepIndex, 2);
+      expect(controller.exerciseStates['hinge']!.currentLoad, 90);
+    },
+  );
 
   test(
     'ending early resumes the deadlift at the rebuild level, not the old load',
@@ -276,13 +348,153 @@ void main() {
       expect(hinge.currentLoad, 48);
       expect(atBlocks.lowerBackRecovery.active, isFalse);
       expect(atBlocks.cyclingAccess.rehit, isTrue);
+      // No box squat trained yet: the goblet squat resumes at the 60% floor
+      // of its old 24 lb (14.4, rounded down to 12), never at 24.
+      expect(atBlocks.exerciseStates['squat']!.ladderStepIndex, 0);
+      expect(atBlocks.exerciseStates['squat']!.currentLoad, 12);
 
-      final atBridges = controllerWith(rebuild());
+      final atBridges = controllerWith(
+        rebuild(),
+        states: {
+          ...baseStates(),
+          backRebuildBoxSquat.trackKey: ExerciseState(
+            trackKey: backRebuildBoxSquat.trackKey,
+            pattern: MovementPattern.squat,
+            currentLoad: 15,
+            lastTrainedDate: day.subtract(const Duration(days: 5)),
+          ),
+        },
+      );
       await atBridges.deactivateLowerBackRecovery();
       expect(atBridges.exerciseStates['hinge']!.ladderStepIndex, 0);
       expect(atBridges.exerciseStates['hinge']!.currentLoad, 42);
+      expect(atBridges.exerciseStates['squat']!.currentLoad, 15);
     },
   );
+
+  test(
+    'staged squat work alone opens the check; a flagged set is a setback',
+    () async {
+      for (final painful in [false, true]) {
+        final controller = controllerWith(rebuild());
+        final plan = planFor(controller, SessionTypeId.s1);
+        final squatOnly =
+            allSets(
+                  plan,
+                  painTrack: painful ? backRebuildSplitSquat.trackKey : null,
+                )
+                .where((set) => set.trackKey == backRebuildSplitSquat.trackKey)
+                .toList();
+        expect(squatOnly, isNotEmpty);
+        await controller.completeSession(plan, squatOnly, durationMinutes: 20);
+        final state = controller.lowerBackRecovery;
+        expect(state.pendingNextMorningSessionDate, day);
+        expect(state.pendingRebuildExposure, BackRebuildExposure.accessory);
+        expect(
+          state.pendingSameDayResponse,
+          painful
+              ? LowerBackSymptomResponse.worse
+              : LowerBackSymptomResponse.unchanged,
+        );
+        // The normal squat ladder never moves during the rebuild.
+        final saved = await controller.repo.loadExerciseStates();
+        expect(saved['squat']?.currentLoad ?? 24, 24);
+      }
+    },
+  );
+
+  test('stale plans with normal squats or back-loading lifts are refused', () {
+    final controller = controllerWith(
+      rebuild(),
+      states: {
+        ...baseStates(),
+        MovementPattern.pullHorizontal.name: ExerciseState(
+          trackKey: MovementPattern.pullHorizontal.name,
+          pattern: MovementPattern.pullHorizontal,
+          currentLoad: 20,
+        ),
+        MovementPattern.pushVertical.name: ExerciseState(
+          trackKey: MovementPattern.pushVertical.name,
+          pattern: MovementPattern.pushVertical,
+          currentLoad: 20,
+        ),
+      },
+    );
+    SessionPlan planWith(String trackKey, MovementPattern pattern) =>
+        SessionPlan(
+          sessionId: SessionTypeId.s4,
+          sessionName: 'Full Body',
+          tier: SessionTier.full,
+          exercises: [
+            PlannedExercise(
+              trackKey: trackKey,
+              pattern: pattern,
+              name: trackKey,
+              sets: 3,
+              targetRange: (8, 10),
+              loadTotal: 20,
+              rirTarget: Rir.rir2,
+            ),
+          ],
+          estimatedDurationMin: 35,
+          lowerBackRecoveryMode: true,
+        );
+    // Built before the staged squat or while the row was still bent-over.
+    expect(
+      controller.isPlanUsableNow(
+        planWith(MovementPattern.squat.name, MovementPattern.squat),
+      ),
+      isFalse,
+    );
+    expect(
+      controller.isPlanUsableNow(
+        planWith(
+          MovementPattern.pullHorizontal.name,
+          MovementPattern.pullHorizontal,
+        ),
+      ),
+      isFalse,
+    );
+    // A seated press (step 0) is already supported.
+    expect(
+      controller.isPlanUsableNow(
+        planWith(
+          MovementPattern.pushVertical.name,
+          MovementPattern.pushVertical,
+        ),
+      ),
+      isTrue,
+    );
+    // Stage 1 only allows the split squat; a box squat is from stage 2.
+    expect(
+      controller.isPlanUsableNow(
+        planWith(backRebuildBoxSquat.trackKey, MovementPattern.squat),
+      ),
+      isFalse,
+    );
+    expect(
+      controller.isPlanUsableNow(
+        planWith(backRebuildSplitSquat.trackKey, MovementPattern.squat),
+      ),
+      isTrue,
+    );
+    controller.settings = controller.settings.copyWith(
+      lowerBackRecovery: rebuild(stage: BackRebuildStage.blockDeadlift),
+    );
+    expect(
+      controller.isPlanUsableNow(
+        planWith(backRebuildBoxSquat.trackKey, MovementPattern.squat),
+      ),
+      isTrue,
+    );
+    // A flag day at stage 2 falls back to split squats: still usable.
+    expect(
+      controller.isPlanUsableNow(
+        planWith(backRebuildSplitSquat.trackKey, MovementPattern.squat),
+      ),
+      isTrue,
+    );
+  });
 
   test('rides open the bike return step by step; walks never count', () async {
     const cardio = CardioEngine();

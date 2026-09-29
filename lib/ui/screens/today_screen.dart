@@ -511,9 +511,10 @@ class _TodayScreenState extends State<TodayScreen> {
                         : 'Back rebuild',
                   ),
                   subtitle: const Text(
-                    'Only the deadlift slot changes; its loaded lift comes '
-                    'last. Stop for sharp, spreading, numb, or tingling '
-                    'symptoms.',
+                    'The squat and deadlift are staged and come last. '
+                    'Bent-over rows, standing presses and L-sits become '
+                    'chest-supported rows, seated presses and planks. Stop '
+                    'for sharp, spreading, numb, or tingling symptoms.',
                   ),
                 ),
               ),

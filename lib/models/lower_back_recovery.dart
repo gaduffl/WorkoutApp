@@ -15,16 +15,17 @@ enum LowerBackSymptomResponse {
   worse,
 }
 
-/// The hinge-slot stages of Back rebuild. Every other slot follows the
-/// normal plan.
+/// The stages of Back rebuild's hinge and squat slots. Bent-over rows,
+/// standing presses and L-sits swap to stand-ins that spare the lower back;
+/// everything else follows the normal plan.
 enum BackRebuildStage {
-  /// Dumbbell-loaded floor glute bridges and sliding hamstring curls.
+  /// Floor glute bridges, sliding hamstring curls and split squats.
   bridges,
 
-  /// Dumbbell deadlift from blocks, 50–70% of the pre-rebuild load.
+  /// Deadlift from blocks (50–70%) and goblet squat to a box (60–80%).
   blockDeadlift,
 
-  /// Dumbbell Romanian deadlift, 70–100% of the pre-rebuild load.
+  /// Romanian deadlift (70–100%) and goblet squat (80–100%).
   romanianDeadlift,
 }
 
@@ -144,9 +145,12 @@ class LowerBackRecoveryState {
   static const rebuildStageCount = 3;
 
   String get rebuildStageTitle => switch (rebuildStage) {
-        BackRebuildStage.bridges => 'Bridges & hamstring curls',
-        BackRebuildStage.blockDeadlift => 'Deadlift from blocks',
-        BackRebuildStage.romanianDeadlift => 'Romanian deadlift',
+        BackRebuildStage.bridges =>
+          'Bridges, hamstring curls & split squats',
+        BackRebuildStage.blockDeadlift =>
+          'Deadlift from blocks & squat to a box',
+        BackRebuildStage.romanianDeadlift =>
+          'Romanian deadlift & goblet squat',
       };
 
   String get bikeReturnLabel => switch (bikeReturnStep) {

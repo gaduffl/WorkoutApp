@@ -66,33 +66,49 @@ safety rules, validation, or delivery workflow changes.
   claims or medical certainty.
 - Deterministic safety gates outrank readiness, weekly targets, manual session swaps,
   progression, and AI-generated explanations. The AI layer may never weaken them.
-- Back rebuild (the lower-back recovery mode) changes only the hinge slot, the bike,
-  and the general preparation (jumping jacks, then an uphill forward walk on the ATG
-  treadmill). Every other slot is the normal plan with its normal ladders, RIR, queue,
-  time budget, and pain, partial-work, travel, readiness and deload gates. Never add a
-  second planner, a closed recovery catalogue, mandatory phases or daily dose forms.
-- The hinge slot has three stages: (1) floor glute bridge and sliding hamstring curl
-  on the separate deadlift-alternative tracks, credited only to glutes and hamstrings
-  respectively; (2) DB deadlift from blocks at RIR 3+, 50–70% of the preserved
-  pre-rebuild hinge load; (3) DB Romanian deadlift at RIR 2, 70–100%. Loaded steps use
-  their own tracks, are clamped to the stage cap, run last and unpaired with their
-  warm-up, at most twice per rolling 7 days and at least 48 hours apart, and never while
-  the lower back or hip is flagged or in travel mode; stage-1 work fills the slot
-  otherwise. Mild flags ease rebuild tracks through the ordinary pain table; sharp
-  lower-back pain removes all rebuild hinge work. The normal hinge ladder stays frozen
-  until hand-off, and no rebuild track advances it.
+- Back rebuild (the lower-back recovery mode) changes only the hinge and squat slots,
+  three lower-back-loading ladder steps, the bike, and the general preparation
+  (jumping jacks, then an uphill forward walk on the ATG treadmill). While it is active
+  the bent-over DB row (row step 0), standing presses (overhead steps 1–3) and the
+  L-sit (core step 1) become a chest-supported row, a back-supported seated press and a
+  plank on their own tracks; planning and the stale-plan check share that one swap
+  rule. Every other slot and step is the normal plan with its normal ladders, RIR,
+  queue, time budget, and pain, partial-work, travel, readiness and deload gates. Never
+  add a second planner, a closed recovery catalogue, mandatory phases or daily dose
+  forms.
+- The hinge and squat slots share three stages: (1) floor glute bridge and sliding
+  hamstring curl on the separate deadlift-alternative tracks, credited only to glutes
+  and hamstrings respectively, plus a split squat with dumbbells at the sides at RIR
+  3+; (2) DB deadlift from blocks at RIR 3+, 50–70% of the preserved pre-rebuild hinge
+  load, and a goblet squat to a box at RIR 3+, 60–80% of the frozen normal squat;
+  (3) DB Romanian deadlift at RIR 2, 70–100%, and a goblet squat at RIR 2, 80–100%.
+  The squat reference is the frozen normal squat's load on the goblet step and half
+  the pair total on two-dumbbell steps. Staged lifts use their own tracks, are clamped
+  to the stage cap, never join a superset, and follow all other work: a glute bridge
+  leads in on lower days (the budgeter may trim it in short windows), then the squat,
+  then a loaded deadlift last with its warm-up. Loaded deadlifts run at most twice per
+  rolling 7 days and at least 48 hours apart, and never while the lower back or hip is
+  flagged or in travel mode; stage-1 work fills the hinge slot otherwise, and the same
+  flags and travel put the squat on the split squat. Mild flags ease rebuild tracks
+  through the ordinary pain table; sharp pain removes the staged work of every pattern
+  it affects, so sharp lower-back pain removes all rebuild hinge and squat work. The
+  normal hinge and squat ladders stay frozen until hand-off, and no rebuild track
+  advances them.
 - Stages, optional back extensions and bike steps advance only after a recorded
   next-morning check: one Better/Same/Worse question at check-in, required when due.
-  There is no same-day question; a pain-flagged rebuild set makes the check a
-  setback. Two same-or-better mornings advance a stage (stages 2–3 also need the cap
-  reached); a worse morning steps back one stage, and the stage it leaves resumes one
-  load step lighter (never below its floor). Completing a session never advances
-  anything by itself.
+  Any staged hinge or squat work creates the check. There is no same-day question; a
+  pain-flagged rebuild set makes the check a setback. Two same-or-better mornings
+  advance a stage (in stages 2–3 only mornings after a loaded deadlift count, and both
+  the deadlift and the squat must have reached their caps); a worse morning steps back
+  one stage, and the stage it leaves resumes both capped lifts one load step lighter
+  (never below their floors). Completing a session never advances anything by itself.
 - Finishing stage 3 ends Back rebuild and hands the hinge to the normal ladder at DB
-  RDL with the capped RDL-track load. A manual end hands off at the rebuild's level
-  (elevated start from stages 1–2, RDL from stage 3), never the old load, and
-  completes the bike return. Tolerated extension sessions never end the rebuild.
-  Reset day drops today's rebuild exposures and never undoes a same-day hand-off.
+  RDL with the capped RDL-track load and the squat to the goblet step with the capped
+  goblet-track load. A manual end hands off at the rebuild's level (elevated start and
+  the box-squat load from stages 1–2, RDL and the goblet-squat load from stage 3),
+  never the old loads, and completes the bike return. Tolerated extension sessions
+  never end the rebuild. Reset day drops today's rebuild exposures and never undoes a
+  same-day hand-off.
 - Back extensions are optional (off by default), unloaded, join stages 1–2 at the end
   of the session when spacing allows, and share the next-morning check.
 - Back rebuild starts a stepped bike return: walk only → Zone 2 rides → 4×4 → all
@@ -113,8 +129,8 @@ safety rules, validation, or delivery workflow changes.
 - A comeback prescription after a training pause must describe the currently
   emitted reduced load/target or easier difficulty. Never carry a stale
   `Load increased` milestone into a detraining-adjusted plan.
-- Back rebuild hinge work uses conservative, pain-tolerated prescriptions and never
-  trains to failure. Do not represent a self-built apparatus as inspected or certified.
+- Back rebuild hinge and squat work uses conservative, pain-tolerated prescriptions
+  and never trains to failure. Do not represent a self-built apparatus as inspected or certified.
 - Keep the existing pain-freeze, substitution, and escalation behavior working for
   users who do not activate Back rebuild. A mild lower-back regression of the normal
   hinge skips the floor DB deadlift and lands on the elevated start.
@@ -132,10 +148,11 @@ safety rules, validation, or delivery workflow changes.
 - Use RED-GREEN-REFACTOR for behavior changes. Add engine, serialization, controller,
   and widget regressions at the layer where each rule is owned.
 - Cover legacy-data defaults and conversion, persistence round trips, safety
-  precedence, stage caps and last-position loaded steps across S1/S2/S4/S5 and the
-  20/35/60 windows, non-hinge slots matching normal training from advanced ladder
-  states, frequency spacing, next-morning progression/regression, the stepped bike
-  return, and automatic/manual hand-off.
+  precedence, stage caps, the staged squat before a last-position loaded deadlift
+  across S1/S2/S4/S5 and the 20/35/60 windows, unstaged slots matching normal training
+  from advanced ladder states apart from the three swaps, stale-plan refusal,
+  frequency spacing, next-morning progression/regression, the stepped bike return, and
+  automatic/manual hand-off of both the hinge and the squat.
 - Run `dart format`, `flutter analyze`, and the complete `flutter test` suite. When the
   local runtime lacks Flutter, GitHub Actions is the authoritative validation and every
   failure must be fixed before merge.

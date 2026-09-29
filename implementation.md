@@ -752,3 +752,52 @@ copy) still hold.
     (a deleted session must not earn a good morning or block the loaded step), and
     re-applies the hinge hand-off when the rebuild ended today, because the
     restored snapshot can hold the frozen pre-rebuild hinge.
+
+## Session 2026-09-29 (Back rebuild: staged squat and back-supported swaps)
+
+Extends #84–91. The rebuild now also owns the squat slot and three lower-back-loading
+ladder steps; the statements in #84–85 that only the hinge slot changes are
+superseded.
+
+92. **The squat is staged like the hinge, on its own tracks.** In real use the
+    stage-1 plan opened with a 50 lb goblet squat at RIR 2: the normal squat slot,
+    untouched by the rebuild. Stage 1 now prescribes a split squat with dumbbells at
+    the sides (RIR 3+, unilateral pairs only, free progression), stage 2 a goblet
+    squat to a box at 60–80% and stage 3 a goblet squat at 80–100% of the frozen
+    normal squat. The reference is that track's load on the goblet step and half the
+    pair total on two-dumbbell steps, a conservative single-dumbbell equivalent. The
+    goblet squats reuse the deadlifts' seed-at-floor and clamp-at-cap path
+    (`hasStageWindow`, `stageTotals` with single-dumbbell totals). Unlike the loaded
+    deadlift the squat is not spaced: it appears on every lower day, and lower-back
+    or hip flags and travel fall back to the split squat.
+93. **Order: other work, bridge lead-in, squat, loaded deadlift.** `_backRebuildSlots`
+    keeps the other slots first, then a glute bridge (plus the curl when no loaded
+    deadlift is due), the staged squat, the loaded deadlift and the extension marker,
+    so neither staged lift follows the prep directly on a normal day; the budgeter may
+    trim the bridge in a 20-minute window. Staged tracks never join a superset and
+    count as compound work where their slot is a template compound.
+94. **Three lower-back-loading steps swap while the rebuild is active.**
+    `supportedSwapFor` maps the bent-over DB row (row step 0) to the chest-supported
+    row track kept from the old recovery mode, standing presses (overhead steps 1–3)
+    to a seated DB press against a backrest, and the L-sit (core step 1) to a plank,
+    each on its own track. The swap only replaces the canonical slot; named S5
+    accessories and every other step stay normal. The canonical tracks are not
+    trained meanwhile and resume through the ordinary detraining path. Planning and
+    the stale-plan check share the rule, and travel resolves the new tracks to the
+    pattern's bodyweight stand-ins.
+95. **Advancement, easing and hand-off include the squat.** `stageCapsReached`
+    requires both staged lifts at their caps in stages 2–3; a worse morning eases both
+    windowed lifts of the stage it leaves; the hand-off also sets the normal squat to
+    the goblet step at the capped goblet (stage 3) or box (stages 1–2) track load, or
+    the stage floor when untrained. Reset day re-applies both hand-offs. Any staged
+    hinge or squat work creates the next-morning check; stages 2–3 still count only
+    mornings after a loaded deadlift.
+96. **Same-day plans from before the change cannot be started.** While the rebuild is
+    active, `isPlanUsableNow` refuses canonical squat or hinge work and canonical
+    steps that now swap; it always refuses a box or goblet squat from another stage.
+    Today shows the existing "Plan unavailable" notice, and redoing the check-in
+    builds the staged plan.
+97. **Rebuild instructions survive pain notes.** A mild flag's pain note is joined
+    with, not substituted for, the rebuild instruction, so the box-depth and
+    neutral-back cues stay visible on an eased lift. The Big 3 entry now says to skip
+    any hold that brings on back pain.

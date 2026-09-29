@@ -214,12 +214,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Start Back rebuild?'),
         content: const Text(
-          'Back rebuild changes only your deadlift slot: loaded glute bridges '
-          'and hamstring curls first, then deadlifts from blocks, then '
-          'Romanian deadlifts, each after two good mornings. Everything else '
-          'stays your normal training. Zone 2 becomes an uphill walk until an '
-          'easy test ride feels fine the next morning. It does not diagnose '
-          'anything or promise a cure.\n\n'
+          'Back rebuild rebuilds your deadlift and squat in three stages: '
+          'bridges, hamstring curls and split squats first, then deadlifts '
+          'from blocks and squats to a box, then Romanian deadlifts and full '
+          'goblet squats, each after two good mornings. Bent-over rows, '
+          'standing presses and L-sits become chest-supported rows, seated '
+          'presses and planks; everything else stays your normal training. '
+          'Zone 2 becomes an uphill walk '
+          'until an easy test ride feels fine the next morning. It does not '
+          'diagnose anything or promise a cure.\n\n'
           'Do not start if you have leg weakness, spreading leg pain, '
           'numbness or tingling, saddle-area numbness, bladder/bowel changes, '
           'fever, major trauma, or rapidly worsening pain. Seek urgent '
@@ -255,9 +258,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('End Back rebuild?'),
         content: const Text(
-          'Your deadlift continues from the rebuild\'s current level, not '
-          'your old load. All cycling becomes available again unless you '
-          'pause it below.',
+          'Your deadlift and squat continue from the rebuild\'s current '
+          'level, not your old loads. All cycling becomes available again '
+          'unless you pause it below.',
         ),
         actions: [
           TextButton(
@@ -353,9 +356,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ? 'Stage ${controller.lowerBackRecovery.rebuildStageNumber} of '
                         '${LowerBackRecoveryState.rebuildStageCount} · '
                         '${controller.lowerBackRecovery.rebuildStageTitle}. '
-                        'Everything else is your normal training.'
-                    : 'Rebuild your deadlift in three steps after a back '
-                        'incident; everything else stays normal',
+                        'Bent-over rows, standing presses and L-sits are '
+                        'swapped out.'
+                    : 'Rebuild your deadlift and squat in three steps after '
+                        'a back incident; bent-over rows, standing presses '
+                        'and L-sits are swapped out',
               ),
               value: controller.lowerBackRecovery.active,
               onChanged: (enabled) => enabled
