@@ -1713,16 +1713,18 @@ class DecisionEngine {
   /// routine of 10-second holds, scaled to the hard time window.
   PlannedExercise _bigThreeEntry({required int slotMinutes}) {
     final minutes = StrengthPrepPolicy.bigThreeMinutes(slotMinutes);
+    // Spelled out in full: a bare "3-2-1" reads as a code, not as sets.
     final instruction = switch (minutes) {
-      2 => '0:00–0:25 · Curl-up: 2 × 10-s holds\n'
-          '0:25–1:15 · Side bridge: 2 × 10 s each side\n'
-          '1:15–2:00 · Bird dog: 2 × 10 s each side\n',
-      4 => '0:00–0:45 · Curl-up: 10-s holds, 3 then 1\n'
-          '0:45–2:20 · Side bridge: 10-s holds, 3 then 1, each side\n'
-          '2:20–4:00 · Bird dog: 10-s holds, 3 then 1, each side\n',
-      _ => '0:00–1:10 · Curl-up: 10-s holds, 3-2-1\n'
-          '1:10–3:35 · Side bridge: 10-s holds, 3-2-1, each side\n'
-          '3:35–6:00 · Bird dog: 10-s holds, 3-2-1, each side\n',
+      2 => '0:00–0:25 · Curl-up: 2 holds of 10 s\n'
+          '0:25–1:15 · Side bridge: 2 holds of 10 s on each side\n'
+          '1:15–2:00 · Bird dog: 2 holds of 10 s on each side\n',
+      4 => '0:00–0:45 · Curl-up: 3 holds of 10 s, short rest, 1 more hold\n'
+          '0:45–2:20 · Side bridge: the same on each side\n'
+          '2:20–4:00 · Bird dog: the same on each side\n',
+      _ => '0:00–1:10 · Curl-up: 3 holds of 10 s, short rest, 2 holds, '
+          'short rest, 1 hold\n'
+          '1:10–3:35 · Side bridge: the same on each side\n'
+          '3:35–6:00 · Bird dog: the same on each side\n',
     };
     return PlannedExercise(
       trackKey: 'warmup:big3',
@@ -1734,8 +1736,8 @@ class DecisionEngine {
       rirTarget: Rir.rir4plus,
       isWarmup: true,
       instruction: '$instruction'
-          'Keep the spine neutral and brace lightly; breathe between holds. '
-          'Build over weeks by adding holds, not longer ones.',
+          'Relax for one breath between holds. Keep the spine neutral and '
+          'brace lightly. Build over weeks by adding holds, not longer ones.',
       progressionEligible: false,
     );
   }
