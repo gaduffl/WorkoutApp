@@ -458,13 +458,13 @@ class _UpdateCard extends StatelessWidget {
         context,
         'Downloads new versions by itself and installs them, also while you '
             'use MorningCoach: a $notice-second notice comes first, and you '
-            'can put it off. Never while a lab plan, an advisor answer or a '
-            'sync is running, or something is open.',
+            'can put it off. Never during an unfinished workout, a pending '
+            'save or backup, or while a form or dialog is open.',
         'Lädt neue Versionen selbst und installiert sie, auch während du '
             'MorningCoach nutzt: Vorher kommt eine Ankündigung mit $notice '
             'Sekunden Vorlauf, die du verschieben kannst. Nie während ein '
-            'Laborplan, eine Antwort der Beratung oder eine Synchronisierung '
-            'läuft oder etwas geöffnet ist.',
+            'Training unvollständig ist, Daten gespeichert oder gesichert '
+            'werden oder ein Formular oder Dialog geöffnet ist.',
       );
     }
     final reason = declined

@@ -56,7 +56,7 @@ enum UpdatePhase {
 /// By default nothing is fetched or installed without a tap; the automatic
 /// check only *looks*. Auto-update is the opt-in exception. Installing replaces
 /// the running process, so even then it never installs with work in flight —
-/// mid-entry, or mid lab plan, that would throw the work away — and in front of
+/// mid-entry, or mid workout, that would throw the work away — and in front of
 /// the person only after a countdown they can postpone.
 class UpdateController extends ChangeNotifier {
   UpdateController({

@@ -85,8 +85,8 @@ class UpdateSettings {
   );
 }
 
-/// Device-level, deliberately not per profile and not in the database: which
-/// server a phone updates from says nothing about anyone's health, and a
+/// Device-level, deliberately outside the workout database: which server a
+/// phone updates from says nothing about anyone's training, and a
 /// synced or backed-up copy would point another device at it.
 class UpdateSettingsStore {
   static const _source = 'update_source';
@@ -133,7 +133,7 @@ class UpdateSettingsStore {
 }
 
 /// Access tokens for a private repository or server, in Android encrypted
-/// storage beside the AI keys and outside every export allowlist.
+/// storage outside the workout database and every export allowlist.
 ///
 /// One slot per source kind: a GitHub token must never be sent to a server URL
 /// someone later types into the other field.
