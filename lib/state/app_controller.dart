@@ -115,6 +115,18 @@ class AppController extends ChangeNotifier {
   bool _notificationSyncQueued = false;
   bool get travelModeChanging => _travelModeChangeInFlight;
 
+  int _backupsInFlight = 0;
+
+  /// Replacing the process must wait for startup, saved workout drafts and
+  /// background writes, as well as the forms tracked by the root navigator.
+  bool get updateWorkInFlight =>
+      loading ||
+      workoutDraft != null ||
+      _completionInFlight ||
+      _boulderingWriteInFlight ||
+      _travelModeChangeInFlight ||
+      _backupsInFlight > 0;
+
   LowerBackRecoveryState get lowerBackRecovery =>
       settings.lowerBackRecovery;
 
@@ -738,6 +750,8 @@ class AppController extends ChangeNotifier {
   /// Uploads the full local database to the OneDrive app folder. Throws on
   /// failure (the UI surfaces it); [silent] swallows errors for auto-backup.
   Future<void> backupToOneDrive({bool silent = false}) async {
+    _backupsInFlight++;
+    notifyListeners();
     try {
       final token = await _validOneDriveToken();
       if (token == null) throw Exception('OneDrive is not connected');
@@ -756,6 +770,9 @@ class AppController extends ChangeNotifier {
       oneDriveError = 'Backup failed: $e';
       notifyListeners();
       if (!silent) rethrow;
+    } finally {
+      _backupsInFlight--;
+      notifyListeners();
     }
   }
 
@@ -2731,3 +2748,4 @@ class AppController extends ChangeNotifier {
 
   static const painEngine = PainEngine();
 }
+

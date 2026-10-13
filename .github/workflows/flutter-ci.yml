@@ -20,8 +20,14 @@ jobs:
           flutter-version: '3.35.5'
           channel: 'stable'
       - run: flutter pub get
+      - name: Format update code and show the resolved dependency lock
+        run: |
+          dart format lib/main.dart lib/updates lib/ui/update_section.dart test/updates test/ui/update_section_test.dart
+          git diff -- lib/main.dart lib/updates lib/ui/update_section.dart test/updates test/ui/update_section_test.dart pubspec.lock
       - run: flutter analyze
       - run: flutter test
+      - name: Require committed update formatting and dependency lock
+        run: git diff --exit-code -- lib/main.dart lib/updates lib/ui/update_section.dart test/updates test/ui/update_section_test.dart pubspec.lock
 
   validate-apk:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
@@ -37,7 +43,7 @@ jobs:
       - run: flutter build apk --debug --build-number=${{ github.run_number }}
 
   publish-apk:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     needs: analyze-and-test
     permissions:
@@ -70,8 +76,7 @@ jobs:
           APK: ${{ steps.apk.outputs.name }}
           APP_VERSION: ${{ steps.apk.outputs.version }}
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          tag="debug-${short_sha}"
+          tag="v${APP_VERSION}+${{ github.run_number }}"
           # Create the release without the asset first. Creating it with the
           # APK in one call races the uploads.github.com endpoint, which can
           # 404 for a few seconds until the new release propagates. Idempotent
@@ -79,13 +84,15 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" \
               --target "${GITHUB_SHA}" \
-              --title "MorningCoach v${APP_VERSION} (build ${{ github.run_number }}) · ${short_sha}" \
+              --title "MorningCoach ${APP_VERSION}+${{ github.run_number }}" \
               --notes "Automated debug APK · v${APP_VERSION} build ${{ github.run_number }} · commit ${GITHUB_SHA}." \
-              --prerelease
+              --draft
           fi
           # Upload the asset separately, retrying through the propagation lag.
           for attempt in 1 2 3 4 5; do
             if gh release upload "${tag}" "${APK}" --clobber; then
+              # The updater reads /releases/latest: expose only a complete APK.
+              gh release edit "${tag}" --draft=false --latest
               echo "Uploaded APK on attempt ${attempt}."
               exit 0
             fi
@@ -94,3 +101,4 @@ jobs:
           done
           echo "APK upload failed after ${attempt} attempts." >&2
           exit 1
+

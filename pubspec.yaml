@@ -43,6 +43,14 @@ dependencies:
   crypto: ^3.0.6
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
+  dio: ^5.9.0
+  flutter_secure_storage: ^9.2.4
+  path_provider: ^2.1.5
+  shared_preferences: ^2.5.3
+  intl: ^0.20.2
+
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
@@ -96,3 +104,4 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+

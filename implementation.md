@@ -842,6 +842,22 @@ output, so the review looked at every path around it.
     same travel flag, so a bodyweight split squat no longer shows the home goblet
     squat's load and the goblet squat back home no longer shows travel reps.
 
+## Android self-updates
+
+The SuperHealth updater is adapted to MorningCoach's package and Flutter 3.35.5.
+`lib/updates/` owns release discovery, version-code ordering, verified downloads,
+device-local settings and the install state machine. Kotlin owns Android package
+installation and the notification after replacement. `MorningCoachApp` holds one
+controller and app-wide lifecycle listener; Settings renders the same update card
+and the app builder renders the countdown. Automatic installs wait for saved
+workout drafts, writes/backups and every route or dialog over Home. Automatic
+checking defaults on; auto-install is opt-in, matching SuperHealth.
+
+The release workflow retains debug APK signing continuity and CI run-number build
+codes, but publishes stable `v<name>+<run>` releases after uploading to a draft.
+This makes `/releases/latest` usable by the app without changing existing app
+data or installing a differently signed package. Details: `docs/UPDATES.md`.
+
 ## Session 2026-10-13, later (travel mornings in Back rebuild)
 
 104. **Travel stand-ins are checked but never count toward a stage.** Two good
