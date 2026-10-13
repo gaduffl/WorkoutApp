@@ -62,4 +62,3 @@ class AppVersion implements Comparable<AppVersion> {
   @override
   String toString() => build == null ? name : '$name+$build';
 }
-

@@ -75,4 +75,3 @@ class AvailableUpdate {
   final DateTime? publishedAt;
   final String? assetName;
 }
-

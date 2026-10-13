@@ -96,4 +96,3 @@ void main() {
     expect(await store.lastCheckedAt(), at);
   });
 }
-

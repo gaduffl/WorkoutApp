@@ -100,7 +100,12 @@ Map<String, Object?> githubAsset({
   String url = 'https://api.github.com/repos/o/r/releases/assets/9',
   int size = 4,
   String? digest,
-}) => {'name': name, 'url': url, 'size': size, if (digest != null) 'digest': digest};
+}) => {
+  'name': name,
+  'url': url,
+  'size': size,
+  if (digest != null) 'digest': digest,
+};
 
 class FakeInstaller implements ApkInstaller {
   FakeInstaller({
@@ -205,4 +210,3 @@ Directory tempDir() {
   });
   return dir;
 }
-

@@ -40,4 +40,3 @@ void main() {
     expect(AppVersion.tryParse('0.9.0')!.isNewerThan(installed), isFalse);
   });
 }
-

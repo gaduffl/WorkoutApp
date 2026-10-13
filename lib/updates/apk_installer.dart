@@ -215,4 +215,3 @@ class MethodChannelApkInstaller implements ApkInstaller {
     _events.add(InstallEvent(kind, message is String ? message : null));
   }
 }
-

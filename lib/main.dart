@@ -118,15 +118,19 @@ class _MorningCoachAppState extends State<MorningCoachApp> {
           ),
           useMaterial3: true,
         ),
-        builder: (context, child) => Column(
-          children: [
-            const SafeArea(bottom: false, child: UpdateCountdownBanner()),
-            Expanded(child: child!),
-          ],
-        ),
+        builder: (context, child) {
+          if (context.watch<UpdateController>().installCountdown == null) {
+            return child!;
+          }
+          return Column(
+            children: [
+              const SafeArea(bottom: false, child: UpdateCountdownBanner()),
+              Expanded(child: child!),
+            ],
+          );
+        },
         home: const HomeScreen(),
       ),
     ),
   );
 }
-

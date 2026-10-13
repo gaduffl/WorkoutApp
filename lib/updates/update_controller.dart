@@ -668,4 +668,3 @@ class UpdateController extends ChangeNotifier {
     super.dispose();
   }
 }
-

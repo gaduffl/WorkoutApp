@@ -100,7 +100,8 @@ class GitHubReleaseSource implements UpdateSource {
     required Dio dio,
     this.token,
     Uri? apiBase,
-  }) : _dio = dio, apiBase = apiBase ?? Uri.parse('https://api.github.com');
+  }) : _dio = dio,
+       apiBase = apiBase ?? Uri.parse('https://api.github.com');
 
   /// `owner/name`.
   final String repository;
@@ -240,4 +241,3 @@ class ManifestUpdateSource implements UpdateSource {
     if (update.downloadUri.host == manifestUri.host) ..._auth,
   };
 }
-

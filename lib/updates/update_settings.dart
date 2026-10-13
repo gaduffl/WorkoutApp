@@ -160,4 +160,3 @@ class UpdateTokenStore {
   Future<void> delete(UpdateSourceKind kind) =>
       _storage.delete(key: _key(kind));
 }
-

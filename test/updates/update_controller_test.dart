@@ -90,7 +90,9 @@ void main() {
   test(
     'the same or an older build is "up to date" and clears stale downloads',
     () async {
-      File('${dir.path}/morningcoach-0.42.0-71.apk').createSync(recursive: true);
+      File(
+        '${dir.path}/morningcoach-0.42.0-71.apk',
+      ).createSync(recursive: true);
       source.update = update(version: '0.42.0+71');
       final controller = build();
       await controller.checkForUpdates();
@@ -803,4 +805,3 @@ class _OfflineAdapter implements HttpClientAdapter {
   @override
   void close({bool force = false}) {}
 }
-

@@ -22,12 +22,12 @@ class UpdateStrings {
   static const english = UpdateStrings._(false);
   static const german = UpdateStrings._(true);
 
-  static UpdateStrings resolve(Locale? locale) =>
-      (locale ?? WidgetsBinding.instance.platformDispatcher.locale)
-              .languageCode ==
-          'de'
-      ? german
-      : english;
+  static UpdateStrings resolve(Locale? locale) {
+    final locales = WidgetsBinding.instance.platformDispatcher.locales;
+    final resolved =
+        locale ?? (locales.isEmpty ? const Locale('en') : locales.first);
+    return resolved.languageCode == 'de' ? german : english;
+  }
 
   static UpdateStrings of(BuildContext context) =>
       resolve(Localizations.localeOf(context));
@@ -915,4 +915,3 @@ class _UpdateSourceDialogState extends State<_UpdateSourceDialog> {
     );
   }
 }
-

@@ -93,7 +93,10 @@ void main() {
     expect(find.text('App updates'), findsOneWidget);
     expect(find.text('Installed: 0.42.0+71'), findsOneWidget);
     expect(
-      find.widgetWithText(OutlinedButton, 'Check for updates'),
+      find.ancestor(
+        of: find.text('Check for updates'),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
+      ),
       findsOneWidget,
     );
     expect(find.text('GitHub · gaduffl/WorkoutApp'), findsOneWidget);
@@ -489,4 +492,3 @@ void main() {
     },
   );
 }
-
