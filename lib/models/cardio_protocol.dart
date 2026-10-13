@@ -22,6 +22,11 @@ class CardioProtocol {
 
   bool get isWalk => modality == CardioModality.walk;
 
+  /// Travel mode's equipment-free walk rather than the ATG-treadmill walk.
+  /// Persisted protocols carry only type, name and modality, so the name
+  /// identifies it.
+  bool get isTravelWalk => isWalk && name == zone2TravelWalk.name;
+
   static const norwegian4x4 = CardioProtocol(
     type: CardioProtocolType.norwegian4x4,
     name: 'CAROL 4×4 Norwegian Zone 5 Intervals',
@@ -36,6 +41,15 @@ class CardioProtocol {
   static const zone2Walk = CardioProtocol(
     type: CardioProtocolType.zone2Base,
     name: 'Zone 2 · uphill walk (ATG treadmill)',
+    modality: CardioModality.walk,
+  );
+
+  /// Zone 2 in travel mode, which assumes neither the bike nor the ATG
+  /// treadmill: a brisk walk wherever you are, with the same dose and
+  /// aerobic credit.
+  static const zone2TravelWalk = CardioProtocol(
+    type: CardioProtocolType.zone2Base,
+    name: 'Zone 2 · brisk walk (no equipment)',
     modality: CardioModality.walk,
   );
   static const rehit = CardioProtocol(

@@ -100,8 +100,12 @@ String _zone2ContinuousInstruction(CardioPrescription prescription) {
   final rpeRange = rpeMin != null && rpeMax != null
       ? ' (RPE ${_number(rpeMin)}–${_number(rpeMax)})'
       : '';
-  final walk = prescription.protocol.isWalk;
-  final adjust = walk ? 'incline/pace' : 'resistance/cadence';
+  final protocol = prescription.protocol;
+  final adjust = switch (protocol) {
+    CardioProtocol(isTravelWalk: true) => 'pace/incline',
+    CardioProtocol(isWalk: true) => 'incline/pace',
+    _ => 'resistance/cadence',
+  };
 
   final targetCue = switch ((hrMin, hrMax, rpeMin, rpeMax)) {
     (final min?, final max?, _, _) =>
@@ -115,7 +119,12 @@ String _zone2ContinuousInstruction(CardioPrescription prescription) {
     _ =>
       'Adjust $adjust as needed to keep the effort comfortably sustainable.',
   };
-  return walk
+  if (protocol.isTravelWalk) {
+    return 'Walk briskly and continuously in Zone 2 wherever you are: '
+        'outdoors and uphill where you can; stairs or any treadmill work '
+        'too. Tall posture, arms swinging.\n$targetCue';
+  }
+  return protocol.isWalk
       ? 'Walk uphill, forward, continuously in Zone 2 on the ATG treadmill '
           '(or hills outdoors): tall posture, arms swinging.\n$targetCue'
       : 'Ride continuously in Zone 2.\n$targetCue';
@@ -198,9 +207,13 @@ class CardioPrescriptionCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: Icon(Icons.directions_bike),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                prescription.protocol.isWalk
+                    ? Icons.directions_walk
+                    : Icons.directions_bike,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

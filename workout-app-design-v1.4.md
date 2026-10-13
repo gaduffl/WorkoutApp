@@ -352,7 +352,11 @@ budgeter may trim it in a short window), joined by the hamstring curl when no lo
 deadlift is due, then the squat, then a loaded deadlift last. Loaded deadlifts run at
 most twice per rolling seven days and at least 48 hours apart. On other days, with any
 lower-back or hip flag, or in travel mode, stage-1 work fills the hinge slot; the same
-flags and travel put the squat on the split squat (bodyweight in travel mode). A mild
+flags and travel put the squat on the split squat (bodyweight in travel mode). In
+travel mode the stage-1 work is a bodyweight floor glute bridge and split squat (the
+sliding curl needs sliders and drops out), the swapped row, press and plank use their
+travel steps, each keeps a short rebuild form cue, and the explanation and Today card
+name only these stand-ins. A mild
 flag eases the rebuild tracks through the ordinary pain table (one load step); sharp
 pain removes the staged work of every pattern it affects, so sharp lower-back pain
 removes all rebuild hinge and squat work. Stage-1 hinge tracks credit only glutes and
@@ -508,7 +512,7 @@ no planner-duration estimate for accuracy comparisons.
 
 - **No check-in by cutoff (e.g., 10:00):** push "No plan yet — tap for a 20-min default"; engine assumes YELLOW + 20 min.
 - **Two slots in one day** (home office): after a completed morning session, the Today screen exposes "add lunch REHIT" if no intensity session in 48 h.
-- **Travel / no equipment:** equipment toggle → ladders resolve to bodyweight steps (push-up, split squat, SL-RDL bodyweight, hanging where possible).
+- **Travel / no equipment:** one switch on Home, Today or in Settings (each applies at once and refreshes an unlocked plan) → every strength slot resolves to a bodyweight or self-resisted step (push-up, split squat, SL-RDL bodyweight, pike push-up, prone pulls, plank/hollow hold, chair dip); a slot whose exercise has no such step is dropped, never prescribed with dumbbells. Zone 2 becomes a brisk walk wherever you are, with the same dose and aerobic credit (outdoors and uphill where possible; stairs or any treadmill work too); CAROL 4×4/REHIT, finishers and nudges stay closed. A plan or unfinished draft made before travel mode was switched on cannot be started while it is on. Load progression pauses; completed work still counts for recency and stimulus, and the logger's "last time" compares travel work only with earlier travel work.
 - **Long illness gap:** first check-in after ≥ 10 idle days routes through detraining adjustment globally and forces week 1 = all-YELLOW modulation.
 - **Conflicting signals** (subjective 5, HRV z −2): trend rule + upward-override block resolves to YELLOW; AI text explains the "engine vs. feel" mismatch transparently.
 - **Day boundary [v1.1]:** all "yesterday/today" logic uses the device's local calendar date at check-in time; sessions logged before 03:00 count toward the previous date (late-evening training). DST shifts follow the OS clock — no custom handling.

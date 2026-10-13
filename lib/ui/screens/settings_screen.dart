@@ -98,7 +98,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       anthropicApiKey: apiKeyText.isEmpty ? null : apiKeyText,
       clearAnthropicApiKey: apiKeyText.isEmpty,
       aiExplanationsEnabled: _settings.aiExplanationsEnabled,
-      travelMode: _settings.travelMode,
       classicHeatmap: _settings.classicHeatmap,
       notificationsEnabled: _settings.notificationsEnabled,
       secondRehitNudgeEnabled: _settings.secondRehitNudgeEnabled,
@@ -107,6 +106,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     await controller.saveSettings(newSettings);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved')));
+  }
+
+  Future<void> _setTravelMode(bool enabled) async {
+    final controller = context.read<AppController>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await controller.setTravelMode(enabled);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled ? 'Travel mode enabled' : 'Travel mode disabled',
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not change travel mode: $error')),
+      );
+    }
+    // Keep any unsaved edits elsewhere on this screen.
+    if (mounted) {
+      setState(
+        () => _settings = _settings.copyWith(
+          travelMode: controller.settings.travelMode,
+        ),
+      );
+    }
   }
 
   /// The reminder's time is learned from history rather than configured, so
@@ -318,15 +344,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _settings = _settings.copyWith(equipment: _settings.equipment.copyWith(unevenPairModeEnabled: v));
               }),
             ),
+            // Applies at once, like the other plan-changing switches: a
+            // travel switch waiting for Save kept today's dumbbell plan.
             SwitchListTile(
+              key: const Key('settings-travel-mode'),
               secondary: const Icon(Icons.luggage_outlined),
               title: const Text('Travel mode (no equipment)'),
-              subtitle: const Text('Uses bodyweight and self-resisted variants. Load progression pauses, '
-                  'but completed work still contributes to your stimulus history.'),
-              value: _settings.travelMode,
-              onChanged: (v) => setState(() {
-                _settings = _settings.copyWith(travelMode: v);
-              }),
+              subtitle: const Text(
+                'Bodyweight and self-resisted variants with no dumbbells, '
+                'bike or treadmill; Zone 2 becomes a brisk walk. Load '
+                'progression pauses; completed work still counts.',
+              ),
+              value: controller.settings.travelMode,
+              onChanged: controller.travelModeChanging ? null : _setTravelMode,
             ),
             const Divider(height: 32),
             Text('History', style: Theme.of(context).textTheme.titleMedium),

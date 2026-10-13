@@ -801,3 +801,43 @@ superseded.
     with, not substituted for, the rebuild instruction, so the box-depth and
     neutral-back cues stay visible on an eased lift. The Big 3 entry now says to skip
     any hold that brings on back pain.
+
+## Session 2026-10-13 (travel mode review)
+
+A travel-mode plan was reported to propose dumbbell exercises. A sweep of ~99k
+travel decisions (sessions, windows, readiness, every pain flag, ladder extremes,
+deadlift alternatives, Back rebuild stages) found no loaded entry in the engine
+output, so the review looked at every path around it.
+
+98. **The Settings switch applies at once.** It changed only a local draft that the
+    "Save settings" button at the bottom persisted, unlike the Home and Today luggage
+    buttons and the other plan-changing switches, so leaving Settings kept the
+    dumbbell plan. It now calls `setTravelMode`, which refreshes an unlocked plan,
+    and Save no longer writes the draft's travel flag back.
+99. **Travel resolution fails closed.** Assembly built the equipment prescription and
+    swapped in a travel step only when one existed, so an unmapped (for example
+    pain-substituted) exercise would have kept its dumbbells. The travel step is now
+    resolved for the exercise actually prescribed, before any substitute state is
+    created, and a slot without one is dropped, as the pain-feasibility projection
+    already assumed. The sweep is a regression test: no load, dumbbell count,
+    non-travel work entry or equipment wording in any travel strength plan.
+100. **Stale equipment plans are unusable while travelling.** `isPlanUsableNow`
+    refuses a plan with non-travel work, and an S6 ride, while travel mode is on (a
+    failed refresh or an unfinished draft); `logCardioSession` refuses a planned
+    ride. Travel plans stay usable at home, since bodyweight work needs no equipment.
+101. **Travel Zone 2 is a walk anywhere.** S6 prescribes
+    `CardioProtocol.zone2TravelWalk`: the zone2Base type and walk modality, so dose,
+    aerobic credit and validation are unchanged and it never counts toward the bike
+    return; it is recognised by its persisted name. Travel stays out of
+    `CyclingAccess` on purpose, because folding it in would report REHIT closures as
+    contraindicating pain and give rides the bike-return error. Retrospective ride
+    logging from Home is unchanged.
+102. **Back rebuild explains its travel stand-ins.** In travel mode the rebuild fires
+    `BACK_REBUILD_TRAVEL` instead of the load-minimized, spacing and stage keys, whose
+    text named DB deadlifts, hamstring curls (dropped without sliders), chest-supported
+    rows and seated presses; the Today card matches. Travel stand-ins of rebuild
+    tracks keep a short form cue, as rebuild cues survive pain notes at home (#97).
+    The knee-pain S4 prep says to skip backward walking, not the treadmill.
+103. **The logger compares like with like.** "Last time" reads only sessions with the
+    same travel flag, so a bodyweight split squat no longer shows the home goblet
+    squat's load and the goblet squat back home no longer shows travel reps.

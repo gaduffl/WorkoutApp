@@ -11,6 +11,7 @@ import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
+import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/pain.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -446,6 +447,58 @@ void main() {
     expect(find.text('Norwegian 4x4 (CAROL)'), findsNothing);
     expect(find.text('REHIT'), findsNothing);
     expect(find.text('Upper Strength'), findsOneWidget);
+  });
+
+  testWidgets('the Back rebuild card names the travel stand-ins',
+      (tester) async {
+    final now = DateTime.now();
+    final controller = _EligibilityController(
+      RehitEligibilityResult(
+        closedReasons: const [RehitClosedReason.rehitUnavailableDueToTravel],
+        observedAt: now,
+        suggestedNudgeTime: null,
+      ),
+      loggedToday: false,
+    )..settings = const UserSettings(
+        travelMode: true,
+        lowerBackRecovery: LowerBackRecoveryState(active: true),
+      );
+    const travelPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower Strength',
+      tier: SessionTier.full,
+      exercises: [],
+      estimatedDurationMin: 35,
+      travelMode: true,
+      lowerBackRecoveryMode: true,
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: controller,
+        child: MaterialApp(
+          home: TodayScreen(trace: trace(now, sessionPlan: travelPlan)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final card = find.byKey(const Key('today-lower-back-recovery'));
+    expect(card, findsOneWidget);
+    expect(
+      find.descendant(
+        of: card,
+        matching: find.textContaining('bodyweight floor glute bridges'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: card,
+        matching: find.textContaining('chest-supported'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('current travel settings hide and disable a restored S3 primary',

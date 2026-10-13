@@ -755,6 +755,7 @@ class _LoggerScreenState extends State<LoggerScreen>
         : controller?.lastPerformanceSummaryFor(
             e.trackKey,
             before: _sessionStartedAt,
+            travel: e.isTravel,
           );
 
     return Scaffold(

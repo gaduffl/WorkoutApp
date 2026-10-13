@@ -159,5 +159,20 @@ void main() {
     final legacy = cardioProtocolToJson(CardioProtocol.zone2Base)
       ..remove('modality');
     expect(cardioProtocolFromJson(legacy).modality, CardioModality.bike);
+
+    final travel = cardioPrescriptionFromJson(
+      cardioPrescriptionToJson(
+        const CardioEngine().prescriptionFor(
+          sessionId: SessionTypeId.s6,
+          durationMinutes: 45,
+          heartRateMaxBpm: 190,
+          travel: true,
+        ),
+      ),
+    );
+    expect(travel.protocol.isTravelWalk, isTrue);
+    expect(travel.protocol.isWalk, isTrue);
+    expect(travel.protocol.type, CardioProtocolType.zone2Base);
+    expect(restored.protocol.isTravelWalk, isFalse);
   });
 }
