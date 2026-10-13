@@ -10,6 +10,7 @@ import '../../models/oura_connection.dart';
 import '../../models/user_settings.dart';
 import '../../state/app_controller.dart';
 import '../widgets/progression_help_dialog.dart';
+import '../update_section.dart';
 import 'insights_screen.dart' show formatMinuteOfDay;
 
 String _editableHrMax(double? value) {
@@ -328,6 +329,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const AppUpdateSection(),
+            const SizedBox(height: 16),
             Text('Equipment', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._settings.equipment.blocks.map(
@@ -999,3 +1002,4 @@ class _OuraStatusChip extends StatelessWidget {
     );
   }
 }
+

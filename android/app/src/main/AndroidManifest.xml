@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Exercise demonstrations are streamed from the official ExerciseDB CDN. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Self-updates use Android's package installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
     <!-- §3.1 morning notification + §12 cutoff nudge -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -66,6 +69,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <receiver android:name=".InstallStatusReceiver" android:exported="false" />
+        <receiver android:name=".UpdatedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -79,3 +88,4 @@
         </intent>
     </queries>
 </manifest>
+
