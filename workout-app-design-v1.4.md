@@ -527,3 +527,15 @@ no planner-duration estimate for accuracy comparisons.
 
 ### Testing notes
 The engine must be pure-function testable: `(CheckIn, RecoverySnapshot, History, States) → (Plan, DecisionTrace)`. Ship with a scenario test suite including at minimum: the worked example in §5, floor-pressure day, RED-day swap, dumbbell-cap ladder jump, deload trigger, detraining re-entry, and the illness guard. **[v1.1 additions]:** score tie-break (two candidates at equal score), floor deficit=1 aging-out horizon firing vs. not firing, all-feasible-candidates-leg-heavy escape hatch, state-machine middle zone (must NOT progress), missing-HRV renormalization (must not bias GREEN), pain-freeze + detraining precedence, and compression×readiness stacking (assert exact set counts for 20-min YELLOW). **[v1.2 additions]:** pair-family switch at 48→50, increment guard firing on 30→40 press (+33%), uneven-pair set expansion (55–95 present only when enabled), and the concrete rounding assertions from §2.6.4.
+
+## App updates on Android
+
+Settings offers App updates using the same mechanism as SuperHealth. By default
+the app checks for a newer WorkoutApp release at startup/resume, no more than
+hourly. Auto-update is optional: Android may install a verified newer build when
+there is no unfinished workout, pending write/backup, form or dialog. A foreground
+update is announced with a ten-second countdown and a Later action. Devices that
+require Android confirmation retain the manual install button. App data, workout
+history and APK signing continuity are preserved. Update credentials and source
+settings are device-local and excluded from workout backups.
+

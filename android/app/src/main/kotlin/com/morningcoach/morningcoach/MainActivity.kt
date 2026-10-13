@@ -6,8 +6,11 @@ import io.flutter.plugin.common.MethodChannel
 import android.view.WindowManager
 
 class MainActivity : FlutterActivity() {
+    private var updater: ApkUpdater? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        updater = ApkUpdater(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "morningcoach/screen_awake"
@@ -25,4 +28,27 @@ class MainActivity : FlutterActivity() {
             result.success(null)
         }
     }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        updater?.dispose()
+        updater = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        visible = true
+        UpdatedReceiver.dismiss(this)
+    }
+
+    override fun onPause() {
+        visible = false
+        super.onPause()
+    }
+
+    companion object {
+        @Volatile
+        var visible = false
+    }
 }
+

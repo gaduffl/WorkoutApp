@@ -65,6 +65,12 @@ safety rules, validation, or delivery workflow changes.
   draft generated without travel mode cannot be started while it is on.
 - Prefer existing models, repositories, and engines over parallel state or duplicate
   rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
+- Android self-updates live in `lib/updates/` and the matching Kotlin package.
+  Keep the Dart and Kotlin method-channel names aligned. Startup/resume checks
+  default on; unattended installation is opt-in and must wait for saved workout
+  drafts, background writes and routes/dialogs over Home. Foreground installation
+  requires the countdown with Later. Update settings and encrypted tokens are
+  device-local and must never enter workout backups. See `docs/UPDATES.md`.
 
 ## Medical and pain-safety invariants
 
@@ -195,3 +201,7 @@ safety rules, validation, or delivery workflow changes.
   dispatch), never from the pull-request `closed` event; one merge must produce one
   release/build identity.
 - Verify the merged `main` workflow and its APK release asset before reporting success.
+- The updater reads GitHub's latest stable release. Publish parseable
+  `v<versionName>+<run_number>` tags only after the APK upload completes, retaining
+  the existing pinned signing key and monotonically increasing Android build code.
+
