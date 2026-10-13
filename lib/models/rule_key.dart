@@ -38,6 +38,7 @@ enum RuleKey {
   lowerBackRecoveryLoadMinimized,
   lowerBackRecoverySpacing,
   lowerBackRecoveryReentry,
+  backRebuildTravel,
   painSubMild,
   painSubSharp,
   painFreeze,
@@ -139,6 +140,8 @@ extension RuleKeyCode on RuleKey {
         return 'LOWER_BACK_RECOVERY_SPACING';
       case RuleKey.lowerBackRecoveryReentry:
         return 'LOWER_BACK_RECOVERY_REENTRY';
+      case RuleKey.backRebuildTravel:
+        return 'BACK_REBUILD_TRAVEL';
       case RuleKey.painSubMild:
         return 'PAIN_SUB_${p}_MILD';
       case RuleKey.painSubSharp:

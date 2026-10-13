@@ -217,6 +217,38 @@ void main() {
     expect(find.textContaining('Warm-up'), findsNothing);
   });
 
+  testWidgets('travel Zone 2 card describes a walk without equipment',
+      (tester) async {
+    final prescription = cardio
+        .prescriptionFor(
+          sessionId: SessionTypeId.s6,
+          durationMinutes: 35,
+          heartRateMaxBpm: 180,
+        )
+        .withProtocol(CardioProtocol.zone2TravelWalk);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CardioPrescriptionCard(prescription: prescription),
+        ),
+      ),
+    );
+
+    expect(find.text(CardioProtocol.zone2TravelWalk.name), findsOneWidget);
+    expect(
+      find.text(
+        '0:00–35:00 · Walk briskly and continuously in Zone 2 wherever you '
+        'are: outdoors and uphill where you can; stairs or any treadmill '
+        'work too. Tall posture, arms swinging.\nStart near 117 bpm; adjust '
+        'pace/incline to stay at 117–135 bpm (RPE 3–4).',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ATG'), findsNothing);
+    expect(find.byIcon(Icons.directions_bike), findsNothing);
+    expect(find.byIcon(Icons.directions_walk), findsOneWidget);
+  });
+
   test('Today labels non-target S6 as recovery rather than queue work', () {
     const candidate = ScoredCandidate(
       sessionId: SessionTypeId.s6,

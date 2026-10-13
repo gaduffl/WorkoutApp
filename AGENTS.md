@@ -56,6 +56,13 @@ safety rules, validation, or delivery workflow changes.
   for the 20/35/60-minute windows, with or without Back rebuild. On rest and
   cardio-only days Home offers the same routine plus an easy uphill walk with one
   Done tap; it never completes, replaces or changes the daily plan.
+- Travel mode means no equipment anywhere. Every strength work entry is a bodyweight
+  or self-resisted travel step, resolved for the exercise actually prescribed (pain
+  substitutes included); a slot without one is dropped, never emitted with its
+  dumbbell prescription. Zone 2 is a brisk walk with the normal dose and aerobic
+  credit, CAROL presets stay closed, and travel copy never names stage lifts or
+  equipment swaps. The switch applies immediately wherever it appears, and a plan or
+  draft generated without travel mode cannot be started while it is on.
 - Prefer existing models, repositories, and engines over parallel state or duplicate
   rule paths. Avoid new dependencies unless they materially reduce risk or complexity.
 
@@ -156,6 +163,9 @@ safety rules, validation, or delivery workflow changes.
 - Run `dart format`, `flutter analyze`, and the complete `flutter test` suite. When the
   local runtime lacks Flutter, GitHub Actions is the authoritative validation and every
   failure must be fixed before merge.
+- Travel regressions must sweep sessions, the 20/35/60 windows, readiness, pain flags,
+  ladder extremes, deadlift alternatives and Back rebuild stages for equipment-free
+  output, and cover the travel Zone 2 walk and the stale-plan refusal.
 - Bouldering regressions must cover same-day replacement, date/duration validation,
   serialization and backup inclusion, the capped duration/effort mapping, muscle-map
   history, no non-pull/cardio credit, and plan timing: yesterday updates an unlocked

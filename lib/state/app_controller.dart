@@ -188,7 +188,14 @@ class AppController extends ChangeNotifier {
     }
     if (plan.sessionId == SessionTypeId.s6 &&
         plan.cardioPrescription?.protocol.isWalk != true &&
-        !cyclingAccess.zone2Ride) {
+        (!cyclingAccess.zone2Ride || settings.travelMode)) {
+      return false;
+    }
+    // Travel mode means no equipment. A plan made before it was switched on
+    // (a failed refresh or an unfinished draft) must not bring dumbbell
+    // work back; bodyweight travel work stays usable at home.
+    if (settings.travelMode &&
+        plan.exercises.any((e) => !e.isWarmup && !e.isTravel)) {
       return false;
     }
     if (settings.deadliftAlternative &&
@@ -283,11 +290,18 @@ class AppController extends ChangeNotifier {
       _recentLogs.where((l) => _isSameDate(l.date, today())).toList();
 
   /// Concise, read-only logger context from the most recent cached exposure.
-  /// It never feeds recommendation or progression logic.
-  String? lastPerformanceSummaryFor(String trackKey, {DateTime? before}) {
+  /// It never feeds recommendation or progression logic. [travel] keeps it
+  /// within the same equipment context: travel work shares its track with
+  /// the dumbbell exercise, but neither says anything about the other.
+  String? lastPerformanceSummaryFor(
+    String trackKey, {
+    DateTime? before,
+    bool travel = false,
+  }) {
     final cutoff = before ?? DateTime.now();
     final matching = _scheduleLogs
         .where((log) => log.completedAt.isBefore(cutoff))
+        .where((log) => log.travelMode == travel)
         .where((log) => log.setLogs.any(
               (set) => !set.isWarmup && set.trackKey == trackKey,
             ))
@@ -2471,6 +2485,11 @@ class AppController extends ChangeNotifier {
     if (id == SessionTypeId.s6 && !walk && !cyclingAccess.zone2Ride) {
       throw StateError(
         'Zone 2 rides are not open yet: stationary cycling is paused or still returning in steps.',
+      );
+    }
+    if (id == SessionTypeId.s6 && !walk && settings.travelMode) {
+      throw StateError(
+        'Travel mode plans Zone 2 as a walk. Regenerate the plan, or log a ride you already did from Home.',
       );
     }
     if ((id == SessionTypeId.s3 || id == SessionTypeId.s7) &&

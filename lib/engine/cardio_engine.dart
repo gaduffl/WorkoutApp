@@ -43,13 +43,14 @@ class CardioEngine {
   }
 
   /// [walk] turns an S6 Zone 2 dose into an uphill walk on the ATG treadmill
-  /// (same dose, credit and heart-rate targets). Interval presets are always
-  /// ridden.
+  /// and [travel] into a brisk walk without equipment (same dose, credit and
+  /// heart-rate targets either way). Interval presets are always ridden.
   CardioPrescription prescriptionFor({
     required SessionTypeId sessionId,
     required int durationMinutes,
     required double heartRateMaxBpm,
     bool walk = false,
+    bool travel = false,
   }) {
     if (durationMinutes <= 0) {
       throw ArgumentError.value(
@@ -80,8 +81,11 @@ class CardioEngine {
           targetRpeMax: 9,
         ),
       SessionTypeId.s6 => CardioPrescription(
-          protocol:
-              walk ? CardioProtocol.zone2Walk : CardioProtocol.zone2Base,
+          protocol: travel
+              ? CardioProtocol.zone2TravelWalk
+              : walk
+                  ? CardioProtocol.zone2Walk
+                  : CardioProtocol.zone2Base,
           plannedWorkIntervals: 1,
           plannedWorkSeconds: durationMinutes * 60,
           plannedRecoveryIntervals: 0,

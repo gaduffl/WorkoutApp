@@ -137,6 +137,10 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
       return lang == AppLanguage.de
           ? 'Back rebuild Stufe ${p['stage'] ?? ''}: ${p['exercise'] ?? 'Kreuzheben'} mit gedeckelter Last, als letzte Übung.'
           : 'Back rebuild stage ${p['stage'] ?? ''}: ${p['exercise'] ?? 'the deadlift'} at a capped load, last in the session.';
+    case RuleKey.backRebuildTravel:
+      return lang == AppLanguage.de
+          ? 'Back rebuild im Reisemodus: Glute Bridges am Boden und Split Squats mit Körpergewicht ersetzen die gestufte Hüftbeuge und Kniebeuge; die belasteten Übungen warten, bis der Reisemodus endet.'
+          : 'Back rebuild in travel mode: bodyweight floor glute bridges and split squats stand in for the staged hinge and squat, and the loaded lifts wait until travel mode ends.';
     case RuleKey.painSubMild:
       return lang == AppLanguage.de
           ? '${pat('pattern')}: leichter Schmerz - Last reduziert und Bewegungsradius angepasst.'

@@ -86,6 +86,8 @@ class AiExplainer {
         return 'the rebuild deadlift is not due today (48-hour spacing, twice-a-week cap, a back or hip flag, or travel), so bridges and hamstring curls fill the slot';
       case RuleKey.lowerBackRecoveryReentry:
         return 'Back rebuild stage deadlift at a capped fraction of the old load, placed last in the session';
+      case RuleKey.backRebuildTravel:
+        return 'Back rebuild continues in no-equipment travel mode: bodyweight floor glute bridges and split squats stand in for the staged hinge and squat, and its loaded lifts wait until travel mode ends';
       case RuleKey.painSubMild:
         return 'mild pain flagged on this pattern, load/ROM eased back';
       case RuleKey.painSubSharp:

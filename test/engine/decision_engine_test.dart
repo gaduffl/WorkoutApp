@@ -716,6 +716,67 @@ void main() {
     );
   });
 
+  test('Back rebuild in travel mode explains only its bodyweight stand-ins',
+      () {
+    final equipmentWords = RegExp(
+      r'\b(DB|dumbbells?|blocks?|box)\b|hamstring curl|chest-supported|seated press',
+      caseSensitive: false,
+    );
+    for (final stage in BackRebuildStage.values) {
+      for (final sessionId in const [SessionTypeId.s1, SessionTypeId.s2]) {
+        final output = plannedFor(
+          sessionId,
+          settings: rebuildSettings(stage: stage).copyWith(travelMode: true),
+        );
+        final reason = '${stage.name} ${sessionId.name}';
+        final codes = output.trace.firedRuleCodes;
+        expect(codes, contains('BACK_REBUILD_TRAVEL'), reason: reason);
+        for (final stale in const [
+          'LOWER_BACK_RECOVERY_LOAD_MINIMIZED',
+          'LOWER_BACK_RECOVERY_SPACING',
+          'LOWER_BACK_RECOVERY_ACTIVE',
+          'LOWER_BACK_RECOVERY_REENTRY',
+        ]) {
+          expect(codes, isNot(contains(stale)), reason: reason);
+        }
+        for (final language in AppLanguage.values) {
+          final why = output.trace.firedRules
+              .map((rule) => fallbackText(rule, language))
+              .join(' ');
+          expect(equipmentWords.hasMatch(why), isFalse, reason: '$reason $why');
+        }
+      }
+    }
+
+    // The rebuild's form cues survive on the bodyweight stand-ins.
+    final lower = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings().copyWith(travelMode: true),
+    ).trace.plan!;
+    String instructionFor(SessionPlan plan, String trackKey) => plan.exercises
+        .singleWhere((e) => !e.isWarmup && e.trackKey == trackKey)
+        .instruction!;
+    expect(
+      instructionFor(lower, backRebuildSplitSquat.trackKey),
+      allOf(contains('Travel mode'), contains('lower back neutral')),
+    );
+    expect(
+      instructionFor(lower, alternativeGluteBridge.trackKey),
+      allOf(contains('Travel mode'), contains('without arching')),
+    );
+    final upper = plannedFor(
+      SessionTypeId.s2,
+      settings: rebuildSettings().copyWith(travelMode: true),
+    ).trace.plan!;
+    final row = upper.exercises.singleWhere(
+      (e) =>
+          !e.isWarmup &&
+          e.trackKey == lowerBackRecoveryChestSupportedRow.trackKey,
+    );
+    expect(row.name, 'Prone W-row');
+    expect(row.instruction, contains('chest on the floor'));
+  });
+
   test('optional back extensions join stages 1–2 at the end, unweighted', () {
     // At 35 minutes the budgeter trims this optional accessory first.
     final stageOne = plannedFor(
@@ -1790,6 +1851,150 @@ void main() {
     expect(work.every((e) => e.loadTotal == null), isTrue);
     expect(work.where((e) => e.instruction?.contains('pain-free range') == true), isNotEmpty);
     expect(work.where((e) => e.instruction?.contains('pain-free range') == true).every((e) => e.rirTarget == Rir.rir4plus), isTrue);
+  });
+
+  test('travel plans never carry equipment, whatever the state or flag', () {
+    // Every ladder at its first and its last (hardest) step, so advanced
+    // dumbbell steps and the S5 named accessories are all reachable.
+    Map<String, ExerciseState> ladderStates(bool hardest) => {
+          for (final entry in ladders.entries)
+            if (entry.key != MovementPattern.kneeHealth)
+              entry.key.name: ExerciseState(
+                trackKey: entry.key.name,
+                pattern: entry.key,
+                ladderStepIndex: hardest ? entry.value.steps.length - 1 : 0,
+                currentLoad: 40,
+                lastTrainedDate: today.subtract(const Duration(days: 2)),
+              ),
+          for (final named in s5NamedAccessories)
+            named.trackKey: ExerciseState(
+              trackKey: named.trackKey,
+              pattern: named.pattern,
+              currentLoad: 20,
+              lastTrainedDate: today.subtract(const Duration(days: 2)),
+            ),
+        };
+    final settingsCases = [
+      const UserSettings(travelMode: true),
+      const UserSettings(travelMode: true, deadliftAlternative: true),
+      for (final stage in BackRebuildStage.values)
+        rebuildSettings(stage: stage, extensions: true)
+            .copyWith(travelMode: true),
+    ];
+    final painCases = <List<PainFlag>>[
+      const [],
+      for (final region in BodyRegion.values)
+        for (final severity in PainSeverity.values)
+          [PainFlag(region: region, severity: severity, flaggedDate: today)],
+    ];
+    final equipment = RegExp(
+      r'\b(DB|dumbbells?|PowerBlock|blocks?|bolster|treadmill|bike)\b',
+      caseSensitive: false,
+    );
+    var strengthPlans = 0;
+    for (final sessionId in const [
+      SessionTypeId.s1,
+      SessionTypeId.s2,
+      SessionTypeId.s4,
+      SessionTypeId.s5,
+    ]) {
+      for (final time in const [20, 35, 60]) {
+        for (final subjective in const [1, 3, 5]) {
+          for (final hardest in const [false, true]) {
+            for (final settings in settingsCases) {
+              for (final pain in painCases) {
+                final plan = decisionEngine
+                    .decide(buildInput(
+                      time: time,
+                      subjective: subjective,
+                      pain: pain,
+                      todaySnapshot: RecoverySnapshot(
+                        date: today,
+                        hrvRmssd: 50,
+                        restingHr: 60,
+                        sleepScore: 90,
+                      ),
+                      recoveryHistory: normalHrvHistory(),
+                      sessionLogs: floorSatisfiedLogs(),
+                      exerciseStates: ladderStates(hardest),
+                      settings: settings,
+                      forcedSessionId: sessionId,
+                    ))
+                    .trace
+                    .plan;
+                if (plan == null || plan.cardioPrescription != null) continue;
+                strengthPlans++;
+                final reason = '${sessionId.name} $time min, '
+                    'subjective $subjective, hardest=$hardest, '
+                    'rebuild=${settings.lowerBackRecovery.rebuildStage.name}'
+                    '/${settings.lowerBackRecovery.active}, '
+                    'pain=${pain.map((p) => '${p.region.name}:${p.severity.name}')}';
+                expect(plan.travelMode, isTrue, reason: reason);
+                for (final exercise in plan.exercises) {
+                  final what = '${exercise.trackKey} "${exercise.name}" · $reason';
+                  expect(exercise.loadTotal, isNull, reason: what);
+                  expect(exercise.loadSteps, isNull, reason: what);
+                  expect(exercise.dumbbellCount, isNull, reason: what);
+                  expect(exercise.loadDisplay, isNull, reason: what);
+                  expect(equipment.hasMatch(exercise.name), isFalse, reason: what);
+                  expect(
+                    equipment.hasMatch(exercise.instruction ?? ''),
+                    isFalse,
+                    reason: what,
+                  );
+                  if (!exercise.isWarmup) {
+                    expect(exercise.isTravel, isTrue, reason: what);
+                    expect(exercise.progressionEligible, isFalse, reason: what);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(strengthPlans, greaterThan(1000));
+  });
+
+  test("travel Zone 2 is a brisk walk with the ride's dose and credit", () {
+    SessionPlan zone2(UserSettings settings) => decisionEngine
+        .decide(buildInput(
+          time: 60,
+          subjective: 4,
+          recoveryHistory: normalHrvHistory(),
+          todaySnapshot: RecoverySnapshot(
+            date: today,
+            hrvRmssd: 50,
+            restingHr: 60,
+            sleepScore: 90,
+          ),
+          sessionLogs: floorSatisfiedLogs(),
+          settings: settings,
+          forcedSessionId: SessionTypeId.s6,
+        ))
+        .trace
+        .plan!;
+
+    final ride = zone2(const UserSettings()).cardioPrescription!;
+    expect(ride.protocol.isWalk, isFalse);
+    for (final settings in const [
+      UserSettings(travelMode: true),
+      // The paused bike's ATG-treadmill walk is not available either.
+      UserSettings(travelMode: true, stationaryBikePaused: true),
+    ]) {
+      final plan = zone2(settings);
+      final walk = plan.cardioPrescription!;
+      expect(plan.sessionId, SessionTypeId.s6);
+      expect(plan.travelMode, isTrue);
+      expect(plan.sessionName, 'Zone 2 · brisk walk');
+      expect(walk.protocol.isTravelWalk, isTrue);
+      expect(walk.protocol.type, CardioProtocolType.zone2Base);
+      expect(walk.protocol.name, isNot(contains('treadmill')));
+      expect(walk.plannedDurationSeconds, ride.plannedDurationSeconds);
+      expect(walk.plannedWorkSeconds, ride.plannedWorkSeconds);
+      expect(walk.targetHeartRateMinBpm, ride.targetHeartRateMinBpm);
+      expect(walk.targetHeartRateMaxBpm, ride.targetHeartRateMaxBpm);
+    }
   });
 
   test('§6.6: a detraining-adjusted load is marked to persist on completion', () {

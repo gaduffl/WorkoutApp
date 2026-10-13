@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
+import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/user_settings.dart';
 import 'package:morningcoach/models/lower_back_recovery.dart';
 import 'package:morningcoach/state/app_controller.dart';
@@ -189,6 +190,30 @@ void main() {
     expect(field.controller!.text, '188.5');
   });
 
+  testWidgets('travel switch applies at once, without Save', (tester) async {
+    final controller = await pumpSettings(tester);
+    final toggle = find.byKey(const Key('settings-travel-mode'));
+    await tester.scrollUntilVisible(toggle, 400);
+    await tester.tap(toggle);
+    await tester.pump();
+
+    // Leaving Settings without Save used to keep today's dumbbell plan.
+    expect(controller.travelModeCalls, [true]);
+    expect(controller.settings.travelMode, isTrue);
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+  });
+
+  testWidgets('Save keeps a travel mode changed outside this screen',
+      (tester) async {
+    final controller = await pumpSettings(tester);
+    controller.settings = controller.settings.copyWith(travelMode: true);
+
+    await tapSave(tester);
+
+    expect(controller.saveCalls, 1);
+    expect(controller.settings.travelMode, isTrue);
+  });
+
   testWidgets('classic heatmap toggle is saved', (tester) async {
     final controller = await pumpSettings(tester);
     final toggle = find.byKey(const Key('settings-classic-heatmap'));
@@ -275,11 +300,20 @@ class _RecordingSettingsController extends AppController {
   _RecordingSettingsController() : super(Repository(AppDatabase()));
 
   int saveCalls = 0;
+  final travelModeCalls = <bool>[];
 
   @override
   Future<void> saveSettings(UserSettings newSettings) async {
     saveCalls += 1;
     settings = newSettings;
     notifyListeners();
+  }
+
+  @override
+  Future<DecisionTrace?> setTravelMode(bool enabled) async {
+    travelModeCalls.add(enabled);
+    settings = settings.copyWith(travelMode: enabled);
+    notifyListeners();
+    return todayTrace;
   }
 }

@@ -898,6 +898,77 @@ void main() {
     }
   });
 
+  test('stale equipment plans cannot be started while travel mode is active',
+      () async {
+    final repo = Repository(_MemoryDatabase());
+    final controller = AppController(repo)
+      ..settings = const UserSettings(travelMode: true);
+    final dumbbellPlan = strengthPlan();
+    final ride = cardioPlan(SessionTypeId.s6, 35);
+    final walk = SessionPlan(
+      sessionId: SessionTypeId.s6,
+      sessionName: 'Zone 2 · uphill walk',
+      tier: SessionTier.full,
+      exercises: const [],
+      estimatedDurationMin: 35,
+      cardioPrescription: cardio.prescriptionFor(
+        sessionId: SessionTypeId.s6,
+        durationMinutes: 35,
+        heartRateMaxBpm: 180,
+        walk: true,
+      ),
+    );
+    const travelPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower Strength',
+      tier: SessionTier.full,
+      exercises: [
+        PlannedExercise(
+          trackKey: 'squat',
+          pattern: MovementPattern.squat,
+          name: 'Split squat (bodyweight)',
+          sets: 2,
+          targetRange: (8, 15),
+          rirTarget: Rir.rir2,
+          progressionEligible: false,
+          isTravel: true,
+        ),
+      ],
+      estimatedDurationMin: 20,
+      travelMode: true,
+    );
+    controller.todayTrace = traceFor(DateTime.now(), dumbbellPlan);
+
+    // A plan made before travel mode (a failed refresh or an unfinished
+    // draft) would put dumbbells or a bike back into a hotel room.
+    expect(controller.isPlanUsableNow(dumbbellPlan), isFalse);
+    expect(controller.isPlanUsableNow(ride), isFalse);
+    expect(controller.isPlanUsableNow(walk), isTrue);
+    expect(controller.isPlanUsableNow(travelPlan), isTrue);
+
+    controller.todayTrace = traceFor(DateTime.now(), ride);
+    await expectLater(
+      controller.logCardioSession(
+        SessionTypeId.s6,
+        completion: cardio.completionFromEntry(
+          prescription: ride.cardioPrescription!,
+          completedWorkIntervals: 1,
+          completedDurationMinutes: 35,
+        ),
+        plan: ride,
+      ),
+      throwsStateError,
+    );
+    expect(await repo.loadSessionLogsSince(DateTime(2000)), isEmpty);
+
+    // Back home, equipment plans are usable again and bodyweight travel
+    // work stays harmless.
+    controller.settings = const UserSettings();
+    expect(controller.isPlanUsableNow(dumbbellPlan), isTrue);
+    expect(controller.isPlanUsableNow(ride), isTrue);
+    expect(controller.isPlanUsableNow(travelPlan), isTrue);
+  });
+
   test('stale CAROL plans cannot be logged while travel mode is active',
       () async {
     final db = _MemoryDatabase();
@@ -1102,6 +1173,34 @@ void main() {
     expect(log.countsAs, {FloorCategory.aerobic});
     expect(log.countsTowardQueueAndFloor, isTrue);
     await controller.syncNotifications();
+  });
+
+  test('a travel Zone 2 walk logs with normal aerobic credit', () async {
+    final repo = Repository(_MemoryDatabase());
+    final controller = AppController(repo)
+      ..settings = const UserSettings(travelMode: true);
+    await controller.submitCheckIn(timeMinutes: 60, subjective: 4);
+    final plan = (await controller.swapToSession(SessionTypeId.s6)).plan!;
+    expect(plan.sessionName, 'Zone 2 · brisk walk');
+    expect(plan.cardioPrescription!.protocol.isTravelWalk, isTrue);
+    expect(controller.isPlanUsableNow(plan), isTrue);
+
+    await controller.logCardioSession(
+      SessionTypeId.s6,
+      completion: cardio.completionFromEntry(
+        prescription: plan.cardioPrescription!,
+        completedWorkIntervals: 1,
+        completedDurationMinutes: 60,
+      ),
+      plan: plan,
+    );
+
+    final log = (await repo.loadSessionLogsSince(DateTime(2000))).single;
+    expect(log.travelMode, isTrue);
+    expect(log.cardioCompletion!.protocol.isTravelWalk, isTrue);
+    expect(log.cardioCompletion!.meetsCreditableDose, isTrue);
+    expect(log.countsAs, contains(FloorCategory.aerobic));
+    expect(controller.sessionDoneToday, isTrue);
   });
 
   test('Zone 2 longer than the 60-minute plan persists its full dose',

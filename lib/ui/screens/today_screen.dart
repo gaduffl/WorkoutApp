@@ -510,11 +510,18 @@ class _TodayScreenState extends State<TodayScreen> {
                             '${controller.lowerBackRecovery.rebuildStageNumber}'
                         : 'Back rebuild',
                   ),
-                  subtitle: const Text(
-                    'The squat and deadlift are staged and come last. '
-                    'Bent-over rows, standing presses and L-sits become '
-                    'chest-supported rows, seated presses and planks. Stop '
-                    'for sharp, spreading, numb, or tingling symptoms.',
+                  subtitle: Text(
+                    plan.travelMode
+                        ? 'Travel mode: bodyweight floor glute bridges and '
+                            'split squats stand in for the staged squat and '
+                            'deadlift; the loaded lifts wait until travel '
+                            'mode ends. Stop for sharp, spreading, numb, or '
+                            'tingling symptoms.'
+                        : 'The squat and deadlift are staged and come last. '
+                            'Bent-over rows, standing presses and L-sits '
+                            'become chest-supported rows, seated presses and '
+                            'planks. Stop for sharp, spreading, numb, or '
+                            'tingling symptoms.',
                   ),
                 ),
               ),
@@ -598,7 +605,11 @@ class _TodayScreenState extends State<TodayScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  icon: const Icon(Icons.directions_bike),
+                  icon: Icon(
+                    plan.cardioPrescription?.protocol.isWalk == true
+                        ? Icons.directions_walk
+                        : Icons.directions_bike,
+                  ),
                   onPressed: _loggingCardio
                       ? null
                       : () => _logCardio(

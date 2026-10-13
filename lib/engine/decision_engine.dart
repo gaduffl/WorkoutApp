@@ -784,9 +784,13 @@ class DecisionEngine {
     final backRebuildPlan =
         backRebuild != null && template != null && !template.isCardioOnly;
     if (backRebuildPlan) {
-      fired.add(
-        const FiredRule(RuleKey.lowerBackRecoveryLoadMinimized),
-      );
+      // Travel mode has none of the stage lifts or the equipment-based
+      // swaps, so it gets its own explanation instead of naming them.
+      fired.add(FiredRule(
+        input.settings.travelMode
+            ? RuleKey.backRebuildTravel
+            : RuleKey.lowerBackRecoveryLoadMinimized,
+      ));
     }
 
     if (template != null && !template.isCardioOnly) {
@@ -802,8 +806,11 @@ class DecisionEngine {
         final String prepInstruction;
         if (kneePainActive) {
           prepName = 'Pain-aware general + upper/scapular prep';
+          final backwardWork = input.settings.travelMode
+              ? 'backward walking'
+              : 'backward treadmill';
           prepInstruction =
-              'Within $atgMinutes min: begin with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. Continue with easy pain-free whole-body movement, breathing/bracing, and non-reproducing upper/scapular motion. Skip backward treadmill and every flagged or pain-provoking knee movement.';
+              'Within $atgMinutes min: begin with pain-free jumping jacks; use low-impact step jacks or marching if jumping or impact reproduces symptoms. Continue with easy pain-free whole-body movement, breathing/bracing, and non-reproducing upper/scapular motion. Skip $backwardWork and every flagged or pain-provoking knee movement.';
         } else if (prepPainAware) {
           prepName = 'Pain-aware movement prep';
           prepInstruction =
@@ -883,7 +890,9 @@ class DecisionEngine {
         backRebuild: backRebuild,
         deadliftAlternative: input.settings.deadliftAlternative,
       );
-      if (backRebuild != null && slots.any((slot) => slot.$1 == MovementPattern.hinge)) {
+      if (backRebuild != null &&
+          !input.settings.travelMode &&
+          slots.any((slot) => slot.$1 == MovementPattern.hinge)) {
         final loaded = backRebuild.loadedStep;
         final waiting = backRebuild.waitingLoadedStep;
         if (loaded != null) {
@@ -1025,6 +1034,20 @@ class DecisionEngine {
         if (action.kind == PainActionKind.removePattern) {
           continue;
         }
+
+        // §12: a travel plan never carries equipment. The no-equipment
+        // variant is resolved for the exercise actually prescribed (a pain
+        // substitute included); work without one is dropped, as the
+        // pain-feasibility projection assumes, never emitted with dumbbells.
+        final travelStep = input.settings.travelMode
+            ? _travelStepFor(
+                pattern,
+                action.kind == PainActionKind.substituteNamed
+                    ? action.substitute
+                    : namedExercise,
+              )
+            : null;
+        if (input.settings.travelMode && travelStep == null) continue;
 
         String? substitutedFrom;
         ExerciseState prescriptionState;
@@ -1251,41 +1274,45 @@ class DecisionEngine {
         // §12 travel / no-equipment mode: ladders resolve to bodyweight
         // steps. Named S5 accessories and pain substitutes use explicit
         // equipment-free equivalents while keeping their own state tracks.
-        if (input.settings.travelMode) {
-          final travelNamedExercise =
-              action.kind == PainActionKind.substituteNamed ? action.substitute : namedExercise;
-          final travel = _travelStepFor(pattern, travelNamedExercise);
-          if (travel != null) {
-            final painAdjusted = painReentryPrescription ||
-                action.kind == PainActionKind.reduceLoadOne ||
-                action.kind == PainActionKind.regressLadderAndReduce ||
-                action.kind == PainActionKind.substituteNamed;
-            planned = PlannedExercise(
-              trackKey: planned.trackKey,
-              pattern: pattern,
-              name: travel.name,
-              visualId: travel.visualId,
-              sets: planned.sets,
-              metric: travel.metric,
-              targetRange: painReentryPrescription
-                  ? travel.metric == ExerciseMetric.seconds
-                      ? const (10, 10)
-                      : const (8, 8)
-                  : travel.targetRange ?? const (8, 15),
-              rirTarget: painAdjusted ? Rir.rir4plus : planned.rirTarget,
-              substitutedFrom: planned.substitutedFrom,
-              instruction: painReentryPrescription
+        if (travelStep != null) {
+          final travel = travelStep;
+          final painAdjusted = painReentryPrescription ||
+              action.kind == PainActionKind.reduceLoadOne ||
+              action.kind == PainActionKind.regressLadderAndReduce ||
+              action.kind == PainActionKind.substituteNamed;
+          // Back rebuild's form cue survives the bodyweight stand-in, as it
+          // survives a pain note at home.
+          final rebuildCue = backRebuildTrack || backRebuildSwap
+              ? _backRebuildTravelCue(trackKey)
+              : null;
+          planned = PlannedExercise(
+            trackKey: planned.trackKey,
+            pattern: pattern,
+            name: travel.name,
+            visualId: travel.visualId,
+            sets: planned.sets,
+            metric: travel.metric,
+            targetRange: painReentryPrescription
+                ? travel.metric == ExerciseMetric.seconds
+                    ? const (10, 10)
+                    : const (8, 8)
+                : travel.targetRange ?? const (8, 15),
+            rirTarget: painAdjusted ? Rir.rir4plus : planned.rirTarget,
+            substitutedFrom: planned.substitutedFrom,
+            instruction: [
+              painReentryPrescription
                   ? 'Travel mode - light pain-free check only; the formal loaded re-entry remains pending'
                   : painAdjusted
                       ? 'Travel mode - use an easier variation and pain-free range; stop if pain worsens'
                       : travel.metric == ExerciseMetric.seconds
                           ? 'Travel mode - no equipment; progress with hold duration, control, or position'
                           : 'Travel mode - no equipment; progress with reps, tempo, or range of motion',
-              progressionEligible: false,
-              isTravel: true,
-              isCompoundWork: planned.isCompoundWork,
-            );
-          }
+              if (rebuildCue != null) rebuildCue,
+            ].join('. '),
+            progressionEligible: false,
+            isTravel: true,
+            isCompoundWork: planned.isCompoundWork,
+          );
         }
 
         // Percent-load warm-ups belong only to genuine compound slots. Named
@@ -1471,22 +1498,27 @@ class DecisionEngine {
       fired.add(const FiredRule(RuleKey.travelModeActive));
     }
     // Zone 2 becomes an uphill walk whenever rides are paused or not yet
-    // reopened by the stepped bike return. The dose and credit are unchanged.
-    final zone2Walk =
-        effectiveSessionId == SessionTypeId.s6 && !cyclingAccess.zone2Ride;
+    // reopened by the stepped bike return, and a brisk walk without the
+    // bike or treadmill in travel mode. The dose and credit are unchanged.
+    final isZone2 = effectiveSessionId == SessionTypeId.s6;
+    final zone2TravelWalk = isZone2 && input.settings.travelMode;
+    final zone2Walk = isZone2 && !cyclingAccess.zone2Ride;
     final cardioPrescription = template?.isCardioOnly == true
         ? cardioEngine.prescriptionFor(
             sessionId: effectiveSessionId,
             durationMinutes: estimatedDuration,
             heartRateMaxBpm: input.settings.hrMax,
             walk: zone2Walk,
+            travel: zone2TravelWalk,
           )
         : null;
     final plan = SessionPlan(
       sessionId: effectiveSessionId,
-      sessionName: zone2Walk
-          ? '${planSessionDef.name} · uphill walk'
-          : planSessionDef.name,
+      sessionName: zone2TravelWalk
+          ? '${planSessionDef.name} · brisk walk'
+          : zone2Walk
+              ? '${planSessionDef.name} · uphill walk'
+              : planSessionDef.name,
       tier: tier,
       exercises: exercises,
       estimatedDurationMin: estimatedDuration,
@@ -1769,6 +1801,22 @@ class DecisionEngine {
           'Sit with your back against a backrest and press without arching away from it. Replaces standing presses during Back rebuild; the app keeps what you log.',
         'sub:coreGrip:back_rebuild_plank' =>
           'Forearms and toes, body in one straight line; brace lightly and do not let the hips sag. Replaces the L-sit during Back rebuild.',
+        _ => null,
+      };
+
+  /// Back rebuild's form cues for the bodyweight stand-ins travel mode uses
+  /// for its tracks (the home cues name dumbbells, blocks or a bolster).
+  String? _backRebuildTravelCue(String trackKey) => switch (trackKey) {
+        'sub:hinge:alternative_glute_bridge' =>
+          'Back rebuild: squeeze the glutes at the top without arching the lower back. Stop if symptoms worsen or spread.',
+        'sub:squat:back_rebuild_split_squat' =>
+          'Back rebuild: torso tall and lower back neutral as the back knee lowers. Stop if symptoms worsen or spread.',
+        'sub:pullHorizontal:lower_back_chest_supported_row' =>
+          'Back rebuild: keep your chest on the floor and lift only the arms.',
+        'sub:pushVertical:back_rebuild_seated_press' =>
+          'Back rebuild: hips high and trunk braced; press without arching the lower back.',
+        'sub:coreGrip:back_rebuild_plank' =>
+          'Back rebuild: body in one straight line; do not let the hips sag.',
         _ => null,
       };
 

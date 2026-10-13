@@ -5,9 +5,11 @@ import 'package:morningcoach/engine/cardio_engine.dart';
 import 'package:morningcoach/models/bouldering_log.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/floor_category.dart';
+import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/recovery_snapshot.dart';
 import 'package:morningcoach/models/session_log.dart';
 import 'package:morningcoach/models/session_type.dart';
+import 'package:morningcoach/models/set_log.dart';
 import 'package:morningcoach/models/training_status.dart';
 import 'package:morningcoach/models/training_targets.dart';
 import 'package:morningcoach/state/app_controller.dart';
@@ -147,5 +149,72 @@ void main() {
       (status) => status.target == AerobicTargetKind.norwegian4x4Preference,
     );
     expect(fourByFour.completedExposures, 0);
+  });
+
+  test('logger "last time" stays within the same equipment context', () {
+    SessionLog squatSession(
+      String id,
+      DateTime at, {
+      required String exercise,
+      required double weight,
+      required int reps,
+      required int sets,
+      bool travelMode = false,
+    }) =>
+        SessionLog(
+          id: id,
+          templateId: SessionTypeId.s1,
+          tier: SessionTier.full,
+          date: DateTime(at.year, at.month, at.day),
+          completedAt: at,
+          setLogs: [
+            for (var set = 0; set < sets; set++)
+              SetLog(
+                trackKey: 'squat',
+                pattern: MovementPattern.squat,
+                exerciseName: exercise,
+                weight: weight,
+                value: reps,
+                rir: Rir.rir2,
+                timestamp: at,
+              ),
+          ],
+          plannedWorkSets: sets,
+          completedWorkSets: sets,
+          durationMinutes: 35,
+          countsAs: const {FloorCategory.strength},
+          travelMode: travelMode,
+        );
+    final home = squatSession(
+      'home',
+      DateTime(2026, 7, 10, 7),
+      exercise: 'Goblet squat',
+      weight: 50,
+      reps: 8,
+      sets: 3,
+    );
+    final travel = squatSession(
+      'travel',
+      DateTime(2026, 7, 12, 7),
+      exercise: 'Split squat (bodyweight)',
+      weight: 0,
+      reps: 12,
+      sets: 2,
+      travelMode: true,
+    );
+    final controller = AppController(_HistoryRepository())
+      ..replaceScheduleLogsForTesting([home, travel]);
+    final before = DateTime(2026, 7, 15);
+
+    // A bodyweight travel set must not show the home dumbbell load, and the
+    // goblet squat back home must not show the travel reps.
+    expect(
+      controller.lastPerformanceSummaryFor('squat', before: before, travel: true),
+      'Last time: 2 × 12 reps',
+    );
+    expect(
+      controller.lastPerformanceSummaryFor('squat', before: before),
+      'Last time: 3 × 8 reps @ 50 lb',
+    );
   });
 }
