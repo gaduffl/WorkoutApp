@@ -106,7 +106,8 @@ safety rules, validation, or delivery workflow changes.
   Any staged hinge or squat work creates the check. There is no same-day question; a
   pain-flagged rebuild set makes the check a setback. Two same-or-better mornings
   advance a stage (in stages 2–3 only mornings after a loaded deadlift count, and both
-  the deadlift and the squat must have reached their caps); a worse morning steps back
+  the deadlift and the squat must have reached their caps; mornings after bodyweight
+  travel stand-ins never count, though they are checked); a worse morning steps back
   one stage, and the stage it leaves resumes both capped lifts one load step lighter
   (never below their floors). Completing a session never advances anything by itself.
 - Finishing stage 3 ends Back rebuild and hands the hinge to the normal ladder at DB

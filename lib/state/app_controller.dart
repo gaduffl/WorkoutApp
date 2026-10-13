@@ -1343,12 +1343,16 @@ class AppController extends ChangeNotifier {
   }
 
   /// What unlocks the next Back rebuild stage, including which staged lift
-  /// has not reached its cap yet.
+  /// has not reached its cap yet. While travelling, stage 1 says that only
+  /// mornings after home sessions count.
   String get backRebuildNextStepLabel {
     final rebuild = lowerBackRecovery;
     final deadlift = _lowerBackRecoveryEngine.loadedStepFor(rebuild);
     if (deadlift == null) {
-      return 'Next: deadlift from blocks and box squats after 2 good mornings';
+      return settings.travelMode
+          ? 'Next: deadlift from blocks and box squats after 2 good mornings '
+              'following home sessions'
+          : 'Next: deadlift from blocks and box squats after 2 good mornings';
     }
     final squat = _lowerBackRecoveryEngine.squatStepFor(rebuild);
     final stageTwo = rebuild.rebuildStage == BackRebuildStage.blockDeadlift;
@@ -2425,6 +2429,15 @@ class AppController extends ChangeNotifier {
       final extension = work.any(
         (setLog) => setLog.trackKey == lowerBackRecoveryTrackKey,
       );
+      // Bodyweight travel stand-ins still get the check (a worse morning
+      // steps back) but never count toward leaving a stage.
+      final travelTracks = {
+        for (final exercise in plan.exercises)
+          if (exercise.isTravel) exercise.trackKey,
+      };
+      final travelOnly = rebuildWork.every(
+        (setLog) => travelTracks.contains(setLog.trackKey),
+      );
       rebuild = _lowerBackRecoveryEngine.recordRebuildSession(
         rebuild,
         sessionDate: day,
@@ -2432,7 +2445,9 @@ class AppController extends ChangeNotifier {
             ? BackRebuildExposure.loaded
             : rebuildWork.isEmpty
                 ? BackRebuildExposure.none
-                : BackRebuildExposure.accessory,
+                : travelOnly
+                    ? BackRebuildExposure.travel
+                    : BackRebuildExposure.accessory,
         extension: extension,
         painFlagged: log.setLogs.any(
           (setLog) =>

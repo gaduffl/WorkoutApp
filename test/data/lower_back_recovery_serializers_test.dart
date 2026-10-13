@@ -88,6 +88,18 @@ void main() {
     expect(restored.bigThreeEnabled, isFalse);
     expect(restored.backRoutineDoneDay, '2026-09-27');
     expect(restored.stationaryBikePaused, isFalse);
+
+    final travel = UserSettings(
+      lowerBackRecovery: settings.lowerBackRecovery.copyWith(
+        pendingRebuildExposure: BackRebuildExposure.travel,
+      ),
+    );
+    expect(
+      userSettingsFromJson(userSettingsToJson(travel))
+          .lowerBackRecovery
+          .pendingRebuildExposure,
+      BackRebuildExposure.travel,
+    );
   });
 
   test('legacy recovery JSON gets safe Back rebuild defaults', () {

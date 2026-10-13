@@ -396,9 +396,12 @@ class LowerBackRecoveryEngine {
           rebuildGoodMornings: 0,
         );
       } else {
-        final counts =
-            state.rebuildStage == BackRebuildStage.bridges ||
-            state.pendingRebuildExposure == BackRebuildExposure.loaded;
+        // Stage 1 counts its own (home) work; stages 2–3 only a loaded
+        // deadlift. Bodyweight travel stand-ins never count.
+        final exposure = state.pendingRebuildExposure;
+        final counts = exposure == BackRebuildExposure.loaded ||
+            (state.rebuildStage == BackRebuildStage.bridges &&
+                exposure == BackRebuildExposure.accessory);
         final goodMornings = state.rebuildGoodMornings + (counts ? 1 : 0);
         final canAdvance =
             goodMornings >= goodMorningsToAdvance &&

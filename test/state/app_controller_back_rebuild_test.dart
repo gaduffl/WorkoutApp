@@ -403,6 +403,51 @@ void main() {
     },
   );
 
+  test('travel stage work opens the check without counting toward stage 2',
+      () async {
+    final travelling = controllerWith(rebuild(goodMornings: 1));
+    travelling.settings = travelling.settings.copyWith(travelMode: true);
+    final plan = planFor(travelling, SessionTypeId.s1);
+    expect(plan.travelMode, isTrue);
+    final rebuildSets = allSets(plan)
+        .where((set) => isBackRebuildTrack(set.trackKey))
+        .toList();
+    expect(rebuildSets, isNotEmpty);
+
+    await travelling.completeSession(
+      plan,
+      allSets(plan),
+      durationMinutes: 20,
+    );
+    final state = travelling.lowerBackRecovery;
+    expect(state.pendingNextMorningSessionDate, day);
+    expect(state.pendingRebuildExposure, BackRebuildExposure.travel);
+    expect(
+      travelling.backRebuildNextStepLabel,
+      'Next: deadlift from blocks and box squats after 2 good mornings '
+      'following home sessions',
+    );
+
+    // The next morning keeps stage 1 and its good-morning count.
+    final answered = controllerWith(
+      rebuild(
+        goodMornings: 1,
+        pendingDate: yesterday,
+        exposure: BackRebuildExposure.travel,
+      ),
+    );
+    await answered.recordLowerBackNextMorningResponse(
+      LowerBackSymptomResponse.better,
+    );
+    expect(answered.lowerBackRecovery.awaitingNextMorningResponse, isFalse);
+    expect(answered.lowerBackRecovery.rebuildStage, BackRebuildStage.bridges);
+    expect(answered.lowerBackRecovery.rebuildGoodMornings, 1);
+    expect(
+      answered.backRebuildNextStepLabel,
+      'Next: deadlift from blocks and box squats after 2 good mornings',
+    );
+  });
+
   test('stale plans with normal squats or back-loading lifts are refused', () {
     final controller = controllerWith(
       rebuild(),

@@ -236,6 +236,55 @@ void main() {
     expect(atStageOne.steppedBackFrom, isNull);
   });
 
+  test('travel stand-ins open the check but never count toward a stage', () {
+    // Bodyweight travel work is checked the next morning, unspaced...
+    final pending = engine.recordRebuildSession(
+      activeState(),
+      sessionDate: today,
+      exposure: BackRebuildExposure.travel,
+      extension: false,
+      painFlagged: false,
+    );
+    expect(pending.awaitingNextMorningResponse, isTrue);
+    expect(pending.pendingRebuildExposure, BackRebuildExposure.travel);
+    expect(pending.recoverySessionDates, isEmpty);
+    // ...and home stage work before the same check outranks it.
+    expect(
+      engine
+          .recordRebuildSession(
+            pending,
+            sessionDate: today,
+            exposure: BackRebuildExposure.accessory,
+            extension: false,
+            painFlagged: false,
+          )
+          .pendingRebuildExposure,
+      BackRebuildExposure.accessory,
+    );
+
+    // A good morning after it never moves stage 1 toward loaded deadlifts.
+    final good = check(
+      activeState(goodMornings: 1),
+      sessionDate: today,
+      exposure: BackRebuildExposure.travel,
+      response: LowerBackSymptomResponse.better,
+    );
+    expect(good.state.awaitingNextMorningResponse, isFalse);
+    expect(good.state.rebuildStage, BackRebuildStage.bridges);
+    expect(good.state.rebuildGoodMornings, 1);
+
+    // A worse morning after it is still a setback.
+    final worse = check(
+      activeState(rebuildStage: BackRebuildStage.blockDeadlift, goodMornings: 1),
+      sessionDate: today,
+      exposure: BackRebuildExposure.travel,
+      response: LowerBackSymptomResponse.worse,
+    );
+    expect(worse.state.rebuildStage, BackRebuildStage.bridges);
+    expect(worse.state.rebuildGoodMornings, 0);
+    expect(worse.steppedBackFrom, BackRebuildStage.blockDeadlift);
+  });
+
   test('pain-flagged rebuild work is a setback whatever the morning says', () {
     final outcome = check(
       activeState(rebuildStage: BackRebuildStage.blockDeadlift),

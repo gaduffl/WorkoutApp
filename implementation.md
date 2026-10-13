@@ -841,3 +841,15 @@ output, so the review looked at every path around it.
 103. **The logger compares like with like.** "Last time" reads only sessions with the
     same travel flag, so a bodyweight split squat no longer shows the home goblet
     squat's load and the goblet squat back home no longer shows travel reps.
+
+## Session 2026-10-13, later (travel mornings in Back rebuild)
+
+104. **Travel stand-ins are checked but never count toward a stage.** Two good
+    mornings after bodyweight travel work used to move stage 1 to loaded block
+    deadlifts with no loaded stage-1 work at all. Stage work done only as travel
+    stand-ins now records `BackRebuildExposure.travel`, ordered between none and
+    accessory so home work before the same check outranks it. It still opens the
+    next-morning check (a worse or pain-flagged morning steps back) but never adds a
+    good morning, in any stage. Exposures are persisted by name, so the new value is
+    backward compatible. While travelling, Home's stage-1 label says only mornings
+    after home sessions count.

@@ -46,8 +46,11 @@ enum BikeReturnStep {
 }
 
 /// Hinge-slot work completed in a rebuild session that awaits its
-/// next-morning check.
-enum BackRebuildExposure { none, accessory, loaded }
+/// next-morning check, ordered by how much it proves. [travel] is stage work
+/// done only as bodyweight travel stand-ins: a worse morning after it still
+/// steps back, but a good one never counts toward leaving a stage. Persisted
+/// by name, so the order may grow.
+enum BackRebuildExposure { none, travel, accessory, loaded }
 
 /// Bike work awaiting its next-morning check, ordered by dose.
 enum BikeExposure { none, easyRide, zone2Ride, fourByFour, rehit }
