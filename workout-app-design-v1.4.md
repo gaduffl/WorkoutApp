@@ -370,7 +370,10 @@ last session — Better, Same or Worse. It is required before planning when due 
 applied before today's plan is built. There is no same-day question; a pain-flagged
 set on rebuild work makes the check a setback. Two same-or-better mornings advance a
 stage (in stages 2–3 only mornings after a loaded deadlift count, and both the
-deadlift and the squat must have reached their stage caps). A worse morning steps
+deadlift and the squat must have reached their stage caps). Bodyweight travel
+stand-ins are checked too, so a worse morning after them still steps back, but a good
+one never counts: stage 1 needs two good mornings after its home work, and Home says
+so while travel mode is on. A worse morning steps
 back one stage and the stage it leaves resumes both capped lifts one load step
 lighter, never below their floors. Completing a session never advances anything by
 itself.

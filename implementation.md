@@ -858,3 +858,14 @@ codes, but publishes stable `v<name>+<run>` releases after uploading to a draft.
 This makes `/releases/latest` usable by the app without changing existing app
 data or installing a differently signed package. Details: `docs/UPDATES.md`.
 
+## Session 2026-10-13, later (travel mornings in Back rebuild)
+
+104. **Travel stand-ins are checked but never count toward a stage.** Two good
+    mornings after bodyweight travel work used to move stage 1 to loaded block
+    deadlifts with no loaded stage-1 work at all. Stage work done only as travel
+    stand-ins now records `BackRebuildExposure.travel`, ordered between none and
+    accessory so home work before the same check outranks it. It still opens the
+    next-morning check (a worse or pain-flagged morning steps back) but never adds a
+    good morning, in any stage. Exposures are persisted by name, so the new value is
+    backward compatible. While travelling, Home's stage-1 label says only mornings
+    after home sessions count.
