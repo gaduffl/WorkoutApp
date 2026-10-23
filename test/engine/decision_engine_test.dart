@@ -6,6 +6,7 @@ import 'package:morningcoach/engine/fallback_templates.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
+import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
@@ -439,9 +440,11 @@ void main() {
   });
 
   test('stage 2 prescribes a capped block deadlift last in the session', () {
+    // The couch stretches' minutes would trim the lead-in bridge at 35.
     final output = plannedFor(
       SessionTypeId.s1,
-      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift),
+      settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift)
+          .copyWith(couchStretchEnabled: false),
     );
     final plan = output.trace.plan!;
     final work = plan.exercises.where((e) => !e.isWarmup).toList();
@@ -680,6 +683,50 @@ void main() {
       expect(splitSquat.loadTotal, 36, reason: region.name);
       expect(splitSquat.instruction, contains('pain-free range'));
       expect(splitSquat.instruction, contains('Dumbbells at your sides'));
+    }
+  });
+
+  test('couch stretches lead into every Back rebuild stage and window', () {
+    for (final stage in BackRebuildStage.values) {
+      for (final sessionId in const [SessionTypeId.s1, SessionTypeId.s2]) {
+        for (final time in const [20, 35, 60]) {
+          final reason = '${stage.name} ${sessionId.name} $time';
+          final plan = plannedFor(
+            sessionId,
+            time: time,
+            settings: rebuildSettings(stage: stage),
+          ).trace.plan!;
+          final keys = plan.exercises.map((e) => e.trackKey).toList();
+          final left = keys.indexOf(CouchStretch.leftTrackKey);
+          expect(left, greaterThan(0), reason: reason);
+          expect(keys[left + 1], CouchStretch.rightTrackKey, reason: reason);
+          expect(
+            plan.exercises.indexWhere((e) => !e.isWarmup),
+            greaterThan(left + 1),
+            reason: reason,
+          );
+          expect(
+            plan.estimatedDurationMin,
+            lessThanOrEqualTo(time),
+            reason: reason,
+          );
+        }
+      }
+    }
+
+    final travel = plannedFor(
+      SessionTypeId.s1,
+      settings: rebuildSettings().copyWith(travelMode: true),
+    ).trace.plan!;
+    final stretches = travel.exercises
+        .where((e) => CouchStretch.isTrack(e.trackKey))
+        .toList();
+    expect(stretches, hasLength(2));
+    for (final stretch in stretches) {
+      expect(stretch.isTravel, isTrue);
+      expect(stretch.instruction, contains('up the wall'));
+      expect(stretch.instruction, isNot(contains('bench')));
+      expect(stretch.instruction, isNot(contains('couch')));
     }
   });
 
@@ -1752,9 +1799,12 @@ void main() {
     expect(s1.trace.plan!.travelMode, isTrue);
     expect(s1.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
     // no percent-load ramp without loads, but movement prep remains explicit;
-    // the equipment-free McGill Big 3 still follows it
+    // the equipment-free McGill Big 3 and couch stretches still follow it
     final travelWarmups = s1.trace.plan!.exercises
-        .where((e) => e.isWarmup && e.trackKey != 'warmup:big3')
+        .where((e) =>
+            e.isWarmup &&
+            e.trackKey != 'warmup:big3' &&
+            !CouchStretch.isTrack(e.trackKey))
         .toList();
     expect(travelWarmups, hasLength(1));
     expect(travelWarmups.single.trackKey, 'warmup:s1');

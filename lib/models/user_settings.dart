@@ -1,3 +1,4 @@
+import 'couch_stretch.dart';
 import 'equipment.dart';
 import 'floor_category.dart';
 import 'lower_back_recovery.dart';
@@ -49,6 +50,13 @@ class UserSettings {
   /// Adds the McGill Big 3 after the strength warm-up and a short back
   /// routine on days without lifting.
   final bool bigThreeEnabled;
+
+  /// Adds a timed left and right couch stretch after the strength warm-up,
+  /// in normal training and in Back rebuild alike.
+  final bool couchStretchEnabled;
+
+  /// Planned hold per side; the logger's timer can still be adjusted.
+  final int couchStretchSeconds;
 
   /// Local `yyyy-mm-dd` of the last day the back routine was marked done.
   final String? backRoutineDoneDay;
@@ -109,6 +117,8 @@ class UserSettings {
     this.deadliftAlternative = false,
     this.recoveryBackExtensionsEnabled = false,
     this.bigThreeEnabled = true,
+    this.couchStretchEnabled = true,
+    this.couchStretchSeconds = CouchStretch.defaultHoldSeconds,
     this.backRoutineDoneDay,
     this.classicHeatmap = false,
     this.notificationsEnabled = false,
@@ -150,6 +160,8 @@ class UserSettings {
     bool? deadliftAlternative,
     bool? recoveryBackExtensionsEnabled,
     bool? bigThreeEnabled,
+    bool? couchStretchEnabled,
+    int? couchStretchSeconds,
     String? backRoutineDoneDay,
     bool? classicHeatmap,
     bool? notificationsEnabled,
@@ -190,6 +202,8 @@ class UserSettings {
       deadliftAlternative: deadliftAlternative ?? this.deadliftAlternative,
       recoveryBackExtensionsEnabled: recoveryBackExtensionsEnabled ?? this.recoveryBackExtensionsEnabled,
       bigThreeEnabled: bigThreeEnabled ?? this.bigThreeEnabled,
+      couchStretchEnabled: couchStretchEnabled ?? this.couchStretchEnabled,
+      couchStretchSeconds: couchStretchSeconds ?? this.couchStretchSeconds,
       backRoutineDoneDay: backRoutineDoneDay ?? this.backRoutineDoneDay,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,

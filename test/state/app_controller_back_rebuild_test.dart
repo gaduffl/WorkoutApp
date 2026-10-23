@@ -7,6 +7,7 @@ import 'package:morningcoach/engine/decision_engine.dart';
 import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
+import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/ladders.dart';
@@ -673,6 +674,36 @@ void main() {
       ..todayTrace = traceWith(null)
       ..settings = controller.settings.copyWith(bigThreeEnabled: false);
     expect(controller.backRoutineOfferedToday, isFalse);
+  });
+
+  test('couch stretch settings refresh the pending plan in both modes',
+      () async {
+    for (final state in [const LowerBackRecoveryState(), rebuild()]) {
+      final controller = controllerWith(state);
+      await controller.submitCheckIn(timeMinutes: 35, subjective: 4);
+      await controller.swapToSession(SessionTypeId.s1);
+      final reason = 'rebuild ${state.active}';
+      List<(int, int)> holds() => [
+            for (final e in controller.todayTrace!.plan!.exercises)
+              if (CouchStretch.isTrack(e.trackKey)) e.targetRange,
+          ];
+      expect(holds(), [(60, 60), (60, 60)], reason: reason);
+
+      await controller.saveSettings(
+        controller.settings.copyWith(couchStretchSeconds: 90),
+      );
+      expect(holds(), [(90, 90), (90, 90)], reason: reason);
+      expect(controller.todayTrace!.plan!.sessionId, SessionTypeId.s1);
+
+      await controller.saveSettings(
+        controller.settings.copyWith(couchStretchEnabled: false),
+      );
+      expect(holds(), isEmpty, reason: reason);
+      final saved = await controller.repo.loadSettings();
+      expect(saved.couchStretchEnabled, isFalse);
+      expect(saved.couchStretchSeconds, 90);
+      expect(controller.lowerBackRecovery.active, state.active);
+    }
   });
 }
 

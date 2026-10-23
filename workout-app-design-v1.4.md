@@ -85,7 +85,7 @@ Each ladder step also has micro-progressions in order: **load → reps (within r
 | Full (35 min) | 3 | 2 |
 | Compressed (20–25 min) | 2 (first superset pair only) | 0 |
 
-**Warm-up protocol:** every app-authored general or ATG preparation block begins with jumping jacks inside the existing time allocation; pain-aware plans use low-impact step jacks or marching when jumping or impact reproduces symptoms. Cardio-owned preset warm-ups are unchanged. For the session's *first* compound only: 40% × 8, 60% × 5, 80% × 3 (percent of first work load, round down to achievable total, rest ≤ 60 s). Every subsequent exercise: one feeder set at 60% × 5. When the ATG/knee-health block is present it runs first and replaces general warm-up (backward treadmill, jumping jacks, tibialis + calf raises within the allocated block). When the `McGill Big 3` setting is on (default), a fixed, non-progressing Big 3 entry (curl-up, side bridge, bird dog; 10-second holds) follows the preparation block in its own 2/4/6 minutes for the 20/35/60-minute windows.
+**Warm-up protocol:** every app-authored general or ATG preparation block begins with jumping jacks inside the existing time allocation; pain-aware plans use low-impact step jacks or marching when jumping or impact reproduces symptoms. Cardio-owned preset warm-ups are unchanged. For the session's *first* compound only: 40% × 8, 60% × 5, 80% × 3 (percent of first work load, round down to achievable total, rest ≤ 60 s). Every subsequent exercise: one feeder set at 60% × 5. When the ATG/knee-health block is present it runs first and replaces general warm-up (backward treadmill, jumping jacks, tibialis + calf raises within the allocated block). When the `McGill Big 3` setting is on (default), a fixed, non-progressing Big 3 entry (curl-up, side bridge, bird dog; 10-second holds) follows the preparation block in its own 2/4/6 minutes for the 20/35/60-minute windows. When the `Couch stretches` setting is on (default), a left and then a right couch stretch follow the Big 3 (or the preparation block when the Big 3 is off): fixed, non-progressing timed holds at the per-side length chosen in Settings (default 60 s), which the logger's timer can still change. Each hold ends with a short beep. Their time counts toward the hard window and may trim work like any warm-up; if the session's minimum meaningful work cannot fit with them, they drop out instead of the session.
 
 **Load semantics:** all loads are stored, computed, and displayed as **totals** (both dumbbells summed when two are used; single-DB exercises = that dumbbell's weight). The equipment table in Settings lists each dumbbell's achievable weight steps — §2.6 specifies the user's actual PowerBlocks, and Settings must ship pre-filled with these values. The engine derives the set of achievable *totals* per exercise (1-DB vs 2-DB). "One increment" = the next achievable total above/below current. All percentage-derived loads round **down** to the nearest achievable total. Units per user setting (lb default; kg conversion at display layer only, storage stays in the equipment's native unit).
 
@@ -407,6 +407,12 @@ adds a fixed curl-up, side bridge and bird dog entry of 10-second holds after th
 preparation in every strength session (§2.5). On rest and cardio-only days Home offers
 the same routine plus an easy 10–15-minute uphill walk with one Done tap; it never
 changes the daily plan.
+
+**Couch stretches.** Also independent of Back rebuild, the `Couch stretches` setting
+(default on) adds a timed left and right hip-flexor stretch after the Big 3 in every
+strength session (§2.5), with or without the rebuild. The cue squeezes the glute and
+tucks the pelvis so the lower back does not arch, and says to ease off or skip a side
+that brings on knee, hip or back pain. Travel mode uses the wall version.
 
 An active profile saved by the earlier recovery mode converts on load to stage 1 with
 the bike at walk only; its forced cycling pause is cleared.

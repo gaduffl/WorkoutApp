@@ -2,6 +2,7 @@ import '../models/analytics_event.dart';
 import '../models/bouldering_log.dart';
 import '../models/cardio_protocol.dart';
 import '../models/check_in.dart';
+import '../models/couch_stretch.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
 import '../models/exercise_metric.dart';
@@ -509,6 +510,8 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'deadliftAlternative': u.deadliftAlternative,
       'recoveryBackExtensionsEnabled': u.recoveryBackExtensionsEnabled,
       'bigThreeEnabled': u.bigThreeEnabled,
+      'couchStretchEnabled': u.couchStretchEnabled,
+      'couchStretchSeconds': u.couchStretchSeconds,
       'backRoutineDoneDay': u.backRoutineDoneDay,
       'classicHeatmap': u.classicHeatmap,
       'notificationsEnabled': u.notificationsEnabled,
@@ -571,6 +574,11 @@ UserSettings _userSettingsFromJson(
       recoveryBackExtensionsEnabled:
           j['recoveryBackExtensionsEnabled'] as bool? ?? false,
       bigThreeEnabled: j['bigThreeEnabled'] as bool? ?? true,
+      couchStretchEnabled: j['couchStretchEnabled'] as bool? ?? true,
+      couchStretchSeconds: CouchStretch.clampHoldSeconds(
+        (j['couchStretchSeconds'] as num?)?.toInt() ??
+            CouchStretch.defaultHoldSeconds,
+      ),
       backRoutineDoneDay: j['backRoutineDoneDay'] as String?,
       classicHeatmap: j['classicHeatmap'] as bool? ?? false,
       notificationsEnabled: j['notificationsEnabled'] as bool? ?? false,

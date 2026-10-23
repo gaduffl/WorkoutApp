@@ -1129,6 +1129,8 @@ class AppController extends ChangeNotifier {
         settings.stationaryBikePaused != newSettings.stationaryBikePaused ||
         settings.deadliftAlternative != newSettings.deadliftAlternative ||
         settings.bigThreeEnabled != newSettings.bigThreeEnabled ||
+        settings.couchStretchEnabled != newSettings.couchStretchEnabled ||
+        settings.couchStretchSeconds != newSettings.couchStretchSeconds ||
         settings.recoveryBackExtensionsEnabled != newSettings.recoveryBackExtensionsEnabled;
     // The REHIT day marker is internal state, not an editable preference.
     // Preserve a marker written while a settings screen held an older copy.

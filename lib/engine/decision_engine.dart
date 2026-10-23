@@ -1,5 +1,6 @@
 import '../models/check_in.dart';
 import '../models/bouldering_log.dart';
+import '../models/couch_stretch.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
 import '../models/exercise_metric.dart';
@@ -879,6 +880,12 @@ class DecisionEngine {
       if (input.settings.bigThreeEnabled) {
         exercises.add(_bigThreeEntry(slotMinutes: checkin.timeMinutes));
       }
+      if (input.settings.couchStretchEnabled) {
+        exercises.addAll(_couchStretchEntries(
+          holdSeconds: input.settings.couchStretchSeconds,
+          travelMode: input.settings.travelMode,
+        ));
+      }
       final slots = _workSlotsForSession(
         sessionId: effectiveSessionId,
         tier: tier,
@@ -1421,10 +1428,20 @@ class DecisionEngine {
       final optionalRehitReserve = optionalRehitFinisherReserved
           ? sessionTypes[SessionTypeId.s7]!.fullDurationMin
           : 0;
-      final budgeted = strengthDurationBudgeter.fit(
+      var budgeted = strengthDurationBudgeter.fit(
         exercises: exercises,
         slotMinutes: checkin.timeMinutes - optionalRehitReserve,
       );
+      if (!budgeted.fits &&
+          exercises.any((exercise) => CouchStretch.isTrack(exercise.trackKey))) {
+        // The optional stretch may trim work, but it never costs the session.
+        budgeted = strengthDurationBudgeter.fit(
+          exercises: exercises
+              .where((exercise) => !CouchStretch.isTrack(exercise.trackKey))
+              .toList(),
+          slotMinutes: checkin.timeMinutes - optionalRehitReserve,
+        );
+      }
       if (!budgeted.fits) {
         patchedStates = {
           for (final entry in planAssemblyStateBaseline.entries)
@@ -1852,6 +1869,43 @@ class DecisionEngine {
           'weeks by adding holds, not longer ones.',
       progressionEligible: false,
     );
+  }
+
+  /// The left and right couch stretches after the warm-up: timed hip-flexor
+  /// holds at the length chosen in Settings, never progressed. The pelvis
+  /// tuck keeps the stretch off the lower back in Back rebuild too.
+  List<PlannedExercise> _couchStretchEntries({
+    required int holdSeconds,
+    required bool travelMode,
+  }) {
+    final seconds = CouchStretch.clampHoldSeconds(holdSeconds);
+    final (support, against) = travelMode
+        ? ('a folded towel or pillow facing away from a wall', 'up the wall')
+        : ('a pad facing away from a couch, bench or wall', 'up against it');
+    PlannedExercise side(String trackKey, String side, String other) =>
+        PlannedExercise(
+          trackKey: trackKey,
+          pattern: MovementPattern.kneeHealth,
+          name: 'Couch stretch ($side)',
+          sets: 1,
+          metric: ExerciseMetric.seconds,
+          targetRange: (seconds, seconds),
+          rirTarget: Rir.rir4plus,
+          isWarmup: true,
+          instruction: 'Kneel on $support: $side knee down with the $side '
+              'shin and foot $against, $other foot flat in front. Squeeze '
+              'the $side glute and tuck the pelvis under so the lower back '
+              'does not arch, then lift the chest only until you feel the '
+              'stretch at the front of the $side hip and thigh. Start the '
+              'timer; it beeps when the hold is done. Ease off or skip this '
+              'side if it brings on knee, hip or back pain.',
+          progressionEligible: false,
+          isTravel: travelMode,
+        );
+    return [
+      side(CouchStretch.leftTrackKey, 'left', 'right'),
+      side(CouchStretch.rightTrackKey, 'right', 'left'),
+    ];
   }
 
   /// Only a same-type completion grants queue credit; RED/YELLOW swaps

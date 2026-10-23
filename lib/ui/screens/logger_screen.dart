@@ -8,7 +8,9 @@ import '../../engine/equipment_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../engine/strength_duration_engine.dart';
 import '../../integrations/screen_awake.dart';
+import '../../integrations/timer_beep.dart';
 import '../../models/cardio_protocol.dart';
+import '../../models/couch_stretch.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/equipment.dart';
 import '../../models/plan.dart';
@@ -227,7 +229,10 @@ class _LoggerScreenState extends State<LoggerScreen>
           _holdSecondsLeft = _secondsRemaining(_holdEndsAt);
           if (_holdSecondsLeft == 0) _holdRunning = false;
         });
-        if (!_holdRunning) _holdTimer?.cancel();
+        if (!_holdRunning) {
+          _holdTimer?.cancel();
+          _holdCountdownEnded();
+        }
       });
     }
     if (_warmupRunning) {
@@ -456,11 +461,20 @@ class _LoggerScreenState extends State<LoggerScreen>
           _holdRunning = false;
           _holdEndsAt = null;
         });
+        _holdCountdownEnded();
         unawaited(_checkpoint());
       } else {
         setState(() => _holdSecondsLeft -= 1);
       }
     });
+  }
+
+  /// The couch stretch is held facing away from the phone, so its countdown
+  /// ends with a short tone.
+  void _holdCountdownEnded() {
+    if (CouchStretch.isTrack(_exercise.trackKey)) {
+      unawaited(TimerBeep.play());
+    }
   }
 
   void _resetHoldTimer() {
