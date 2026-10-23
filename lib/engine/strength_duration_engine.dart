@@ -44,16 +44,18 @@ class StrengthPrepPolicy {
 
 /// Conservative, deterministic timing model for generated strength work.
 ///
-/// General or ATG preparation uses the exact minutes in the plan. A load
-/// ramp or feeder gets 30 seconds of work plus 45 seconds before the next
-/// set. Rep-based work gets 45 seconds per set; timed work uses the upper
-/// prescribed bound for every set. Straight compound work and complete
-/// superset rounds receive 90 seconds of rest; straight accessory work gets
-/// 60 seconds, matching the logger. The final work unit receives no rest,
-/// and every work exercise receives a 30-second setup allowance.
+/// General or ATG preparation uses the exact minutes in the plan. A timed
+/// warm-up hold (the couch stretch) gets its seconds plus 15 to get into
+/// position. A load ramp or feeder gets 30 seconds of work plus 45 seconds
+/// before the next set. Rep-based work gets 45 seconds per set; timed work
+/// uses the upper prescribed bound for every set. Straight compound work and
+/// complete superset rounds receive 90 seconds of rest; straight accessory
+/// work gets 60 seconds, matching the logger. The final work unit receives
+/// no rest, and every work exercise receives a 30-second setup allowance.
 class StrengthDurationEstimator {
   static const int loadWarmupWorkSeconds = 30;
   static const int loadWarmupRestSeconds = 45;
+  static const int timedWarmupSetupSeconds = 15;
   static const int workSetSeconds = 45;
   static const int workRestSeconds = 90;
   static const int accessoryRestSeconds = 60;
@@ -68,6 +70,10 @@ class StrengthDurationEstimator {
     for (final exercise in exercises.where((exercise) => exercise.isWarmup)) {
       if (exercise.metric == ExerciseMetric.minutes) {
         seconds += exercise.targetRange.$2 * 60 * exercise.sets;
+      } else if (exercise.metric == ExerciseMetric.seconds) {
+        seconds += exercise.sets *
+            (exercise.targetRange.$2 * _sideFactor(exercise) +
+                timedWarmupSetupSeconds);
       } else {
         seconds += exercise.sets *
             (loadWarmupWorkSeconds * _sideFactor(exercise) +

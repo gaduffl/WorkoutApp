@@ -869,3 +869,26 @@ data or installing a differently signed package. Details: `docs/UPDATES.md`.
     good morning, in any stage. Exposures are persisted by name, so the new value is
     backward compatible. While travelling, Home's stage-1 label says only mornings
     after home sessions count.
+
+## Session 2026-10-23 (couch stretches)
+
+105. **Couch stretches are two timed warm-up holds, not a track.** With
+    `couchStretchEnabled` (default on, legacy JSON included) the planner adds
+    `warmup:couch_stretch_left` then `_right` after the Big 3, or after the prep when
+    the Big 3 is off, in every strength session with or without Back rebuild. Each is a
+    one-set `seconds` warm-up at `couchStretchSeconds` (default 60, restored values
+    clamped to 15–300), so the `warmup:` prefix keeps them out of stimulus credit,
+    progression and the muscle map. Travel mode keeps them with a wall instead of a
+    couch or bench. Toggling either setting refreshes today's pending plan.
+106. **The window absorbs the stretches, but they never cost the session.** The
+    estimator charges a timed warm-up its hold plus 15 s to get into position, and the
+    budgeter trims work around it as it does for the Big 3, so 35-minute rebuild
+    sessions can lose the optional lead-in bridge or extension. Only when the minimum
+    meaningful work cannot fit with them does planning retry without the stretches,
+    which leaves the plan exactly as it would be with the setting off.
+107. **Only the couch-stretch countdown beeps.** The logger's existing hold timer (±5 s
+    stepper) is the variable timer. When a couch-stretch countdown reaches zero in the
+    foreground it calls `morningcoach/timer_beep`, which plays a 150 ms
+    `ToneGenerator` beep at media volume so it is heard on a phone set to vibrate;
+    other holds stay silent. A missing bridge or audio failure is ignored. No
+    dependency or permission was added.

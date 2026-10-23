@@ -121,6 +121,51 @@ void main() {
     expect(tester.widget<SwitchListTile>(bigThree).value, isFalse);
   });
 
+  testWidgets('couch stretches toggle and set their hold at once',
+      (tester) async {
+    final controller = await pumpSettings(tester);
+    final couch = find.byKey(const Key('settings-couch-stretch'));
+    final hold = find.byKey(const Key('settings-couch-stretch-hold'));
+    await tester.scrollUntilVisible(couch, 400);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(couch).value, isTrue);
+    expect(tester.widget<DropdownButton<int>>(hold).value, 60);
+
+    await tester.tap(hold);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('90 s').last);
+    await tester.pumpAndSettle();
+    expect(controller.saveCalls, 1);
+    expect(controller.settings.couchStretchSeconds, 90);
+    expect(tester.widget<DropdownButton<int>>(hold).value, 90);
+
+    await tester.tap(couch);
+    await tester.pump();
+    expect(controller.saveCalls, 2);
+    expect(controller.settings.couchStretchEnabled, isFalse);
+    expect(controller.settings.couchStretchSeconds, 90);
+    expect(hold, findsNothing);
+  });
+
+  testWidgets('a restored off-list couch stretch hold stays selectable',
+      (tester) async {
+    await pumpSettings(
+      tester,
+      settings: const UserSettings(couchStretchSeconds: 75),
+    );
+    final hold = find.byKey(const Key('settings-couch-stretch-hold'));
+    await tester.scrollUntilVisible(hold, 400);
+    await tester.pump();
+    expect(tester.widget<DropdownButton<int>>(hold).value, 75);
+    expect(
+      tester
+          .widget<DropdownButton<int>>(hold)
+          .items!
+          .map((item) => item.value),
+      [30, 45, 60, 75, 90, 120, 180],
+    );
+  });
+
   testWidgets('blank HR override and API key explicitly clear saved values',
       (tester) async {
     final controller = await pumpSettings(

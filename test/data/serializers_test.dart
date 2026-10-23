@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:morningcoach/data/serializers.dart';
+import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
@@ -319,6 +320,34 @@ void main() {
     final legacy = userSettingsToJson(const UserSettings())
       ..remove('classicHeatmap');
     expect(userSettingsFromJson(legacy).classicHeatmap, isFalse);
+  });
+
+  test('couch stretch settings round-trip and are legacy-safe', () {
+    final restored = userSettingsFromJson(
+      userSettingsToJson(
+        const UserSettings(couchStretchEnabled: false, couchStretchSeconds: 90),
+      ),
+    );
+    expect(restored.couchStretchEnabled, isFalse);
+    expect(restored.couchStretchSeconds, 90);
+
+    // Existing installations and backups get the stretches at the default.
+    final legacy = userSettingsToJson(const UserSettings())
+      ..remove('couchStretchEnabled')
+      ..remove('couchStretchSeconds');
+    final defaults = userSettingsFromJson(legacy);
+    expect(defaults.couchStretchEnabled, isTrue);
+    expect(defaults.couchStretchSeconds, CouchStretch.defaultHoldSeconds);
+
+    for (final (stored, expected) in const [
+      (0, CouchStretch.minHoldSeconds),
+      (3600, CouchStretch.maxHoldSeconds),
+      (75, 75),
+    ]) {
+      final json = userSettingsToJson(const UserSettings())
+        ..['couchStretchSeconds'] = stored;
+      expect(userSettingsFromJson(json).couchStretchSeconds, expected);
+    }
   });
 
   test('planned exercise visual ID round-trips and is legacy-safe', () {

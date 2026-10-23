@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import 'package:morningcoach/data/app_database.dart';
 import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
+import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -827,6 +829,89 @@ void main() {
     await tester.pump();
 
     expect(controller.lastLoggedSets.single.value, 10);
+  });
+
+  List<String> recordBeeps(WidgetTester tester) {
+    const channel = MethodChannel('morningcoach/timer_beep');
+    final beeps = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async {
+        beeps.add(call.method);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    return beeps;
+  }
+
+  testWidgets('each couch stretch countdown ends with one beep',
+      (tester) async {
+    final beeps = recordBeeps(tester);
+    PlannedExercise stretch(String key, String name) => PlannedExercise(
+          trackKey: key,
+          pattern: MovementPattern.kneeHealth,
+          name: name,
+          sets: 1,
+          metric: ExerciseMetric.seconds,
+          targetRange: const (5, 5),
+          rirTarget: Rir.rir4plus,
+          isWarmup: true,
+        );
+    final stretchPlan = SessionPlan(
+      sessionId: SessionTypeId.s1,
+      sessionName: 'Lower',
+      tier: SessionTier.full,
+      estimatedDurationMin: 35,
+      exercises: [
+        stretch(CouchStretch.leftTrackKey, 'Couch stretch (left)'),
+        stretch(CouchStretch.rightTrackKey, 'Couch stretch (right)'),
+        ex('squat', MovementPattern.squat, 24, null, sets: 1),
+      ],
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: captureController(),
+        child: MaterialApp(home: LoggerScreen(plan: stretchPlan)),
+      ),
+    );
+
+    // The timer is variable: one step up before starting the left side.
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+    expect(find.text('10 s'), findsOneWidget);
+    await tester.tap(find.text('Start hold'));
+    await tester.pump(const Duration(seconds: 9));
+    expect(beeps, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('0 s'), findsOneWidget);
+    expect(beeps, ['beep']);
+    await tester.pump(const Duration(seconds: 3));
+    expect(beeps, hasLength(1));
+
+    await tester.tap(find.text('Log warm-up'));
+    await tester.pump();
+    expect(find.text('Couch stretch (right)'), findsOneWidget);
+    await tester.tap(find.text('Start hold'));
+    await tester.pump(const Duration(seconds: 5));
+    expect(beeps, ['beep', 'beep']);
+  });
+
+  testWidgets('other hold countdowns end without a beep', (tester) async {
+    final beeps = recordBeeps(tester);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppController>.value(
+        value: captureController(),
+        child: MaterialApp(home: LoggerScreen(plan: timedHoldPlan())),
+      ),
+    );
+    await tester.tap(find.text('Start hold'));
+    await tester.pump(const Duration(seconds: 6));
+    expect(find.text('0 s'), findsOneWidget);
+    expect(beeps, isEmpty);
   });
 
   testWidgets('rep work keeps the manually selected value', (tester) async {

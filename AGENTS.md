@@ -56,6 +56,13 @@ safety rules, validation, or delivery workflow changes.
   for the 20/35/60-minute windows, with or without Back rebuild. On rest and
   cardio-only days Home offers the same routine plus an easy uphill walk with one
   Done tap; it never completes, replaces or changes the daily plan.
+- The `Couch stretches` setting (default on) adds a fixed, non-progressing left then
+  right couch stretch after the Big 3 (or the prep when it is off) of every strength
+  session, with or without Back rebuild, as timed warm-up holds at the per-side length
+  chosen in Settings (default 60 s). The hard window absorbs them; they drop out only
+  when the session's minimum work would not fit. The logger timer stays adjustable and
+  only a couch-stretch countdown plays the short `morningcoach/timer_beep` tone; a
+  missing bridge must never block logging. Travel mode uses the wall version.
 - Travel mode means no equipment anywhere. Every strength work entry is a bodyweight
   or self-resisted travel step, resolved for the exercise actually prescribed (pain
   substitutes included); a slot without one is dropped, never emitted with its

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../engine/schedule_fit_engine.dart';
+import '../../models/couch_stretch.dart';
 import '../../models/ladders.dart';
 import '../../models/lower_back_recovery.dart';
 import '../../models/movement_pattern.dart';
@@ -418,6 +419,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               },
             ),
+            SwitchListTile(
+              key: const Key('settings-couch-stretch'),
+              secondary: const Icon(Icons.airline_seat_legroom_extra),
+              title: const Text('Couch stretches'),
+              subtitle: const Text(
+                'A timed left and right hip-flexor stretch after the warm-up, '
+                'in normal training and Back rebuild. The timer beeps at the '
+                'end of each hold.',
+              ),
+              value: controller.settings.couchStretchEnabled,
+              onChanged: (v) async {
+                await controller.saveSettings(
+                  controller.settings.copyWith(couchStretchEnabled: v),
+                );
+                if (mounted) {
+                  setState(() => _settings = controller.settings);
+                }
+              },
+            ),
+            if (controller.settings.couchStretchEnabled)
+              ListTile(
+                title: const Text('Hold per side'),
+                subtitle: const Text(
+                  'You can still change the timer during the workout',
+                ),
+                trailing: DropdownButton<int>(
+                  key: const Key('settings-couch-stretch-hold'),
+                  value: controller.settings.couchStretchSeconds,
+                  items: [
+                    for (final seconds in {
+                      ...CouchStretch.holdOptionsSeconds,
+                      controller.settings.couchStretchSeconds,
+                    }.toList()
+                      ..sort())
+                      DropdownMenuItem(
+                        value: seconds,
+                        child: Text('$seconds s'),
+                      ),
+                  ],
+                  onChanged: (seconds) async {
+                    if (seconds == null) return;
+                    await controller.saveSettings(
+                      controller.settings.copyWith(
+                        couchStretchSeconds: seconds,
+                      ),
+                    );
+                    if (mounted) {
+                      setState(() => _settings = controller.settings);
+                    }
+                  },
+                ),
+              ),
             ExpansionTile(
               key: const Key('recovery-options'),
               title: const Text('More back options'),

@@ -4,6 +4,7 @@ import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/engine/session_templates.dart';
 import 'package:morningcoach/engine/strength_duration_engine.dart';
 import 'package:morningcoach/models/check_in.dart';
+import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
@@ -146,6 +147,29 @@ void main() {
       expect(result.estimatedDurationMin, 6);
       expect(result.exercises.single.sets, 3);
       expect(estimator.estimateMinutes(result.exercises), 6);
+    });
+
+    test('charges a timed warm-up hold its seconds plus setup', () {
+      PlannedExercise stretch(String key) => PlannedExercise(
+            trackKey: key,
+            pattern: MovementPattern.kneeHealth,
+            name: key,
+            sets: 1,
+            metric: ExerciseMetric.seconds,
+            targetRange: const (60, 60),
+            rirTarget: Rir.rir4plus,
+            isWarmup: true,
+          );
+
+      // 2*60 s holds + 2*15 s to get into position; warm-ups take no work
+      // rest or exercise setup.
+      expect(
+        estimator.estimateSeconds([
+          stretch(CouchStretch.leftTrackKey),
+          stretch(CouchStretch.rightTrackKey),
+        ]),
+        150,
+      );
     });
 
     test('trims accessories first, then work sets round-robin', () {
@@ -402,12 +426,13 @@ void main() {
         expect(atg.instruction, contains('Replaces general movement prep.'));
         expect(atg.instruction, isNot(contains('shoulder/scapular rehearsal')));
         // The ATG block replaces general movement prep. The McGill Big 3
-        // entry that follows it is not general prep.
+        // and couch stretch entries that follow it are not general prep.
         expect(
           plan.exercises.where(
             (exercise) =>
                 exercise.trackKey.startsWith('warmup:') &&
-                exercise.trackKey != 'warmup:big3',
+                exercise.trackKey != 'warmup:big3' &&
+                !CouchStretch.isTrack(exercise.trackKey),
           ),
           isEmpty,
         );
@@ -462,6 +487,127 @@ void main() {
         withoutBigThree.exercises.map((exercise) => exercise.trackKey),
         isNot(contains('warmup:big3')),
       );
+    });
+
+    test('couch stretches follow the Big 3 on both sides in every window',
+        () {
+      for (final time in const [20, 35, 60]) {
+        for (final id in const [
+          SessionTypeId.s1,
+          SessionTypeId.s2,
+          SessionTypeId.s4,
+          SessionTypeId.s5,
+        ]) {
+          final reason = '${id.name} $time';
+          final plan = decide(time: time, forced: id).trace.plan!;
+          final keys = plan.exercises.map((e) => e.trackKey).toList();
+          final bigThree = keys.indexOf('warmup:big3');
+          expect(
+            keys.indexOf(CouchStretch.leftTrackKey),
+            bigThree + 1,
+            reason: reason,
+          );
+          expect(
+            keys.indexOf(CouchStretch.rightTrackKey),
+            bigThree + 2,
+            reason: reason,
+          );
+          expect(
+            plan.exercises.indexWhere((e) => !e.isWarmup),
+            greaterThan(bigThree + 2),
+            reason: reason,
+          );
+          for (final (key, side) in const [
+            (CouchStretch.leftTrackKey, 'left'),
+            (CouchStretch.rightTrackKey, 'right'),
+          ]) {
+            final stretch = plan.exercises.singleWhere(
+              (e) => e.trackKey == key,
+            );
+            expect(stretch.name, 'Couch stretch ($side)', reason: reason);
+            expect(stretch.isWarmup, isTrue, reason: reason);
+            expect(stretch.progressionEligible, isFalse, reason: reason);
+            expect(stretch.metric, ExerciseMetric.seconds, reason: reason);
+            expect(stretch.targetRange, (60, 60), reason: reason);
+            expect(stretch.instruction, contains('$side knee down'));
+            expect(stretch.instruction, contains('lower back does not arch'));
+            expect(stretch.instruction, contains('beeps'));
+          }
+          expect(
+            plan.estimatedDurationMin,
+            lessThanOrEqualTo(time),
+            reason: reason,
+          );
+        }
+      }
+
+      // The chosen hold sets the timer; without the Big 3 the stretches
+      // follow the prep directly.
+      final custom = decide(
+        time: 35,
+        forced: SessionTypeId.s1,
+        settings: const UserSettings(
+          bigThreeEnabled: false,
+          couchStretchSeconds: 90,
+        ),
+      ).trace.plan!;
+      expect(
+        custom.exercises.take(3).map((e) => e.trackKey),
+        ['warmup:s1', CouchStretch.leftTrackKey, CouchStretch.rightTrackKey],
+      );
+      expect(custom.exercises[1].targetRange, (90, 90));
+      expect(custom.exercises[2].targetRange, (90, 90));
+
+      final off = decide(
+        time: 35,
+        forced: SessionTypeId.s1,
+        settings: const UserSettings(couchStretchEnabled: false),
+      ).trace.plan!;
+      expect(
+        off.exercises.where((e) => CouchStretch.isTrack(e.trackKey)),
+        isEmpty,
+      );
+    });
+
+    test('couch stretches may trim work but never cost the session', () {
+      List<(String, int)> work(SessionPlan plan) => [
+            for (final exercise in plan.exercises)
+              if (!exercise.isWarmup) (exercise.trackKey, exercise.sets),
+          ];
+      final off = decide(
+        time: 20,
+        forced: SessionTypeId.s1,
+        settings: const UserSettings(couchStretchEnabled: false),
+      ).trace.plan!;
+
+      // The default holds fit by trimming work, as the Big 3 does.
+      final standard = decide(time: 20, forced: SessionTypeId.s1).trace.plan!;
+      expect(
+        standard.exercises.where((e) => CouchStretch.isTrack(e.trackKey)),
+        hasLength(2),
+      );
+      expect(
+        standard.plannedWorkSets,
+        lessThanOrEqualTo(off.plannedWorkSets),
+      );
+      expect(standard.estimatedDurationMin, lessThanOrEqualTo(20));
+
+      // Five minutes a side leaves no room for meaningful work, so the
+      // stretches drop out and the session stays exactly as without them.
+      final long = decide(
+        time: 20,
+        forced: SessionTypeId.s1,
+        settings: const UserSettings(
+          couchStretchSeconds: CouchStretch.maxHoldSeconds,
+        ),
+      ).trace.plan;
+      expect(long, isNotNull);
+      expect(
+        long!.exercises.where((e) => CouchStretch.isTrack(e.trackKey)),
+        isEmpty,
+      );
+      expect(work(long), work(off));
+      expect(long.estimatedDurationMin, off.estimatedDurationMin);
     });
 
     test('the zero-minute hard window remains a rest outcome', () {
