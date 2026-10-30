@@ -33,10 +33,11 @@ void main() {
     expect(result.muscle, hasLength(MajorMuscleGroup.values.length));
     for (final muscle in result.muscle) {
       expect(muscle.completedEffectiveSets, 0);
-      expect(muscle.minimumTargetEffectiveSets, 32);
-      expect(muscle.centerTargetEffectiveSets, 40);
-      expect(muscle.maximumTargetEffectiveSets, 48);
-      expect(muscle.deficitToMinimumEffectiveSets, 32);
+      final targeted = muscle.muscleGroup.hasHypertrophyTarget;
+      expect(muscle.minimumTargetEffectiveSets, targeted ? 32 : 0);
+      expect(muscle.centerTargetEffectiveSets, targeted ? 40 : 0);
+      expect(muscle.maximumTargetEffectiveSets, targeted ? 48 : 0);
+      expect(muscle.deficitToMinimumEffectiveSets, targeted ? 32 : 0);
     }
   });
 

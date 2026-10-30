@@ -892,3 +892,28 @@ data or installing a differently signed package. Details: `docs/UPDATES.md`.
     `ToneGenerator` beep at media volume so it is heard on a phone set to vibrate;
     other holds stay silent. A missing bridge or audio failure is ignored. No
     dependency or permission was added.
+
+
+## Session 2026-10-30 (HOV Fuß Warmup)
+
+- Added backward-compatible `hovFootWarmupEnabled` settings and plan snapshots.
+  Settings refresh pending plans in both training modes; stale plans/drafts cannot
+  bypass a changed setting. Default off preserves existing installations.
+- `HovFootWarmupEngine` emits the supplied Phase 1 as real, fixed exercise entries.
+  Explicit circuit rounds and alternating left/right holds survive superset toggles
+  and draft persistence without inventing a new logger or progression track.
+- Protected HOV dose in the shared duration budgeter. Retain Big 3 and the first
+  loaded ramp; 20-minute lifting may use non-progressing single sets or defer a
+  later primary lift (queue withheld). Couch stretches follow work only if they fit.
+  Fixed the logger/Today trailing-warmup omission to support end stretches.
+- Extended the authoritative muscle map and existing ledger to calves, shin/ankle
+  and foot stabilizers, with no default targets for the new regions. Only HOV calf
+  strength work can qualify under the usual effort gate; coordination remains
+  exposure-only, and separate unilateral holds receive half-set coefficients.
+  HOV logs never fulfill main strength completion/finisher thresholds.
+- Kept the source document and video media outside version control; exact original
+  demonstration links open externally. Later phase headings have no exercise rows
+  in the supplied export and are deliberately not implemented.
+- Regression coverage includes prescribed dose/order, all strength families and
+  time windows across Back rebuild stages, travel, sharp pain, settings persistence,
+  stale plans, completion isolation, muscle accounting and trailing-stretch logging.

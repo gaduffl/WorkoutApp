@@ -402,6 +402,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : _stopLowerBackRecovery(),
             ),
             SwitchListTile(
+              key: const Key('settings-hov-foot-warmup'),
+              secondary: const Icon(Icons.directions_walk),
+              title: const Text('HOV Fuß Warmup'),
+              subtitle: const Text(
+                'Phase 1 replaces general/ATG preparation in normal training '
+                'and Back rebuild. Keeps Big 3; couch stretches finish when '
+                'time permits. Two circuit rounds and 3 × 30 s per foot. '
+                'Travel mode defers the wedge holds until equipment is available.',
+              ),
+              value: controller.settings.hovFootWarmupEnabled,
+              onChanged: (enabled) async {
+                await controller.saveSettings(
+                  controller.settings.copyWith(hovFootWarmupEnabled: enabled),
+                );
+                if (mounted) setState(() => _settings = controller.settings);
+              },
+            ),
+            SwitchListTile(
               key: const Key('settings-big-three'),
               secondary: const Icon(Icons.self_improvement),
               title: const Text('McGill Big 3'),
@@ -423,8 +441,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               key: const Key('settings-couch-stretch'),
               secondary: const Icon(Icons.airline_seat_legroom_extra),
               title: const Text('Couch stretches'),
-              subtitle: const Text(
-                'A timed left and right hip-flexor stretch after the warm-up, '
+              subtitle: Text(controller.settings.hovFootWarmupEnabled
+                ? 'Left and right hip-flexor holds at the end, when they fit after HOV, Big 3 and strength work.'
+                : 'A timed left and right hip-flexor stretch after the warm-up, '
                 'in normal training and Back rebuild. The timer beeps at the '
                 'end of each hold.',
               ),

@@ -548,3 +548,46 @@ require Android confirmation retain the manual install button. App data, workout
 history and APK signing continuity are preserved. Update credentials and source
 settings are device-local and excluded from workout backups.
 
+
+
+## HOV Fuß Warmup (2026-10)
+
+An optional Settings switch, off for existing and new installations, replaces the
+normal or Back rebuild general/ATG preparation with the supplied HOV **Phase 1**.
+The attached export provides exercise details only for this phase. It does not
+justify inventing later phases, an automatic progression, or a running allowance.
+
+Order: bilateral calf bridge (2 × 30 s), C1 whole-foot roll (10 reps), C2 floating
+heel hinge (10), C3 inversion/eversion lifts (30), C4 side-to-cross step (14), repeat
+C1–C4 for a second round, then alternate left/right single-leg isometric calf holds
+with the prescribed wedge (3 × 30 s **per foot**). Keep the enabled Big 3 after
+HOV and the lift-specific warm-up sets. Enabled couch stretches move to the end
+and fit only after the strength work. Written cues and the original HOV video
+links are available; videos and the patient document are not bundled.
+
+The source advises daily practice for at least a week, every other day with marked
+soreness, and a pain goal below 3/10 (3–5 discuss; above 5 stop). This switch inserts
+it into strength sessions; it does not schedule the rest of the physician's daily
+program or advance phases. Existing red-flag rules still take precedence. Sharp
+knee flags omit HOV; sharp hip/back flags omit the bridge, hinge and cross-steps.
+Travel mode defers the equipment-dependent wedge holds rather than substituting
+an unprescribed variant.
+
+The full HOV dose is protected from the time budgeter. The 35/60-minute slots use
+ordinary strength trimming. The 20-minute slot first removes optional accessories,
+then reduces lifting to as little as one set per movement and removes later feeder
+sets; if needed it defers later lifts. Reduced sets cannot advance progression;
+a deferred primary lift leaves the queue pending. Do not rush or shorten the HOV
+holds/circuit to make an optimistic time estimate. The duration model allocates
+2 seconds per rep (3 for the hinge), 10-second transitions, and 30-second rests
+after bridge sets and C4; alternating calf holds let the other side rest. These are
+app pacing estimates, not additional medical prescriptions.
+
+HOV is logged as real work. Its explicit muscle profiles feed the existing planned
+and completed exposure maps, including calves/soleus, shin/ankle stabilizers and
+feet. Only the bridge and calf holds can qualify for effective-set credit at the
+existing RIR threshold; coordination drills remain exposure-only. Left/right holds
+each contribute half a bilateral-equivalent set. These newly tracked regions have
+no default hypertrophy target, so HOV does not create artificial weekly deficits.
+Its sets do not count toward main strength completion, queue advancement, optional
+REHIT eligibility or Back rebuild progression.

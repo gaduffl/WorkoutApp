@@ -121,6 +121,20 @@ void main() {
     expect(tester.widget<SwitchListTile>(bigThree).value, isFalse);
   });
 
+  testWidgets('HOV toggles immediately while retaining Big 3 and couch preferences', (tester) async {
+    final controller = await pumpSettings(tester);
+    final toggle = find.byKey(const Key('settings-hov-foot-warmup'));
+    await tester.scrollUntilVisible(toggle, 400);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.pump();
+    expect(controller.settings.hovFootWarmupEnabled, isTrue);
+    expect(controller.settings.bigThreeEnabled, isTrue);
+    expect(controller.settings.couchStretchEnabled, isTrue);
+    expect(controller.saveCalls, 1);
+  });
+
   testWidgets('couch stretches toggle and set their hold at once',
       (tester) async {
     final controller = await pumpSettings(tester);

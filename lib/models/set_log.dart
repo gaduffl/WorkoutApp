@@ -1,4 +1,5 @@
 import 'exercise_metric.dart';
+import 'hov_foot_warmup.dart';
 import 'movement_pattern.dart';
 
 /// Reps-in-reserve, §2.4 / §6 logger input.
@@ -49,6 +50,9 @@ class SetLog {
 
   /// Compatibility alias for older call sites and serialized history.
   int get reps => value;
+
+  bool get countsTowardStrengthCompletion =>
+      !isWarmup && !HovFootWarmup.isTrack(trackKey) && value > 0;
 
   /// Total seconds this step occupied: rest into it, setup, and execution.
   /// Null when the set predates timing capture; negative spans (a clock

@@ -316,7 +316,8 @@ void main() {
 
     expect(restored.hardTimeWindowsMinutes, [0, 20, 35, 60]);
     expect(restored.hypertrophyEvaluationWindowDays, 28);
-    expect(restored.hypertrophyTargetBands.length, 9);
+    expect(restored.hypertrophyTargetBands.length, MajorMuscleGroup.values.length);
+    expect(restored.hypertrophyTargetBands[MajorMuscleGroup.calves]!.minimum, 0);
     expect(
       restored.hypertrophyTargetBands[MajorMuscleGroup.delts]!.center,
       10,
@@ -332,7 +333,8 @@ void main() {
       },
     });
 
-    expect(restored.hypertrophyTargetBands.length, 9);
+    expect(restored.hypertrophyTargetBands.length, MajorMuscleGroup.values.length);
+    expect(restored.hypertrophyTargetBands[MajorMuscleGroup.calves]!.minimum, 0);
     expect(restored.hypertrophyTargetBands[MajorMuscleGroup.chest]!.center, 11);
     expect(restored.hypertrophyTargetBands[MajorMuscleGroup.back]!.center, 10);
   });

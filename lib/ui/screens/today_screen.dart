@@ -8,6 +8,7 @@ import '../../engine/schedule_fit_engine.dart';
 import '../../engine/session_templates.dart';
 import '../../models/decision_trace.dart';
 import '../../models/plan.dart';
+import '../../models/hov_foot_warmup.dart';
 import '../../models/rule_key.dart';
 import '../../models/session_type.dart';
 import '../../state/app_controller.dart';
@@ -62,6 +63,7 @@ List<PlannedExercise> _playOrder(List<PlannedExercise> exercises) {
       u++;
     }
   }
+  ordered.addAll(pending.map((index) => exercises[index]));
   return ordered;
 }
 
@@ -527,6 +529,20 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
               const SizedBox(height: 8),
             ],
+            if (plan?.hovFootWarmupEnabled == true)
+              Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('HOV Fuß Warmup', style: Theme.of(context).textTheme.titleMedium),
+                  const Text(HovFootWarmup.guidance),
+                  if (plan!.travelMode)
+                    const Text('Travel: wedge holds are deferred until your prescribed wedge is available.'),
+                  if (!plan.grantsQueueCredit)
+                    const Text('This session does not advance the strength queue. Use a longer slot to fit more lifting alongside the full foot routine.'),
+                  const Text('Big 3 stays enabled separately. Optional couch stretches finish when they fit. '
+                      'Short sessions reduce lifting, not the prescribed foot routine.'),
+                ],
+              ))),
             if (plan != null)
               ..._playOrder(plan.exercises).map((e) => Card(
                     child: ListTile(

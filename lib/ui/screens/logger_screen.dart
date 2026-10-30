@@ -11,6 +11,7 @@ import '../../integrations/screen_awake.dart';
 import '../../integrations/timer_beep.dart';
 import '../../models/cardio_protocol.dart';
 import '../../models/couch_stretch.dart';
+import '../../models/hov_foot_warmup.dart';
 import '../../models/exercise_metric.dart';
 import '../../models/equipment.dart';
 import '../../models/plan.dart';
@@ -21,6 +22,7 @@ import '../../state/app_controller.dart';
 import '../widgets/cardio_widgets.dart';
 import '../widgets/progression_panel.dart';
 import '../widgets/exercise_visual.dart';
+import '../widgets/hov_exercise_guide.dart';
 
 /// §11.3: one exercise at a time, big steppers, RIR buttons, pain button,
 /// rest timer, "wrap up" button. Weight steps follow the exercise's real
@@ -334,6 +336,11 @@ class _LoggerScreenState extends State<LoggerScreen>
         u++;
       }
     }
+    for (final w in pending) {
+      for (var set = 1; set <= _ex[w].sets; set++) {
+        steps.add(_Step(w, set));
+      }
+    }
     // no rest after the very last step
     if (steps.isNotEmpty) {
       final last = steps.removeLast();
@@ -415,6 +422,10 @@ class _LoggerScreenState extends State<LoggerScreen>
   }
 
   int? _restSecondsAfter(_Step step, PlannedExercise exercise) {
+    if (HovFootWarmup.isTrack(exercise.trackKey)) {
+      final seconds = HovFootWarmup.restSecondsAfter(exercise.trackKey);
+      return seconds == 0 ? null : seconds;
+    }
     if (exercise.isWarmup) {
       // General/ATG preparation is a continuous minute block and transitions
       // directly into the load ramp. Generated load ramps and later-compound
@@ -427,6 +438,13 @@ class _LoggerScreenState extends State<LoggerScreen>
           : null;
     }
     if (!step.restAfter) return null;
+    // The estimator ends lifting rest at the final work set. Cooldown holds
+    // can follow it, but must not introduce another 60/90-second rest block.
+    if (_steps.skip(_current + 1).every(
+          (next) => CouchStretch.isTrack(_ex[next.exIdx].trackKey),
+        )) {
+      return null;
+    }
     return exercise.isCompoundWork ? 90 : 60;
   }
 
@@ -851,6 +869,8 @@ class _LoggerScreenState extends State<LoggerScreen>
                                 label: Text('Superset — next: $partner'),
                               ),
                             const SizedBox(height: 12),
+                            if (HovFootWarmup.isTrack(e.trackKey))
+                              HovExerciseGuide(trackKey: e.trackKey),
                             if (e.visualId != null)
                               ExerciseVisualCard(
                                 visualId: e.visualId!,

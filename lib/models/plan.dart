@@ -1,5 +1,6 @@
 import 'cardio_protocol.dart';
 import 'exercise_metric.dart';
+import 'hov_foot_warmup.dart';
 import 'movement_pattern.dart';
 import 'session_type.dart';
 import 'set_log.dart';
@@ -131,9 +132,13 @@ class PlannedExercise {
 
   String get targetLabel => metric.formatRange(targetRange);
 
+  bool get countsTowardStrengthCompletion =>
+      !isWarmup && !HovFootWarmup.isTrack(trackKey);
+
   PlannedExercise copyWith({
     int? sets,
     int? supersetGroup,
+    bool? progressionEligible,
   }) =>
       PlannedExercise(
         trackKey: trackKey,
@@ -155,7 +160,7 @@ class PlannedExercise {
         nextProgressionLabel: nextProgressionLabel,
         prescriptionChange: prescriptionChange,
         persistLoadOnCompletion: persistLoadOnCompletion,
-        progressionEligible: progressionEligible,
+        progressionEligible: progressionEligible ?? this.progressionEligible,
         isTravel: isTravel,
         loadSteps: loadSteps,
         dumbbellCount: dumbbellCount,
@@ -191,6 +196,7 @@ class SessionPlan {
   /// The plan was generated while the dedicated lower-back recovery mode
   /// was active. Persisting the flag keeps safety context visible in history.
   final bool lowerBackRecoveryMode;
+  final bool hovFootWarmupEnabled;
 
   /// The conservative 9-minute upper bound of CAROL's REHIT Intense preset
   /// was explicitly withheld from this strength plan after all
@@ -213,12 +219,13 @@ class SessionPlan {
     this.grantsQueueCredit = true,
     this.travelMode = false,
     this.lowerBackRecoveryMode = false,
+    this.hovFootWarmupEnabled = false,
     this.optionalRehitFinisherReserved = false,
     this.timeCompressed = false,
   });
 
   int get plannedWorkSets =>
-      exercises.where((e) => !e.isWarmup).fold(0, (sum, e) => sum + e.sets);
+      exercises.where((e) => e.countsTowardStrengthCompletion).fold(0, (sum, e) => sum + e.sets);
 }
 
 /// Non-workout outcomes: rest day, forced rest, "wrap up" style short plans

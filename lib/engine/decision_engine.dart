@@ -1,6 +1,8 @@
 import '../models/check_in.dart';
 import '../models/bouldering_log.dart';
 import '../models/couch_stretch.dart';
+import '../models/hov_foot_warmup.dart';
+import 'hov_foot_warmup_engine.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
 import '../models/exercise_metric.dart';
@@ -782,6 +784,9 @@ class DecisionEngine {
     };
     final template = sessionTemplates[effectiveSessionId];
     final exercises = <PlannedExercise>[];
+    var primaryWorkDeferred = false;
+    final hovEnabled = input.settings.hovFootWarmupEnabled &&
+        template != null && !template.isCardioOnly;
     final backRebuildPlan =
         backRebuild != null && template != null && !template.isCardioOnly;
     if (backRebuildPlan) {
@@ -800,7 +805,13 @@ class DecisionEngine {
       // S4's ATG block replaces general movement prep, not the first loaded
       // compound's percent-load ramp.
       var loadedCompoundRampDone = false;
-      if (template.hasKneeHealthBlock) {
+      if (hovEnabled) {
+        exercises.addAll(const HovFootWarmupEngine().build(
+          travelMode: input.settings.travelMode,
+          painAware: prepPainAware,
+          excludedTracks: _hovExcludedTracks(input),
+        ));
+      } else if (template.hasKneeHealthBlock) {
         final atgMinutes =
             StrengthPrepPolicy.atgMinutes(checkin.timeMinutes);
         final String prepName;
@@ -880,7 +891,7 @@ class DecisionEngine {
       if (input.settings.bigThreeEnabled) {
         exercises.add(_bigThreeEntry(slotMinutes: checkin.timeMinutes));
       }
-      if (input.settings.couchStretchEnabled) {
+      if (input.settings.couchStretchEnabled && !hovEnabled) {
         exercises.addAll(_couchStretchEntries(
           holdSeconds: input.settings.couchStretchSeconds,
           travelMode: input.settings.travelMode,
@@ -1393,7 +1404,7 @@ class DecisionEngine {
     final queueCreditType = redTechnique ? null : _queueCreditType(chosen.id, effectiveSessionId, recovery.bucket);
     if (template != null &&
         !template.isCardioOnly &&
-        exercises.where((exercise) => !exercise.isWarmup).fold<int>(
+        exercises.where((exercise) => exercise.countsTowardStrengthCompletion).fold<int>(
               0,
               (sum, exercise) => sum + exercise.sets,
             ) ==
@@ -1431,6 +1442,7 @@ class DecisionEngine {
       var budgeted = strengthDurationBudgeter.fit(
         exercises: exercises,
         slotMinutes: checkin.timeMinutes - optionalRehitReserve,
+        condenseCompounds: hovEnabled && checkin.timeMinutes == 20,
       );
       if (!budgeted.fits &&
           exercises.any((exercise) => CouchStretch.isTrack(exercise.trackKey))) {
@@ -1461,6 +1473,22 @@ class DecisionEngine {
           ),
           patchedStates,
         );
+      }
+      primaryWorkDeferred = unbudgetedWork.any((original) =>
+          original.isCompoundWork && !budgeted.exercises.any((kept) =>
+              kept.isCompoundWork && kept.trackKey == original.trackKey));
+      // HOV's prescribed dose and the retained strength work outrank optional
+      // end-of-session stretches; do not cut lifts merely to fit the stretches.
+      if (hovEnabled && input.settings.couchStretchEnabled) {
+        final withStretches = [...budgeted.exercises, ..._couchStretchEntries(
+          holdSeconds: input.settings.couchStretchSeconds,
+          travelMode: input.settings.travelMode,
+        )];
+        final estimate = const StrengthDurationEstimator().estimateMinutes(withStretches);
+        if (estimate <= checkin.timeMinutes - optionalRehitReserve) {
+          budgeted = StrengthBudgetResult(exercises: withStretches,
+              estimatedDurationMin: estimate, fits: true);
+        }
       }
       exercises
         ..clear()
@@ -1540,11 +1568,13 @@ class DecisionEngine {
       exercises: exercises,
       estimatedDurationMin: estimatedDuration,
       cardioPrescription: cardioPrescription,
-      grantsQueueCredit: queueCreditType != null,
+      grantsQueueCredit: queueCreditType != null && !primaryWorkDeferred,
       travelMode: input.settings.travelMode,
       lowerBackRecoveryMode: input.settings.lowerBackRecovery.active,
+      hovFootWarmupEnabled: hovEnabled,
       optionalRehitFinisherReserved: optionalRehitFinisherReserved,
-      timeCompressed: isTimeCompressedSession(effectiveSessionId, tier),
+      timeCompressed: isTimeCompressedSession(effectiveSessionId, tier) ||
+          (hovEnabled && checkin.timeMinutes == 20),
     );
 
     return DecisionEngineOutput(
@@ -1558,11 +1588,30 @@ class DecisionEngine {
         queue: QueueTraceInfo(
           pointerBefore: input.queueState.pointer,
           servedBefore: input.queueState.served,
-          pointerAfterIfCompleted: queueEngine.advance(input.queueState, queueCreditType).pointer,
+          pointerAfterIfCompleted: queueEngine.advance(input.queueState, primaryWorkDeferred ? null : queueCreditType).pointer,
         ),
       ),
       patchedStates,
     );
+  }
+
+  Set<String> _hovExcludedTracks(DecisionEngineInput input) {
+    final sharpRegions = {
+      for (final flag in input.checkin.pain)
+        if (flag.severity == PainSeverity.sharp) flag.region,
+      for (final state in input.exerciseStates.values)
+        if (state.painFrozen && state.painSeverity == PainSeverity.sharp &&
+            state.painRegion != null) state.painRegion!,
+    };
+    if (sharpRegions.contains(BodyRegion.kneeLeft) ||
+        sharpRegions.contains(BodyRegion.kneeRight)) {
+      return HovFootWarmup.tracks;
+    }
+    if (sharpRegions.contains(BodyRegion.lowerBack) ||
+        sharpRegions.contains(BodyRegion.hip)) {
+      return {HovFootWarmup.bridge, HovFootWarmup.hinge, HovFootWarmup.steps};
+    }
+    return const {};
   }
 
   bool _prepPainActive(
