@@ -8,6 +8,7 @@ import 'package:morningcoach/engine/queue_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/couch_stretch.dart';
+import 'package:morningcoach/models/hov_foot_warmup.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/ladders.dart';
@@ -674,6 +675,33 @@ void main() {
       ..todayTrace = traceWith(null)
       ..settings = controller.settings.copyWith(bigThreeEnabled: false);
     expect(controller.backRoutineOfferedToday, isFalse);
+  });
+
+  test('HOV refreshes both modes, rejects stale plans and cannot complete main strength', () async {
+    for (final state in [const LowerBackRecoveryState(), rebuild()]) {
+      final controller = controllerWith(state);
+      await controller.submitCheckIn(timeMinutes: 35, subjective: 4);
+      await controller.swapToSession(SessionTypeId.s1);
+      final oldPlan = controller.todayTrace!.plan!;
+      await controller.saveSettings(controller.settings.copyWith(hovFootWarmupEnabled: true));
+      final plan = controller.todayTrace!.plan!;
+      expect(plan.hovFootWarmupEnabled, isTrue);
+      expect(controller.isPlanUsableNow(oldPlan), isFalse);
+      expect(controller.isPlanUsableNow(plan), isTrue);
+      expect((await controller.repo.loadSettings()).hovFootWarmupEnabled, isTrue);
+      final pointer = controller.queueState.pointer;
+      final stage = controller.lowerBackRecovery.rebuildStage;
+      await controller.completeSession(plan,
+        allSets(plan).where((s) => HovFootWarmup.isTrack(s.trackKey)).toList(),
+        durationMinutes: 15, endedEarly: true);
+      expect(controller.queueState.pointer, pointer);
+      expect(controller.lowerBackRecovery.rebuildStage, stage);
+      expect(controller.exerciseStates.keys.any(HovFootWarmup.isTrack), isFalse);
+      final logs = await controller.repo.loadSessionLogsSince(day);
+      expect(logs.last.completedWorkSets, 0);
+      expect(logs.last.countsTowardQueueAndFloor, isFalse);
+      expect(logs.last.setLogs, isNotEmpty);
+    }
   });
 
   test('couch stretch settings refresh the pending plan in both modes',

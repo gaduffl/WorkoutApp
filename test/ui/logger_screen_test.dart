@@ -8,6 +8,8 @@ import 'package:morningcoach/data/repository.dart';
 import 'package:morningcoach/engine/rehit_eligibility_engine.dart';
 import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/couch_stretch.dart';
+import 'package:morningcoach/engine/hov_foot_warmup_engine.dart';
+import 'package:morningcoach/models/hov_foot_warmup.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/movement_pattern.dart';
 import 'package:morningcoach/models/plan.dart';
@@ -847,6 +849,39 @@ void main() {
     );
     return beeps;
   }
+
+  testWidgets('HOV rounds run in order and trailing couch holds remain loggable', (tester) async {
+    final controller = captureController();
+    final hov = const HovFootWarmupEngine().build();
+    final entries = [...hov, ex('squat', MovementPattern.squat, 24, null, sets: 1),
+      for (final key in [CouchStretch.leftTrackKey, CouchStretch.rightTrackKey])
+        PlannedExercise(trackKey: key, pattern: MovementPattern.kneeHealth,
+          name: key, sets: 1, metric: ExerciseMetric.seconds,
+          targetRange: (30, 30), rirTarget: Rir.rir4plus, isWarmup: true),
+    ];
+    final plan = SessionPlan(sessionId: SessionTypeId.s1, sessionName: 'HOV',
+      tier: SessionTier.full, estimatedDurationMin: 35, exercises: entries);
+    await tester.pumpWidget(ChangeNotifierProvider<AppController>.value(
+      value: controller, child: MaterialApp(home: LoggerScreen(plan: plan))));
+    for (final e in entries.take(entries.length - 1)) {
+      for (var set = 1; set <= e.sets; set++) {
+        expect(find.textContaining(e.name), findsWidgets);
+        final action = e.isWarmup ? 'Log warm-up' :
+            e.metric == ExerciseMetric.seconds ? 'Log hold' : 'Log set';
+        await tester.tap(find.text(action));
+        await tester.pump();
+        if (e.trackKey == 'squat') {
+          expect(find.textContaining('Rest:'), findsNothing,
+              reason: 'Cooldown follows the final lift without an unbudgeted rest.');
+        }
+      }
+    }
+    expect(find.text(CouchStretch.rightTrackKey), findsOneWidget);
+    expect(find.text('Log warm-up & finish'), findsOneWidget);
+    expect(controller.completed, isFalse);
+    expect(hov.where((e) => e.trackKey == HovFootWarmup.holdLeft), hasLength(3));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('each couch stretch countdown ends with one beep',
       (tester) async {

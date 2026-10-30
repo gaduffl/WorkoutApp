@@ -40,7 +40,9 @@ void main() {
       MajorMuscleGroup.coreGrip,
     );
     expect(majorMuscleGroupForAnatomicalSlug('lower-back'), isNull);
-    expect(majorMuscleGroupForAnatomicalSlug('calves'), isNull);
+    expect(majorMuscleGroupForAnatomicalSlug('calves'), MajorMuscleGroup.calves);
+    expect(majorMuscleGroupForAnatomicalSlug('tibialis'), MajorMuscleGroup.tibialis);
+    expect(majorMuscleGroupForAnatomicalSlug('feet'), MajorMuscleGroup.feet);
   });
 
   testWidgets('renders labeled anatomical front and back views', (tester) async {

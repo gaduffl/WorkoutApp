@@ -47,7 +47,7 @@ safety rules, validation, or delivery workflow changes.
   preserve the release Android `INTERNET` permission. Never guess by name or let a
   substitution inherit a demo for different equipment or motion; unsupported variants
   display no graphic.
-- Every app-authored strength preparation block includes jumping jacks inside its
+- Except for the prescribed HOV routine, every app-authored strength preparation block includes jumping jacks inside its
   existing time allocation. Pain-aware and Back rebuild plans must retain the
   low-impact step-jack or marching fallback when jumping or impact reproduces
   symptoms. Cardio-owned preset warm-ups remain unchanged.
@@ -63,6 +63,22 @@ safety rules, validation, or delivery workflow changes.
   when the session's minimum work would not fit. The logger timer stays adjustable and
   only a couch-stretch countdown plays the short `morningcoach/timer_beep` tone; a
   missing bridge must never block logging. Travel mode uses the wall version.
+- `HOV Fuß Warmup` is opt-in and replaces general/ATG preparation in both normal
+  strength and Back rebuild. Keep the separately enabled Big 3, first lift's load
+  ramp, and safety gates; append enabled couch stretches only if they fit after
+  budgeted work. Preserve Phase 1's 2×30 s bilateral calf bridge, two C1–C4 rounds
+  (10/10/30/14 reps), and alternating 3×30 s calf holds on each foot. No automatic
+  rehabilitation progression. Travel defers wedge holds; sharp lower-body flags
+  exclude affected HOV movements. Never silently shorten the prescribed dose.
+- HOV entries are non-progressing work on exact `hov:` tracks. The existing muscle
+  map handles calves, shin/ankle and foot stabilizers plus secondary leg exposure.
+  Coordination drills are exposure-only; bridge/holds qualify for effective-set
+  credit only under the existing effort policy. Each separately logged unilateral
+  hold contributes half a bilateral-equivalent set. New regions have no invented
+  hypertrophy targets. HOV must not satisfy main-strength completion/queue/finisher
+  thresholds or advance Back rebuild. Shortened 20-minute lifting can reach one
+  set; reduced sets do not progress, and deferring a primary lift withholds queue
+  credit. The logger and Today preview must include trailing stretch entries.
 - Travel mode means no equipment anywhere. Every strength work entry is a bodyweight
   or self-resisted travel step, resolved for the exercise actually prescribed (pain
   substitutes included); a slot without one is dropped, never emitted with its

@@ -136,7 +136,7 @@ class HistoryFeedbackViewModel {
     };
 
     final muscles = [
-      for (final muscle in MajorMuscleGroup.values)
+      for (final muscle in MajorMuscleGroup.values.where((m) => m.hasHypertrophyTarget))
         _muscleRow(
           muscle: muscle,
           ledger: ledger,
@@ -260,6 +260,9 @@ class HistoryFeedbackViewModel {
         MajorMuscleGroup.biceps => 'Biceps',
         MajorMuscleGroup.triceps => 'Triceps',
         MajorMuscleGroup.coreGrip => 'Core/grip',
+        MajorMuscleGroup.calves => 'Calves / soleus',
+        MajorMuscleGroup.tibialis => 'Shin / ankle stabilizers',
+        MajorMuscleGroup.feet => 'Foot stabilizers',
       };
 }
 

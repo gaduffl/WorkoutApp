@@ -12,7 +12,7 @@ void main() {
       targets.hypertrophyTargetBands.keys.toSet(),
       MajorMuscleGroup.values.toSet(),
     );
-    for (final band in targets.hypertrophyTargetBands.values) {
+    for (final band in targets.hypertrophyTargetBands.entries.where((e) => e.key.hasHypertrophyTarget).map((e) => e.value)) {
       expect(band.minimum, 8);
       expect(band.center, 10);
       expect(band.maximum, 12);

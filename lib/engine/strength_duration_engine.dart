@@ -1,5 +1,6 @@
 import '../models/exercise_metric.dart';
 import '../models/plan.dart';
+import '../models/hov_foot_warmup.dart';
 
 /// Exact movement-preparation allocation within the immutable hard windows.
 /// S4's ATG block replaces general preparation, so the two values are never
@@ -66,7 +67,14 @@ class StrengthDurationEstimator {
   int estimateSeconds(List<PlannedExercise> exercises) {
     var seconds = 0;
 
-    final work = exercises.where((exercise) => !exercise.isWarmup).toList();
+    final work = exercises.where((exercise) => exercise.countsTowardStrengthCompletion).toList();
+    for (final exercise in exercises.where((e) => HovFootWarmup.isTrack(e.trackKey))) {
+      final active = exercise.metric == ExerciseMetric.seconds
+          ? exercise.targetRange.$2
+          : exercise.targetRange.$2 * HovFootWarmup.repSeconds(exercise.trackKey);
+      seconds += exercise.sets * (active + HovFootWarmup.restSecondsAfter(exercise.trackKey))
+          + HovFootWarmup.transitionSeconds;
+    }
     for (final exercise in exercises.where((exercise) => exercise.isWarmup)) {
       if (exercise.metric == ExerciseMetric.minutes) {
         seconds += exercise.targetRange.$2 * 60 * exercise.sets;
@@ -169,6 +177,7 @@ class StrengthDurationBudgeter {
   StrengthBudgetResult fit({
     required List<PlannedExercise> exercises,
     required int slotMinutes,
+    bool condenseCompounds = false,
   }) {
     final budgeted = List<PlannedExercise>.of(exercises);
 
@@ -185,12 +194,12 @@ class StrengthDurationBudgeter {
     if (current.fits) return current;
 
     final accessories = budgeted
-        .where((exercise) => !exercise.isWarmup && !exercise.isCompoundWork)
+        .where((exercise) => exercise.countsTowardStrengthCompletion && !exercise.isCompoundWork)
         .toList()
         .reversed;
     for (final accessory in accessories) {
       final workCount =
-          budgeted.where((exercise) => !exercise.isWarmup).length;
+          budgeted.where((exercise) => exercise.countsTowardStrengthCompletion).length;
       if (workCount <= 1) break;
       final index = budgeted.lastIndexOf(accessory);
       if (index < 0) continue;
@@ -204,10 +213,11 @@ class StrengthDurationBudgeter {
       changed = false;
       for (var i = 0; i < budgeted.length; i++) {
         final exercise = budgeted[i];
-        if (exercise.isWarmup) continue;
-        final minimumSets = exercise.isCompoundWork ? 2 : 1;
+        if (!exercise.countsTowardStrengthCompletion) continue;
+        final minimumSets = exercise.isCompoundWork && !condenseCompounds ? 2 : 1;
         if (exercise.sets <= minimumSets) continue;
-        budgeted[i] = exercise.copyWith(sets: exercise.sets - 1);
+        budgeted[i] = exercise.copyWith(sets: exercise.sets - 1,
+            progressionEligible: condenseCompounds ? false : exercise.progressionEligible);
         changed = true;
         current = result();
         if (current.fits) return current;
@@ -220,6 +230,19 @@ class StrengthDurationBudgeter {
       current = result();
     }
 
+    // A 20-minute HOV session keeps the prescription and first loaded ramp.
+    // If one set of each main lift still cannot fit, defer later lifts rather
+    // than shortening the prescribed foot dose. The caller withholds queue
+    // credit when a primary movement is deferred.
+    if (condenseCompounds) {
+      for (var i = budgeted.length - 1; i >= 0 && !current.fits; i--) {
+        if (!budgeted[i].countsTowardStrengthCompletion) continue;
+        if (budgeted.where((e) => e.countsTowardStrengthCompletion).length <= 1) break;
+        _removeWorkAndItsWarmups(budgeted, i);
+        current = result();
+        i = i.clamp(0, budgeted.length).toInt();
+      }
+    }
     return current;
   }
 

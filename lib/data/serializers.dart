@@ -511,6 +511,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'recoveryBackExtensionsEnabled': u.recoveryBackExtensionsEnabled,
       'bigThreeEnabled': u.bigThreeEnabled,
       'couchStretchEnabled': u.couchStretchEnabled,
+      'hovFootWarmupEnabled': u.hovFootWarmupEnabled,
       'couchStretchSeconds': u.couchStretchSeconds,
       'backRoutineDoneDay': u.backRoutineDoneDay,
       'classicHeatmap': u.classicHeatmap,
@@ -575,6 +576,7 @@ UserSettings _userSettingsFromJson(
           j['recoveryBackExtensionsEnabled'] as bool? ?? false,
       bigThreeEnabled: j['bigThreeEnabled'] as bool? ?? true,
       couchStretchEnabled: j['couchStretchEnabled'] as bool? ?? true,
+      hovFootWarmupEnabled: j['hovFootWarmupEnabled'] as bool? ?? false,
       couchStretchSeconds: CouchStretch.clampHoldSeconds(
         (j['couchStretchSeconds'] as num?)?.toInt() ??
             CouchStretch.defaultHoldSeconds,
@@ -831,6 +833,7 @@ Map<String, dynamic> sessionPlanToJson(SessionPlan p) => {
       'grantsQueueCredit': p.grantsQueueCredit,
       'travelMode': p.travelMode,
       'lowerBackRecoveryMode': p.lowerBackRecoveryMode,
+      'hovFootWarmupEnabled': p.hovFootWarmupEnabled,
       'optionalRehitFinisherReserved': p.optionalRehitFinisherReserved,
       'timeCompressed': p.timeCompressed,
     };
@@ -850,6 +853,7 @@ SessionPlan sessionPlanFromJson(Map<String, dynamic> j) => SessionPlan(
       travelMode: j['travelMode'] as bool? ?? false,
       lowerBackRecoveryMode:
           j['lowerBackRecoveryMode'] as bool? ?? false,
+      hovFootWarmupEnabled: j['hovFootWarmupEnabled'] as bool? ?? false,
       optionalRehitFinisherReserved:
           j['optionalRehitFinisherReserved'] as bool? ?? false,
       timeCompressed: j['timeCompressed'] as bool? ?? false,

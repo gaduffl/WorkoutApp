@@ -45,6 +45,9 @@ class AnatomicalMuscleMap extends StatelessWidget {
 @visibleForTesting
 MajorMuscleGroup? majorMuscleGroupForAnatomicalSlug(String slug) =>
     switch (slug) {
+      'calves' => MajorMuscleGroup.calves,
+      'tibialis' => MajorMuscleGroup.tibialis,
+      'feet' => MajorMuscleGroup.feet,
       'quadriceps' => MajorMuscleGroup.quads,
       'gluteal' => MajorMuscleGroup.glutes,
       'hamstring' => MajorMuscleGroup.hamstrings,

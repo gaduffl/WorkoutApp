@@ -12,6 +12,13 @@ enum MajorMuscleGroup {
   biceps,
   triceps,
   coreGrip,
+  calves,
+  tibialis,
+  feet;
+
+  /// HOV adds tracked regions, not invented weekly hypertrophy goals.
+  bool get hasHypertrophyTarget =>
+      this != calves && this != tibialis && this != feet;
 }
 
 /// Weekly-equivalent hypertrophy dose target for one muscle group.
@@ -72,7 +79,9 @@ class TrainingTargets {
             Map<MajorMuscleGroup, EffectiveSetTargetBand>.unmodifiable(
           {
             for (final group in MajorMuscleGroup.values)
-              group: defaultHypertrophyBand,
+              group: group.hasHypertrophyTarget
+                  ? defaultHypertrophyBand
+                  : const EffectiveSetTargetBand(minimum: 0, center: 0, maximum: 0),
             ...?hypertrophyTargetBands,
           },
         ),

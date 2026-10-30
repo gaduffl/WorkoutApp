@@ -185,6 +185,10 @@ class AppController extends ChangeNotifier {
 
   bool isPlanUsableNow(SessionPlan? plan, {DateTime? nowLocal}) {
     if (plan == null) return true;
+    if (sessionTemplates[plan.sessionId]?.isCardioOnly == false &&
+        plan.hovFootWarmupEnabled != settings.hovFootWarmupEnabled) {
+      return false;
+    }
     if (lowerBackRecovery.active &&
         ((todayTrace?.checkin.pain.any(
                   (p) => p.region == BodyRegion.lowerBack && p.tags.isNotEmpty,
@@ -404,7 +408,7 @@ class AppController extends ChangeNotifier {
       ..sort((a, b) => a.completedAt.compareTo(b.completedAt));
     final firstLog = todaysLogs.isEmpty ? null : todaysLogs.first;
     final firstActualWorkSets = firstLog?.setLogs
-            .where((setLog) => !setLog.isWarmup && setLog.value > 0)
+            .where((setLog) => setLog.countsTowardStrengthCompletion)
             .length ??
         0;
     final firstSession = firstLog == null
@@ -463,7 +467,7 @@ class AppController extends ChangeNotifier {
     DateTime? nowLocal,
   }) {
     final workSets = loggedSets
-        .where((setLog) => !setLog.isWarmup && setLog.value > 0)
+        .where((setLog) => setLog.countsTowardStrengthCompletion)
         .toList();
     final validPlan = plan.sessionId == SessionTypeId.s2 &&
         plan.tier == SessionTier.extended &&
@@ -1130,6 +1134,7 @@ class AppController extends ChangeNotifier {
         settings.deadliftAlternative != newSettings.deadliftAlternative ||
         settings.bigThreeEnabled != newSettings.bigThreeEnabled ||
         settings.couchStretchEnabled != newSettings.couchStretchEnabled ||
+        settings.hovFootWarmupEnabled != newSettings.hovFootWarmupEnabled ||
         settings.couchStretchSeconds != newSettings.couchStretchSeconds ||
         settings.recoveryBackExtensionsEnabled != newSettings.recoveryBackExtensionsEnabled;
     // The REHIT day marker is internal state, not an editable preference.
@@ -2359,7 +2364,7 @@ class AppController extends ChangeNotifier {
         setLogs: loggedSets,
         plannedWorkSets: plan.plannedWorkSets,
         completedWorkSets:
-            loggedSets.where((s) => !s.isWarmup && s.value > 0).length,
+            loggedSets.where((s) => s.countsTowardStrengthCompletion).length,
         durationMinutes: durationMinutes,
         timings: timings,
         countsAs: countsAs,
@@ -2435,7 +2440,7 @@ class AppController extends ChangeNotifier {
     var rebuild = before;
     if (rebuild.active && plan.lowerBackRecoveryMode) {
       final work = log.setLogs
-          .where((setLog) => !setLog.isWarmup && setLog.value > 0)
+          .where((setLog) => setLog.countsTowardStrengthCompletion)
           .toList();
       // Any staged hinge or squat work waits for the next-morning check.
       final rebuildWork =

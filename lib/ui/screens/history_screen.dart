@@ -1147,10 +1147,14 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
     MuscleExposureSnapshot? exposure,
   ) {
     if (_mode == _MuscleMapMode.dose) {
+      final maxTrackedDose = widget.status.muscle
+          .where((row) => !row.muscleGroup.hasHypertrophyTarget)
+          .fold<double>(1, (maximum, row) => row.completedEffectiveSets > maximum
+              ? row.completedEffectiveSets : maximum);
       return {
         for (final row in widget.status.muscle)
           row.muscleGroup: row.maximumTargetEffectiveSets <= 0
-              ? 0
+              ? (row.completedEffectiveSets / maxTrackedDose).clamp(0.0, 1.0)
               : (row.completedEffectiveSets /
                       row.maximumTargetEffectiveSets)
                   .clamp(0.0, 1.0),
@@ -1181,7 +1185,8 @@ class _MuscleMapCardState extends State<MuscleMapCard> {
     MuscleExposureSnapshot? exposure,
   ) {
     if (_mode == _MuscleMapMode.dose) {
-      return _sets(widget.ledger.muscle(muscle).effectiveSets28d);
+      return '${_sets(widget.ledger.muscle(muscle).effectiveSets28d)}'
+          '${muscle.hasHypertrophyTarget ? '' : ' (no target)'}';
     }
     if (_mode == _MuscleMapMode.recency) {
       final days = widget.ledger.muscle(muscle).daysSinceLastStimulus;
@@ -1205,6 +1210,9 @@ String _muscleLabel(MajorMuscleGroup muscle) => switch (muscle) {
       MajorMuscleGroup.biceps => 'Biceps',
       MajorMuscleGroup.triceps => 'Triceps',
       MajorMuscleGroup.coreGrip => 'Core/grip',
+      MajorMuscleGroup.calves => 'Calves / soleus',
+      MajorMuscleGroup.tibialis => 'Shin / ankle stabilizers',
+      MajorMuscleGroup.feet => 'Foot stabilizers',
     };
 
 class _ClassicCalendarHeatCard extends StatelessWidget {

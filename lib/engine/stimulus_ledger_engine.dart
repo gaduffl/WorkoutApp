@@ -2,6 +2,7 @@ import '../models/cardio_protocol.dart';
 import '../models/bouldering_log.dart';
 import '../models/floor_category.dart';
 import '../models/ladders.dart';
+import '../models/hov_foot_warmup.dart';
 import '../models/lower_back_recovery.dart';
 import '../models/movement_pattern.dart';
 import '../models/plan.dart';
@@ -21,6 +22,32 @@ class ExerciseMuscleMap {
   const ExerciseMuscleMap();
 
   static const Map<String, _MuscleProfile> _namedTracks = {
+    HovFootWarmup.bridge: _MuscleProfile(
+      primary: {MajorMuscleGroup.calves},
+      secondary: {MajorMuscleGroup.glutes, MajorMuscleGroup.hamstrings},
+    ),
+    HovFootWarmup.roll: _MuscleProfile(
+      primary: {MajorMuscleGroup.feet},
+      secondary: {MajorMuscleGroup.calves, MajorMuscleGroup.tibialis},
+    ),
+    HovFootWarmup.hinge: _MuscleProfile(
+      primary: {MajorMuscleGroup.calves},
+      secondary: {MajorMuscleGroup.feet, MajorMuscleGroup.hamstrings, MajorMuscleGroup.glutes},
+    ),
+    HovFootWarmup.lifts: _MuscleProfile(
+      primary: {MajorMuscleGroup.tibialis},
+      secondary: {MajorMuscleGroup.feet},
+    ),
+    HovFootWarmup.steps: _MuscleProfile(
+      primary: {MajorMuscleGroup.feet},
+      secondary: {MajorMuscleGroup.calves, MajorMuscleGroup.quads, MajorMuscleGroup.glutes},
+    ),
+    HovFootWarmup.holdLeft: _MuscleProfile(
+      primary: {MajorMuscleGroup.calves}, secondary: {MajorMuscleGroup.feet},
+    ),
+    HovFootWarmup.holdRight: _MuscleProfile(
+      primary: {MajorMuscleGroup.calves}, secondary: {MajorMuscleGroup.feet},
+    ),
     'sub:hinge:alternative_glute_bridge': _MuscleProfile(
       primary: {MajorMuscleGroup.glutes},
     ),
@@ -199,7 +226,12 @@ class ExerciseMuscleMap {
         (normalizedName == null
             ? null
             : _legacyNamedExercises[normalizedName]);
-    if (named != null) return named.effectiveSets;
+    if (named != null) {
+      final perSide = trackKey == HovFootWarmup.holdLeft ||
+          trackKey == HovFootWarmup.holdRight;
+      return named.effectiveSets.map((muscle, credit) =>
+          MapEntry(muscle, perSide ? credit * 0.5 : credit));
+    }
 
     // An unknown named/substitute track is safer left uncredited than treated
     // as the broad pain-management pattern it happens to use.
@@ -253,7 +285,9 @@ class TargetEffortPolicy {
   });
 
   bool qualifies(SetLog set) =>
-      !set.isWarmup && set.value > 0 && qualifyingRir.contains(set.rir);
+      !set.isWarmup && set.value > 0 && qualifyingRir.contains(set.rir) &&
+      (!HovFootWarmup.isTrack(set.trackKey) ||
+          HovFootWarmup.isStrengthTrack(set.trackKey));
 }
 
 /// Relative, non-diagnostic muscle exposure for the History "Today" view.

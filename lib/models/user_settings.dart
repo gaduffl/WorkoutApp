@@ -55,6 +55,9 @@ class UserSettings {
   /// in normal training and in Back rebuild alike.
   final bool couchStretchEnabled;
 
+  /// HOV Phase 1 replaces general/ATG prep; Big 3 stays, couch holds finish.
+  final bool hovFootWarmupEnabled;
+
   /// Planned hold per side; the logger's timer can still be adjusted.
   final int couchStretchSeconds;
 
@@ -118,6 +121,7 @@ class UserSettings {
     this.recoveryBackExtensionsEnabled = false,
     this.bigThreeEnabled = true,
     this.couchStretchEnabled = true,
+    this.hovFootWarmupEnabled = false,
     this.couchStretchSeconds = CouchStretch.defaultHoldSeconds,
     this.backRoutineDoneDay,
     this.classicHeatmap = false,
@@ -161,6 +165,7 @@ class UserSettings {
     bool? recoveryBackExtensionsEnabled,
     bool? bigThreeEnabled,
     bool? couchStretchEnabled,
+    bool? hovFootWarmupEnabled,
     int? couchStretchSeconds,
     String? backRoutineDoneDay,
     bool? classicHeatmap,
@@ -203,6 +208,7 @@ class UserSettings {
       recoveryBackExtensionsEnabled: recoveryBackExtensionsEnabled ?? this.recoveryBackExtensionsEnabled,
       bigThreeEnabled: bigThreeEnabled ?? this.bigThreeEnabled,
       couchStretchEnabled: couchStretchEnabled ?? this.couchStretchEnabled,
+      hovFootWarmupEnabled: hovFootWarmupEnabled ?? this.hovFootWarmupEnabled,
       couchStretchSeconds: couchStretchSeconds ?? this.couchStretchSeconds,
       backRoutineDoneDay: backRoutineDoneDay ?? this.backRoutineDoneDay,
       classicHeatmap: classicHeatmap ?? this.classicHeatmap,
