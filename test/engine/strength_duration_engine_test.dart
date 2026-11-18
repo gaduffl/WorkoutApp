@@ -5,6 +5,7 @@ import 'package:morningcoach/engine/session_templates.dart';
 import 'package:morningcoach/engine/strength_duration_engine.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/couch_stretch.dart';
+import 'package:morningcoach/models/kickstand_rdl.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/floor_category.dart';
@@ -425,14 +426,16 @@ void main() {
         }
         expect(atg.instruction, contains('Replaces general movement prep.'));
         expect(atg.instruction, isNot(contains('shoulder/scapular rehearsal')));
-        // The ATG block replaces general movement prep. The McGill Big 3
-        // and couch stretch entries that follow it are not general prep.
+        // The ATG block replaces general movement prep. The McGill Big 3,
+        // couch stretch and kickstand RDL entries that follow it are not
+        // general prep.
         expect(
           plan.exercises.where(
             (exercise) =>
                 exercise.trackKey.startsWith('warmup:') &&
                 exercise.trackKey != 'warmup:big3' &&
-                !CouchStretch.isTrack(exercise.trackKey),
+                !CouchStretch.isTrack(exercise.trackKey) &&
+                !KickstandRdl.isTrack(exercise.trackKey),
           ),
           isEmpty,
         );

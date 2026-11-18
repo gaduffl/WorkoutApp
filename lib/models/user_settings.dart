@@ -55,6 +55,10 @@ class UserSettings {
   /// in normal training and in Back rebuild alike.
   final bool couchStretchEnabled;
 
+  /// Adds the mini-band kickstand RDL as the last warm-up item on lower-body
+  /// days (sessions with a hinge slot), in normal training and Back rebuild.
+  final bool kickstandRdlEnabled;
+
   /// HOV Phase 1 replaces general/ATG prep; Big 3 stays, couch holds finish.
   final bool hovFootWarmupEnabled;
 
@@ -121,6 +125,7 @@ class UserSettings {
     this.recoveryBackExtensionsEnabled = false,
     this.bigThreeEnabled = true,
     this.couchStretchEnabled = true,
+    this.kickstandRdlEnabled = true,
     this.hovFootWarmupEnabled = false,
     this.couchStretchSeconds = CouchStretch.defaultHoldSeconds,
     this.backRoutineDoneDay,
@@ -165,6 +170,7 @@ class UserSettings {
     bool? recoveryBackExtensionsEnabled,
     bool? bigThreeEnabled,
     bool? couchStretchEnabled,
+    bool? kickstandRdlEnabled,
     bool? hovFootWarmupEnabled,
     int? couchStretchSeconds,
     String? backRoutineDoneDay,
@@ -208,6 +214,7 @@ class UserSettings {
       recoveryBackExtensionsEnabled: recoveryBackExtensionsEnabled ?? this.recoveryBackExtensionsEnabled,
       bigThreeEnabled: bigThreeEnabled ?? this.bigThreeEnabled,
       couchStretchEnabled: couchStretchEnabled ?? this.couchStretchEnabled,
+      kickstandRdlEnabled: kickstandRdlEnabled ?? this.kickstandRdlEnabled,
       hovFootWarmupEnabled: hovFootWarmupEnabled ?? this.hovFootWarmupEnabled,
       couchStretchSeconds: couchStretchSeconds ?? this.couchStretchSeconds,
       backRoutineDoneDay: backRoutineDoneDay ?? this.backRoutineDoneDay,

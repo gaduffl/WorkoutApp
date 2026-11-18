@@ -41,6 +41,22 @@ class StrengthPrepPolicy {
             'Strength plans require a 20, 35, or 60 minute hard window',
           ),
       };
+
+  /// Rounds of the lower-day kickstand RDL (8 slow reps per side each).
+  static int kickstandRdlRounds(int slotMinutes) => switch (slotMinutes) {
+        20 => 1,
+        35 || 60 => 2,
+        _ => throw ArgumentError.value(
+            slotMinutes,
+            'slotMinutes',
+            'Strength plans require a 20, 35, or 60 minute hard window',
+          ),
+      };
+
+  /// Minutes planned for those rounds: about 1½ minutes per round, rounded
+  /// up so the band, the stance and the side switch fit.
+  static int kickstandRdlMinutes(int slotMinutes) =>
+      kickstandRdlRounds(slotMinutes) == 1 ? 2 : 3;
 }
 
 /// Conservative, deterministic timing model for generated strength work.
