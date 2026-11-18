@@ -2,6 +2,7 @@ import '../models/check_in.dart';
 import '../models/bouldering_log.dart';
 import '../models/couch_stretch.dart';
 import '../models/hov_foot_warmup.dart';
+import '../models/kickstand_rdl.dart';
 import 'hov_foot_warmup_engine.dart';
 import '../models/decision_trace.dart';
 import '../models/equipment.dart';
@@ -787,6 +788,8 @@ class DecisionEngine {
     var primaryWorkDeferred = false;
     final hovEnabled = input.settings.hovFootWarmupEnabled &&
         template != null && !template.isCardioOnly;
+    // The lower-day hinge primer, when enabled and today's flags allow it.
+    PlannedExercise? kickstandRdl;
     final backRebuildPlan =
         backRebuild != null && template != null && !template.isCardioOnly;
     if (backRebuildPlan) {
@@ -896,6 +899,17 @@ class DecisionEngine {
           holdSeconds: input.settings.couchStretchSeconds,
           travelMode: input.settings.travelMode,
         ));
+      }
+      if (input.settings.kickstandRdlEnabled &&
+          template.compoundPatterns.contains(MovementPattern.hinge) &&
+          !_kickstandRdlBlockedByPain(input)) {
+        kickstandRdl = _kickstandRdlEntry(
+          slotMinutes: checkin.timeMinutes,
+          travelMode: input.settings.travelMode,
+        );
+        // HOV keeps its prescribed dose and the lifts first: there the
+        // primer joins after budgeting, and only if it fits (see below).
+        if (!hovEnabled) exercises.add(kickstandRdl);
       }
       final slots = _workSlotsForSession(
         sessionId: effectiveSessionId,
@@ -1444,14 +1458,28 @@ class DecisionEngine {
         slotMinutes: checkin.timeMinutes - optionalRehitReserve,
         condenseCompounds: hovEnabled && checkin.timeMinutes == 20,
       );
-      if (!budgeted.fits &&
-          exercises.any((exercise) => CouchStretch.isTrack(exercise.trackKey))) {
-        // The optional stretch may trim work, but it never costs the session.
+      // The optional warm-up drills may trim work, but they never cost the
+      // session. Drop as few as possible, the newer kickstand RDL first, so
+      // it never pushes the couch stretches out.
+      final hasKickstand =
+          exercises.any((exercise) => KickstandRdl.isTrack(exercise.trackKey));
+      final hasCouch =
+          exercises.any((exercise) => CouchStretch.isTrack(exercise.trackKey));
+      for (final (dropKickstand, dropCouch) in [
+        if (hasKickstand) (true, false),
+        if (hasCouch) (false, true),
+        if (hasKickstand && hasCouch) (true, true),
+      ]) {
+        if (budgeted.fits) break;
         budgeted = strengthDurationBudgeter.fit(
-          exercises: exercises
-              .where((exercise) => !CouchStretch.isTrack(exercise.trackKey))
-              .toList(),
+          exercises: [
+            for (final exercise in exercises)
+              if (!(dropKickstand && KickstandRdl.isTrack(exercise.trackKey)) &&
+                  !(dropCouch && CouchStretch.isTrack(exercise.trackKey)))
+                exercise,
+          ],
           slotMinutes: checkin.timeMinutes - optionalRehitReserve,
+          condenseCompounds: hovEnabled && checkin.timeMinutes == 20,
         );
       }
       if (!budgeted.fits) {
@@ -1478,7 +1506,24 @@ class DecisionEngine {
           original.isCompoundWork && !budgeted.exercises.any((kept) =>
               kept.isCompoundWork && kept.trackKey == original.trackKey));
       // HOV's prescribed dose and the retained strength work outrank optional
-      // end-of-session stretches; do not cut lifts merely to fit the stretches.
+      // drills; do not cut lifts merely to fit them. The kickstand RDL goes
+      // right after HOV and the Big 3, the couch stretches after the work.
+      final hovPrimer = hovEnabled ? kickstandRdl : null;
+      if (hovPrimer != null) {
+        final firstAfterPrep = budgeted.exercises.indexWhere((exercise) =>
+            !HovFootWarmup.isTrack(exercise.trackKey) &&
+            exercise.trackKey != _bigThreeTrackKey);
+        final withPrimer = [...budgeted.exercises]..insert(
+            firstAfterPrep < 0 ? budgeted.exercises.length : firstAfterPrep,
+            hovPrimer,
+          );
+        final estimate =
+            const StrengthDurationEstimator().estimateMinutes(withPrimer);
+        if (estimate <= checkin.timeMinutes - optionalRehitReserve) {
+          budgeted = StrengthBudgetResult(exercises: withPrimer,
+              estimatedDurationMin: estimate, fits: true);
+        }
+      }
       if (hovEnabled && input.settings.couchStretchEnabled) {
         final withStretches = [...budgeted.exercises, ..._couchStretchEntries(
           holdSeconds: input.settings.couchStretchSeconds,
@@ -1904,7 +1949,7 @@ class DecisionEngine {
           '3:35–6:00 · Bird dog: the same on each side\n',
     };
     return PlannedExercise(
-      trackKey: 'warmup:big3',
+      trackKey: _bigThreeTrackKey,
       pattern: MovementPattern.coreGrip,
       name: 'McGill Big 3',
       sets: 1,
@@ -1955,6 +2000,70 @@ class DecisionEngine {
       side(CouchStretch.leftTrackKey, 'left', 'right'),
       side(CouchStretch.rightTrackKey, 'right', 'left'),
     ];
+  }
+
+  static const _bigThreeTrackKey = 'warmup:big3';
+
+  /// The mini-band kickstand RDL as the last warm-up item on lower-body days:
+  /// a fixed, non-progressing hinge-and-glute primer of 8 slow reps per side,
+  /// two rounds (one in a 20-minute window). Travel mode drops the band.
+  PlannedExercise _kickstandRdlEntry({
+    required int slotMinutes,
+    required bool travelMode,
+  }) {
+    final rounds = StrengthPrepPolicy.kickstandRdlRounds(slotMinutes);
+    final minutes = StrengthPrepPolicy.kickstandRdlMinutes(slotMinutes);
+    const reps = KickstandRdl.repsPerSide;
+    final schedule = rounds == 1
+        ? '0:00–2:00 · $reps slow reps on the left leg, then $reps on the '
+            'right\n'
+        : '0:00–1:30 · Round 1: $reps slow reps on the left leg, then $reps '
+            'on the right\n'
+            '1:30–3:00 · Round 2: the same\n';
+    final band = travelMode
+        ? 'No band while travelling: press the front knee gently out over '
+            'the toes.'
+        : 'Mini-band just above the knees (or where your physio placed it); '
+            'press the front knee out against it.';
+    return PlannedExercise(
+      trackKey: KickstandRdl.trackKey,
+      pattern: MovementPattern.kneeHealth,
+      name: travelMode ? 'Kickstand RDL (no band)' : 'Mini-band kickstand RDL',
+      sets: 1,
+      metric: ExerciseMetric.minutes,
+      targetRange: (minutes, minutes),
+      rirTarget: Rir.rir4plus,
+      isWarmup: true,
+      instruction: '$schedule$band Front foot flat and carrying most of your '
+          'weight; back foot half a step behind with only the toes down, heel '
+          'up. The back toe stays planted the whole time. Keep the hips square '
+          'and the back neutral, push the hips back until you feel the back of '
+          'the front thigh, then drive through the front heel to stand tall. '
+          'Ease off or skip a side that brings on back, hip or knee pain.',
+      progressionEligible: false,
+      isTravel: travelMode,
+    );
+  }
+
+  /// The kickstand RDL is a standing hinge on mostly one leg, so any
+  /// lower-back or hip flag (today's or a persisted freeze) and a sharp knee
+  /// flag leave it out, as the pain-aware prep skips flagged rehearsals.
+  bool _kickstandRdlBlockedByPain(DecisionEngineInput input) {
+    bool blocks(BodyRegion region, PainSeverity severity) =>
+        region.affectedPatterns.contains(MovementPattern.hinge) ||
+        ((region == BodyRegion.kneeLeft || region == BodyRegion.kneeRight) &&
+            severity == PainSeverity.sharp);
+    return input.checkin.pain
+            .any((flag) => blocks(flag.region, flag.severity)) ||
+        input.exerciseStates.values.any(
+          (state) =>
+              state.painFrozen &&
+              state.painRegion != null &&
+              blocks(
+                state.painRegion!,
+                state.painSeverity ?? PainSeverity.sharp,
+              ),
+        );
   }
 
   /// Only a same-type completion grants queue credit; RED/YELLOW swaps

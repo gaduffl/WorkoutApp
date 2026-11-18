@@ -161,6 +161,26 @@ void main() {
     expect(hold, findsNothing);
   });
 
+  testWidgets('the kickstand RDL toggles at once and keeps the stretches',
+      (tester) async {
+    final controller = await pumpSettings(tester);
+    final toggle = find.byKey(const Key('settings-kickstand-rdl'));
+    await tester.scrollUntilVisible(toggle, 400);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    expect(
+      find.textContaining('Lower Strength and Full Body days'),
+      findsOneWidget,
+    );
+
+    await tester.tap(toggle);
+    await tester.pump();
+    expect(controller.saveCalls, 1);
+    expect(controller.settings.kickstandRdlEnabled, isFalse);
+    expect(controller.settings.couchStretchEnabled, isTrue);
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+  });
+
   testWidgets('a restored off-list couch stretch hold stays selectable',
       (tester) async {
     await pumpSettings(

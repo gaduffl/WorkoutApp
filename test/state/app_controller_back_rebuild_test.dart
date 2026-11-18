@@ -9,6 +9,7 @@ import 'package:morningcoach/models/cardio_protocol.dart';
 import 'package:morningcoach/models/check_in.dart';
 import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/hov_foot_warmup.dart';
+import 'package:morningcoach/models/kickstand_rdl.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/ladders.dart';
@@ -734,6 +735,30 @@ void main() {
       final saved = await controller.repo.loadSettings();
       expect(saved.couchStretchEnabled, isFalse);
       expect(saved.couchStretchSeconds, 90);
+      expect(controller.lowerBackRecovery.active, state.active);
+    }
+  });
+
+  test('the kickstand RDL setting refreshes the pending plan in both modes',
+      () async {
+    for (final state in [const LowerBackRecoveryState(), rebuild()]) {
+      final controller = controllerWith(state);
+      await controller.submitCheckIn(timeMinutes: 35, subjective: 4);
+      await controller.swapToSession(SessionTypeId.s1);
+      final reason = 'rebuild ${state.active}';
+      bool hasPrimer() => controller.todayTrace!.plan!.exercises
+          .any((e) => KickstandRdl.isTrack(e.trackKey));
+      expect(hasPrimer(), isTrue, reason: reason);
+
+      await controller.saveSettings(
+        controller.settings.copyWith(kickstandRdlEnabled: false),
+      );
+      expect(hasPrimer(), isFalse, reason: reason);
+      expect(controller.todayTrace!.plan!.sessionId, SessionTypeId.s1);
+      expect(
+        (await controller.repo.loadSettings()).kickstandRdlEnabled,
+        isFalse,
+      );
       expect(controller.lowerBackRecovery.active, state.active);
     }
   });

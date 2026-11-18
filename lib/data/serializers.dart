@@ -511,6 +511,7 @@ Map<String, dynamic> userSettingsToJson(UserSettings u) => {
       'recoveryBackExtensionsEnabled': u.recoveryBackExtensionsEnabled,
       'bigThreeEnabled': u.bigThreeEnabled,
       'couchStretchEnabled': u.couchStretchEnabled,
+      'kickstandRdlEnabled': u.kickstandRdlEnabled,
       'hovFootWarmupEnabled': u.hovFootWarmupEnabled,
       'couchStretchSeconds': u.couchStretchSeconds,
       'backRoutineDoneDay': u.backRoutineDoneDay,
@@ -576,6 +577,7 @@ UserSettings _userSettingsFromJson(
           j['recoveryBackExtensionsEnabled'] as bool? ?? false,
       bigThreeEnabled: j['bigThreeEnabled'] as bool? ?? true,
       couchStretchEnabled: j['couchStretchEnabled'] as bool? ?? true,
+      kickstandRdlEnabled: j['kickstandRdlEnabled'] as bool? ?? true,
       hovFootWarmupEnabled: j['hovFootWarmupEnabled'] as bool? ?? false,
       couchStretchSeconds: CouchStretch.clampHoldSeconds(
         (j['couchStretchSeconds'] as num?)?.toInt() ??

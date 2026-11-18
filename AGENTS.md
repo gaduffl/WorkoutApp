@@ -63,6 +63,16 @@ safety rules, validation, or delivery workflow changes.
   when the session's minimum work would not fit. The logger timer stays adjustable and
   only a couch-stretch countdown plays the short `morningcoach/timer_beep` tone; a
   missing bridge must never block logging. Travel mode uses the wall version.
+- The `Kickstand RDL` setting (default on) ends the warm-up of every session whose
+  template has a hinge slot (Lower Strength, Full Body), with or without Back rebuild,
+  with one fixed, non-progressing `warmup:kickstand_rdl` entry: a mini-band kickstand
+  RDL with the back toe planted, 2 rounds of 8 slow reps per side in 3 minutes (1 round
+  in 2 minutes in the 20-minute window). It earns no stimulus credit and never touches
+  progression, the queue, Back rebuild stages or the next-morning check. Any lower-back
+  or hip flag and a sharp knee flag leave it out. It may trim work like the couch
+  stretches; when the minimum work would not fit, drop as few optional drills as
+  possible, the kickstand RDL before the couch stretches. With HOV it joins right after
+  HOV and the Big 3 only when it fits without cutting work. Travel mode drops the band.
 - `HOV Fuß Warmup` is opt-in and replaces general/ATG preparation in both normal
   strength and Back rebuild. Keep the separately enabled Big 3, first lift's load
   ramp, and safety gates; append enabled couch stretches only if they fit after

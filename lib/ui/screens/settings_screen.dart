@@ -490,6 +490,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
               ),
+            SwitchListTile(
+              key: const Key('settings-kickstand-rdl'),
+              secondary: const Icon(Icons.accessibility_new),
+              title: const Text('Kickstand RDL'),
+              subtitle: Text(controller.settings.hovFootWarmupEnabled
+                ? 'Mini-band kickstand RDLs after HOV and the Big 3 on Lower '
+                    'Strength and Full Body days, when they fit without '
+                    'cutting lifts.'
+                : 'Mini-band kickstand RDLs at the end of the warm-up on Lower '
+                    'Strength and Full Body days: 2 rounds of 8 per side, '
+                    '1 round in a 20-minute window.',
+              ),
+              value: controller.settings.kickstandRdlEnabled,
+              onChanged: (v) async {
+                await controller.saveSettings(
+                  controller.settings.copyWith(kickstandRdlEnabled: v),
+                );
+                if (mounted) {
+                  setState(() => _settings = controller.settings);
+                }
+              },
+            ),
             ExpansionTile(
               key: const Key('recovery-options'),
               title: const Text('More back options'),

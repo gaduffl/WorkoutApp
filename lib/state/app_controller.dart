@@ -1134,6 +1134,7 @@ class AppController extends ChangeNotifier {
         settings.deadliftAlternative != newSettings.deadliftAlternative ||
         settings.bigThreeEnabled != newSettings.bigThreeEnabled ||
         settings.couchStretchEnabled != newSettings.couchStretchEnabled ||
+        settings.kickstandRdlEnabled != newSettings.kickstandRdlEnabled ||
         settings.hovFootWarmupEnabled != newSettings.hovFootWarmupEnabled ||
         settings.couchStretchSeconds != newSettings.couchStretchSeconds ||
         settings.recoveryBackExtensionsEnabled != newSettings.recoveryBackExtensionsEnabled;

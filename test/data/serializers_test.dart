@@ -350,6 +350,18 @@ void main() {
     }
   });
 
+  test('the kickstand RDL setting round-trips and is on for old data', () {
+    final restored = userSettingsFromJson(
+      userSettingsToJson(const UserSettings(kickstandRdlEnabled: false)),
+    );
+    expect(restored.kickstandRdlEnabled, isFalse);
+
+    // Existing installations and backups get the lower-day primer.
+    final legacy = userSettingsToJson(const UserSettings())
+      ..remove('kickstandRdlEnabled');
+    expect(userSettingsFromJson(legacy).kickstandRdlEnabled, isTrue);
+  });
+
   test('planned exercise visual ID round-trips and is legacy-safe', () {
     const exercise = PlannedExercise(
       trackKey: 'pullVertical',

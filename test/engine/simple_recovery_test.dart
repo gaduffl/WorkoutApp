@@ -255,12 +255,13 @@ void main() {
   });
 
   test('a legacy deadlift re-entry extension stage never loads a hinge', () {
-    // The couch stretches' minutes would trim this optional extension at 35.
+    // The couch stretches' and kickstand RDL's minutes would trim this
+    // optional extension at 35.
     final result = plan(
       settings: rebuild(
         extensions: true,
         extensionStage: LowerBackRecoveryStage.deadliftReentry,
-      ).copyWith(couchStretchEnabled: false),
+      ).copyWith(couchStretchEnabled: false, kickstandRdlEnabled: false),
     ).trace.plan!;
     final extension = result.exercises.singleWhere(
       (e) => e.trackKey == lowerBackRecoveryTrackKey,

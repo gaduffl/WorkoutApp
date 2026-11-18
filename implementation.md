@@ -917,3 +917,27 @@ data or installing a differently signed package. Details: `docs/UPDATES.md`.
 - Regression coverage includes prescribed dose/order, all strength families and
   time windows across Back rebuild stages, travel, sharp pain, settings persistence,
   stale plans, completion isolation, muscle accounting and trailing-stretch logging.
+
+## Session 2026-11-18 (kickstand RDL)
+
+108. **The physio's kickstand RDL is a lower-day warm-up drill, not a track.** With
+    `kickstandRdlEnabled` (default on, legacy JSON included) the planner ends the
+    warm-up of templates with a hinge slot (S1, S4) with one `warmup:kickstand_rdl`
+    minutes entry after the prep, Big 3 and couch stretches: 2 rounds of 8 slow reps
+    per side in 3 minutes, 1 round in 2 minutes at 20. A minutes entry keeps the logger
+    to one tap with its countdown, like the Big 3, and the `warmup:` prefix keeps it out
+    of stimulus credit, progression, the muscle map and the Back rebuild check. It is
+    left out under any lower-back or hip flag (today's or a persisted freeze) and a
+    sharp knee flag, as the pain-aware prep skips flagged rehearsals. Travel mode
+    keeps it without the band. Toggling it refreshes today's pending plan.
+109. **The newer drill gives way first.** The budgeter trims work around it as it does
+    for the couch stretches; on 35-minute Back rebuild days in stages 2–3 that can drop
+    the hamstring curl (no deadlift due) or the lead-in bridge (Full Body with a
+    deadlift). When the minimum work cannot fit, planning retries without the kickstand
+    RDL, then without the couch stretches, then without both, so a full 20-minute
+    deadlift day keeps the stretches it had before and long couch holds drop only
+    themselves.
+110. **With HOV it never cuts a lift.** HOV's dose and the budgeted work come first: the
+    primer is inserted after HOV and the Big 3 only if the whole plan still fits, before
+    the couch stretches get the same check at the end. In practice that is mostly
+    60-minute HOV days.

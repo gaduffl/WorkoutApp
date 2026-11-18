@@ -10,6 +10,7 @@ import 'package:morningcoach/models/couch_stretch.dart';
 import 'package:morningcoach/models/decision_trace.dart';
 import 'package:morningcoach/models/exercise_state.dart';
 import 'package:morningcoach/models/exercise_metric.dart';
+import 'package:morningcoach/models/kickstand_rdl.dart';
 import 'package:morningcoach/models/floor_category.dart';
 import 'package:morningcoach/models/ladders.dart';
 import 'package:morningcoach/models/lower_back_recovery.dart';
@@ -440,11 +441,12 @@ void main() {
   });
 
   test('stage 2 prescribes a capped block deadlift last in the session', () {
-    // The couch stretches' minutes would trim the lead-in bridge at 35.
+    // The couch stretches' and kickstand RDL's minutes would trim the
+    // lead-in bridge at 35.
     final output = plannedFor(
       SessionTypeId.s1,
       settings: rebuildSettings(stage: BackRebuildStage.blockDeadlift)
-          .copyWith(couchStretchEnabled: false),
+          .copyWith(couchStretchEnabled: false, kickstandRdlEnabled: false),
     );
     final plan = output.trace.plan!;
     final work = plan.exercises.where((e) => !e.isWarmup).toList();
@@ -555,12 +557,13 @@ void main() {
   });
 
   test('the loaded step waits for spacing while bridges and curls fill in', () {
+    // The kickstand RDL's minutes would trim the curl at 35.
     final output = plannedFor(
       SessionTypeId.s1,
       settings: rebuildSettings(
         stage: BackRebuildStage.blockDeadlift,
         spacedDates: [today.subtract(const Duration(days: 1))],
-      ),
+      ).copyWith(kickstandRdlEnabled: false),
     );
     final tracks = output.trace.plan!.exercises
         .where((e) => !e.isWarmup)
@@ -1799,12 +1802,14 @@ void main() {
     expect(s1.trace.plan!.travelMode, isTrue);
     expect(s1.trace.firedRuleCodes, contains('TRAVEL_MODE_ACTIVE'));
     // no percent-load ramp without loads, but movement prep remains explicit;
-    // the equipment-free McGill Big 3 and couch stretches still follow it
+    // the equipment-free McGill Big 3, couch stretches and band-free
+    // kickstand RDL still follow it
     final travelWarmups = s1.trace.plan!.exercises
         .where((e) =>
             e.isWarmup &&
             e.trackKey != 'warmup:big3' &&
-            !CouchStretch.isTrack(e.trackKey))
+            !CouchStretch.isTrack(e.trackKey) &&
+            !KickstandRdl.isTrack(e.trackKey))
         .toList();
     expect(travelWarmups, hasLength(1));
     expect(travelWarmups.single.trackKey, 'warmup:s1');
