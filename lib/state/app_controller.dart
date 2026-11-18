@@ -2310,9 +2310,26 @@ class AppController extends ChangeNotifier {
           // load/micro-stage until this track's final prescribed set count is
           // complete. Other fully completed tracks remain independently
           // eligible even when later exercises are wrapped.
+          final keptWeight =
+              completedAllPrescribedWork &&
+                  !travelKeys.contains(entry.key) &&
+                  !startedPainFrozenKeys.contains(entry.key) &&
+                  !painFlaggedTodayKeys.contains(entry.key)
+              ? _backRebuildKeptManualWeight(
+                  plan,
+                  entry.key,
+                  state,
+                  entry.value,
+                )
+              : null;
           exerciseStates[entry.key] = state.clone()
             ..lastTrainedDate = now
-            ..lastPrescriptionChange = null;
+            ..lastPrescriptionChange = keptWeight == null
+                ? null
+                : 'Kept the heavier weight you logged';
+          if (keptWeight != null) {
+            exerciseStates[entry.key]!.currentLoad = keptWeight;
+          }
           continue;
         }
         exerciseStates[entry.key] = progression.evaluateSession(
@@ -2426,6 +2443,49 @@ class AppController extends ChangeNotifier {
     } finally {
       _completionInFlight = false;
     }
+  }
+
+  /// Back rebuild keeps a heavier weight the user chose on a day readiness
+  /// paused progression (yellow or red). Only a fully completed, regular
+  /// rebuild lift or supported stand-in counts, and only an achievable load
+  /// above the stored one: the reduced red-day prescription is never saved
+  /// as the new load, no extra increment is added, and the next plan still
+  /// caps the load at the stage window.
+  double? _backRebuildKeptManualWeight(
+    SessionPlan plan,
+    String trackKey,
+    ExerciseState state,
+    List<SetLog> workSets,
+  ) {
+    if (!settings.lowerBackRecovery.active || plan.travelMode) return null;
+    final tracked =
+        isBackRebuildTrack(trackKey) ||
+        trackKey == lowerBackRecoveryChestSupportedRow.trackKey ||
+        trackKey == backRebuildSeatedPress.trackKey;
+    if (!tracked) return null;
+    final exercise = substituteRegistry[trackKey];
+    if (exercise == null || exercise.dumbbells == 0) return null;
+    final planned = plan.exercises.where(
+      (e) => !e.isWarmup && e.trackKey == trackKey,
+    );
+    if (planned.isEmpty ||
+        planned.any(
+          (e) =>
+              e.isTravel ||
+              e.isPainReentryTest ||
+              e.substitutedFrom != null ||
+              e.persistLoadOnCompletion,
+        )) {
+      return null;
+    }
+    final weight = workSets.last.weight;
+    if (weight <= state.currentLoad) return null;
+    final totals = _lowerBackRecoveryEngine.stageTotals(
+      exercise,
+      settings.equipment,
+    );
+    if (!totals.any((total) => (total - weight).abs() < 0.001)) return null;
+    return weight;
   }
 
   /// Marks rebuild hinge work and bike work for tomorrow's check. Only

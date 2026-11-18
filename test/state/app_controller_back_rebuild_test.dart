@@ -74,7 +74,11 @@ void main() {
     ..settings = UserSettings(lowerBackRecovery: state)
     ..exerciseStates = states ?? baseStates();
 
-  SessionPlan planFor(AppController controller, SessionTypeId id) {
+  SessionPlan planFor(
+    AppController controller,
+    SessionTypeId id, {
+    double hrv = 50,
+  }) {
     final output = const DecisionEngine().decide(
       DecisionEngineInput(
         checkinHistory: const [],
@@ -86,7 +90,7 @@ void main() {
         ),
         todaySnapshot: RecoverySnapshot(
           date: day,
-          hrvRmssd: 50,
+          hrvRmssd: hrv,
           restingHr: 60,
           sleepScore: 90,
         ),
@@ -732,6 +736,79 @@ void main() {
       expect(saved.couchStretchSeconds, 90);
       expect(controller.lowerBackRecovery.active, state.active);
     }
+  });
+  group('a heavier weight logged on a yellow or red day', () {
+    List<SetLog> heavier(
+      SessionPlan plan,
+      String track,
+      double weight, {
+      int dropSets = 0,
+    }) => [
+      for (final e in plan.exercises.where((e) => !e.isWarmup))
+        for (var i = 0; i < e.sets - (e.trackKey == track ? dropSets : 0); i++)
+          SetLog(
+            trackKey: e.trackKey,
+            pattern: e.pattern,
+            exerciseName: e.name,
+            weight: e.trackKey == track ? weight : (e.loadTotal ?? 0),
+            value: e.targetRange.$2,
+            metric: e.metric,
+            rir: Rir.rir3plus,
+            timestamp: now,
+          ),
+    ];
+
+    Future<(double, double?)> run({
+      required double hrv,
+      required double weight,
+      String? track,
+      int dropSets = 0,
+    }) async {
+      final key = track ?? backRebuildBlockDeadlift.trackKey;
+      final controller = controllerWith(
+        rebuild(stage: BackRebuildStage.blockDeadlift),
+      );
+      final plan = planFor(controller, SessionTypeId.s1, hrv: hrv);
+      expect(
+        plan.exercises
+            .where((e) => !e.isWarmup && e.trackKey == key)
+            .every((e) => !e.progressionEligible),
+        isTrue,
+      );
+      await controller.completeSession(
+        plan,
+        heavier(plan, key, weight, dropSets: dropSets),
+        durationMinutes: 30,
+      );
+      final saved =
+          (await controller.repo.loadExerciseStates())[key]!.currentLoad;
+      final next = planFor(
+        controllerWith(
+          rebuild(stage: BackRebuildStage.blockDeadlift),
+          states: controller.exerciseStates,
+        ),
+        SessionTypeId.s1,
+      ).exercises.firstWhere((e) => !e.isWarmup && e.trackKey == key);
+      return (saved, next.loadTotal);
+    }
+
+    test('is kept for the next workout without an extra increment', () async {
+      expect(await run(hrv: 40, weight: 48), (48.0, 48.0));
+      expect(
+        await run(hrv: 40, weight: 18, track: backRebuildBoxSquat.trackKey),
+        (18.0, 18.0),
+      );
+    });
+
+    test('is kept on a red day, but the lighter red-day load is not', () async {
+      expect(await run(hrv: 25, weight: 48), (48.0, 48.0));
+      expect(await run(hrv: 25, weight: 24), (42.0, 42.0));
+    });
+
+    test('still needs every set and still respects the stage cap', () async {
+      expect(await run(hrv: 40, weight: 48, dropSets: 1), (42.0, 42.0));
+      expect(await run(hrv: 40, weight: 70), (70.0, 60.0));
+    });
   });
 }
 
