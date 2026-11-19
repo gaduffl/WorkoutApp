@@ -56,8 +56,12 @@ class TrainingTargets {
 
   final int hypertrophyEvaluationWindowDays;
   final int intensityRollingWindowDays;
+
+  /// Distinct REHIT or Norwegian 4x4 days per rolling window. REHIT is the
+  /// preferred protocol; that preference lives in the decision policy.
   final int highIntensityDistinctDaysTarget;
-  final int preferredNorwegian4x4Exposures;
+
+  /// The 60-minute base exposure is shown in History for information only.
   final int baseAerobicRollingWindowDays;
   final int baseLongExposureCount;
   final int baseLongExposureMinutes;
@@ -69,7 +73,6 @@ class TrainingTargets {
     this.hypertrophyEvaluationWindowDays = 28,
     this.intensityRollingWindowDays = 7,
     this.highIntensityDistinctDaysTarget = 3,
-    this.preferredNorwegian4x4Exposures = 1,
     this.baseAerobicRollingWindowDays = 7,
     this.baseLongExposureCount = 1,
     this.baseLongExposureMinutes = 60,
@@ -91,7 +94,6 @@ class TrainingTargets {
         assert(hypertrophyEvaluationWindowDays > 0),
         assert(intensityRollingWindowDays > 0),
         assert(highIntensityDistinctDaysTarget > 0),
-        assert(preferredNorwegian4x4Exposures > 0),
         assert(baseAerobicRollingWindowDays > 0),
         assert(baseLongExposureCount > 0),
         assert(baseLongExposureMinutes > 0);

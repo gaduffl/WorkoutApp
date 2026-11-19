@@ -3,10 +3,12 @@
 enum RuleKey {
   restTimeZero,
   restDoubleRed,
+  // Now emitted only while the bike return has opened 4x4 but not REHIT.
   norwegian4x4Due,
+  // REHIT is the preferred protocol; the persisted name predates that.
   rehitFallbackDue,
-  baseLongDeficit,
   // Retained solely so persisted DecisionTrace history remains readable.
+  baseLongDeficit,
   baseShortDeficit,
   muscleStimulusDeficit,
   muscleRecoveryDemotion,

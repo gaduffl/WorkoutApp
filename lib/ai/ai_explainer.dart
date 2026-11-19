@@ -25,9 +25,9 @@ class AiExplainer {
       case RuleKey.restDoubleRed:
         return 'second RED recovery day in a row';
       case RuleKey.norwegian4x4Due:
-        return 'a high-intensity day is due and the preferred 4x4 is missing from the rolling 7-day window';
+        return 'a high-intensity day is due and the stepped bike return has not opened REHIT yet, so the 4x4 fills it';
       case RuleKey.rehitFallbackDue:
-        return 'the bike-guided CAROL REHIT Intense preset fills one still-due distinct high-intensity day';
+        return 'a high-intensity day is due and the bike-guided CAROL REHIT Intense preset is the preferred way to fill it';
       case RuleKey.baseLongDeficit:
         return 'the allocated 60-minute base exposure is missing';
       case RuleKey.baseShortDeficit:

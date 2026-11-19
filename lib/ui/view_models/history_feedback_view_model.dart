@@ -172,12 +172,8 @@ class HistoryFeedbackViewModel {
           'High-intensity days',
         ),
         cardioRow(
-          AerobicTargetKind.norwegian4x4Preference,
-          'Norwegian 4×4 preference',
-        ),
-        cardioRow(
           AerobicTargetKind.longBaseExposure,
-          '${targets.baseLongExposureMinutes}m base exposure (secondary to strength deficits)',
+          '${targets.baseLongExposureMinutes}m base exposure (optional)',
         ),
       ],
     );

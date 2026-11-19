@@ -145,10 +145,6 @@ void main() {
     );
     expect(highIntensity.completedDistinctDays, 1);
     expect(highIntensity.distinctDayDeficit, 2);
-    final fourByFour = data.trainingStatus.aerobic.singleWhere(
-      (status) => status.target == AerobicTargetKind.norwegian4x4Preference,
-    );
-    expect(fourByFour.completedExposures, 0);
   });
 
   test('logger "last time" stays within the same equipment context', () {

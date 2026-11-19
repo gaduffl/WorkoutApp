@@ -322,7 +322,6 @@ void main() {
       restored.hypertrophyTargetBands[MajorMuscleGroup.delts]!.center,
       10,
     );
-    expect(restored.preferredNorwegian4x4Exposures, 1);
     expect(restored.highIntensityDistinctDaysTarget, 3);
   });
 
@@ -345,10 +344,15 @@ void main() {
       'fallbackRehitRequiresSeparateDays': true,
       'baseShortExposureCount': 1,
       'baseShortExposureMinutes': [30, 35],
+      'preferredNorwegian4x4Exposures': 1,
     });
 
     expect(restored.highIntensityDistinctDaysTarget, 3);
     expect(trainingTargetsToJson(restored), isNot(contains('fallbackRehitExposures')));
+    expect(
+      trainingTargetsToJson(restored),
+      isNot(contains('preferredNorwegian4x4Exposures')),
+    );
     expect(trainingTargetsToJson(restored), containsPair('highIntensityDistinctDaysTarget', 3));
   });
 

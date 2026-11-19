@@ -36,7 +36,7 @@ A single-user (later multi-user) app that removes all morning decision-making ab
 - If the engine selects a cycle type *other than* the pointer's (e.g., floor pressure pulls S3 forward), that type is marked `served` for the current cycle and the pointer subsequently skips served types. When all five are served, a new cycle begins.
 - Readiness swaps (§5 Step 6 RED) and time substitutions (S3→S7) do **not** mark the original type served — the original stays pending.
 - **S6 selection rule:** S6 sits outside the cycle. It becomes top-ranked candidate iff ALL hold: local weekday ∈ {Sat, Sun}; no S6 completed in trailing 7 days; available time ≥ 30 min; no floor category at hard pressure (§5 Step 3). Declining S6 has no queue effect.
-- **S7 rules:** outside the cycle; eligible any day as primary session when slot < 35 min, or as a same-day second session if no intensity session completed in the trailing 48 h. **Leg-heavy exemption:** although S7 is cycling, it is exempt from leg-heavy spacing (8 min is below the fatigue threshold). S3 is NOT exempt. (This resolves the apparent contradiction with the table above.)
+- **S7 rules:** outside the cycle; the preferred primary session in any slot while a high-intensity day is due (§2.2), or a same-day second session if no intensity session completed in the trailing 48 h. **Leg-heavy exemption:** although S7 is cycling, it is exempt from leg-heavy spacing (8 min is below the fatigue threshold). S3 is NOT exempt. (This resolves the apparent contradiction with the table above.)
 - **Intensity credit for S2** counts only if the REHIT finisher was actually completed; otherwise S2 logs as strength only.
 
 ### 2.2 Weekly Floor (configurable)
@@ -46,6 +46,8 @@ A single-user (later multi-user) app that removes all morning decision-making ab
 - S6 is desirable but explicitly the most skippable element.
 
 The floor is evaluated on a rolling 7-day window, not calendar weeks.
+
+**Cardio target [2026-11]:** three distinct high-intensity days (REHIT or Norwegian 4×4, each counted once per calendar day) in the rolling 7 days. REHIT is preferred and fills a due day in every time window; the 4×4 fills one only while the stepped bike return has opened 4×4 but not REHIT, and is otherwise a manual swap. The 60-minute Zone 2 base exposure is optional: History shows its checkbox for information, and it never drives a recommendation.
 
 ### 2.3 Movement Patterns & Difficulty Ladders
 

@@ -21,7 +21,6 @@ void main() {
 
     expect(targets.intensityRollingWindowDays, 7);
     expect(targets.highIntensityDistinctDaysTarget, 3);
-    expect(targets.preferredNorwegian4x4Exposures, 1);
     expect(targets.baseAerobicRollingWindowDays, 7);
     expect(targets.baseLongExposureCount, 1);
     expect(targets.baseLongExposureMinutes, 60);
