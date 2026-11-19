@@ -447,7 +447,7 @@ class _CardioTargetsCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Trailing windows · high-intensity days can be REHIT or Norwegian 4×4; REHIT preferred',
+                'Trailing windows · high-intensity days are Norwegian 4×4s; REHIT stands in when a 4×4 does not fit',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -474,7 +474,7 @@ class _CardioTargetRow extends StatelessWidget {
     final note = switch (row.target) {
       AerobicTargetKind.highIntensityDistinctDays => row.met
           ? 'Met — REHIT and Norwegian 4×4 each count once per calendar day'
-          : '${row.distinctDayDeficit} distinct high-intensity day${row.distinctDayDeficit == 1 ? '' : 's'} remaining · REHIT preferred',
+          : '${row.distinctDayDeficit} distinct high-intensity day${row.distinctDayDeficit == 1 ? '' : 's'} remaining · 4×4 preferred',
       AerobicTargetKind.longBaseExposure => row.met
           ? 'Exposure met'
           : 'Not required · shown for information',

@@ -20,7 +20,7 @@ enum RehitClosedReason {
   painEscalationActive,
   globalDeloadActive,
   patternDeloadActive,
-  intensityWithinTrailing48Hours,
+  intensityTooRecent,
   rehitAlreadyCompletedToday,
   rehitUnavailableDueToTravel,
   highIntensityTargetMet,
@@ -177,11 +177,11 @@ class RehitEligibilityEngine {
     if (input.patternDeloadActive) {
       reasons.add(RehitClosedReason.patternDeloadActive);
     }
-    if (intensityRecoveryPolicy.hasRelevantIntensityInInclusiveWindow(
+    if (intensityRecoveryPolicy.hasRecentRelevantIntensity(
       input.sessionLogsForRecovery,
       asOf: input.nowLocal,
     )) {
-      reasons.add(RehitClosedReason.intensityWithinTrailing48Hours);
+      reasons.add(RehitClosedReason.intensityTooRecent);
     }
     if (input.rehitAlreadyCompletedToday) {
       reasons.add(RehitClosedReason.rehitAlreadyCompletedToday);

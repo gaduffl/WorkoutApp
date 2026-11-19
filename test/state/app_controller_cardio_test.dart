@@ -666,7 +666,7 @@ void main() {
     expect(controller.sessionDoneToday, isFalse);
     expect(
       controller.rehitEligibilityAt(DateTime.now()).closedReasons,
-      contains(RehitClosedReason.intensityWithinTrailing48Hours),
+      contains(RehitClosedReason.intensityTooRecent),
     );
 
     final swapped = await controller.swapToSession(SessionTypeId.s1);
@@ -1935,7 +1935,7 @@ void main() {
       );
       expect(
         reasons,
-        contains(RehitClosedReason.intensityWithinTrailing48Hours),
+        contains(RehitClosedReason.intensityTooRecent),
       );
     });
 
@@ -1963,7 +1963,7 @@ void main() {
       final nextDay = DateTime.now().add(const Duration(days: 1));
       expect(
         controller.rehitEligibilityAt(nextDay).closedReasons,
-        contains(RehitClosedReason.intensityWithinTrailing48Hours),
+        contains(RehitClosedReason.intensityTooRecent),
         reason: 'recovery safety is independent of category/queue credit',
       );
     });

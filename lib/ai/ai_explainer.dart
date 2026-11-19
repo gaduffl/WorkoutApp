@@ -25,9 +25,9 @@ class AiExplainer {
       case RuleKey.restDoubleRed:
         return 'second RED recovery day in a row';
       case RuleKey.norwegian4x4Due:
-        return 'a high-intensity day is due and the stepped bike return has not opened REHIT yet, so the 4x4 fills it';
+        return 'a high-intensity day is due, so the Norwegian 4x4, the main interval session, fills it';
       case RuleKey.rehitFallbackDue:
-        return 'a high-intensity day is due and the bike-guided CAROL REHIT Intense preset is the preferred way to fill it';
+        return 'a high-intensity day is due but a 4x4 does not fit, so the bike-guided CAROL REHIT Intense preset stands in';
       case RuleKey.baseLongDeficit:
         return 'the allocated 60-minute base exposure is missing';
       case RuleKey.baseShortDeficit:
@@ -63,7 +63,7 @@ class AiExplainer {
       case RuleKey.s7TimeSub:
         return 'not enough time for the 4x4, so the bike-guided CAROL REHIT Intense preset was substituted';
       case RuleKey.s7SecondSessionOffer:
-        return 'no intensity work in 48h, so the bike-guided CAROL REHIT Intense preset was offered as a bonus second session';
+        return 'no interval session yesterday or today, so the bike-guided CAROL REHIT Intense preset was offered as a bonus second session';
       case RuleKey.yellowVolumeCut:
         return 'recovery is middling, so training volume was reduced';
       case RuleKey.yellow4x4ToRehit:

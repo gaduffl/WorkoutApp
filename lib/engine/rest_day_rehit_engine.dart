@@ -18,7 +18,7 @@ enum RestDayRehitClosedReason {
   contraindicatingPainActive,
   painEscalationActive,
   deloadActive,
-  intensityWithinTrailing48Hours,
+  intensityTooRecent,
   rehitUnavailableDueToTravel,
 
   /// The rolling seven-day high-intensity target is already met, so an extra
@@ -43,7 +43,7 @@ class RestDayRehitInput {
   final bool contraindicatingPainActive;
   final bool painEscalationActive;
   final bool deloadActive;
-  final bool intensityWithinTrailingWindow;
+  final bool intensityTooRecent;
   final bool rehitUnavailableDueToTravel;
   final bool highIntensityTargetDue;
 
@@ -58,7 +58,7 @@ class RestDayRehitInput {
     required this.contraindicatingPainActive,
     required this.painEscalationActive,
     required this.deloadActive,
-    required this.intensityWithinTrailingWindow,
+    required this.intensityTooRecent,
     required this.rehitUnavailableDueToTravel,
     required this.highIntensityTargetDue,
     required this.scheduleSlot,
@@ -128,8 +128,8 @@ class RestDayRehitEngine {
     if (input.deloadActive) {
       reasons.add(RestDayRehitClosedReason.deloadActive);
     }
-    if (input.intensityWithinTrailingWindow) {
-      reasons.add(RestDayRehitClosedReason.intensityWithinTrailing48Hours);
+    if (input.intensityTooRecent) {
+      reasons.add(RestDayRehitClosedReason.intensityTooRecent);
     }
     if (input.rehitUnavailableDueToTravel) {
       reasons.add(RestDayRehitClosedReason.rehitUnavailableDueToTravel);
@@ -169,7 +169,7 @@ class RestDayRehitEngine {
         contraindicatingPainActive: safety.contraindicatingPainActive,
         painEscalationActive: safety.painEscalationActive,
         deloadActive: safety.deloadActive,
-        intensityWithinTrailingWindow: safety.intensityRecoveryActive,
+        intensityTooRecent: safety.intensityRecoveryActive,
         rehitUnavailableDueToTravel: safety.travelUnavailable,
         highIntensityTargetDue: highIntensityTargetDue,
         scheduleSlot: scheduleSlot,

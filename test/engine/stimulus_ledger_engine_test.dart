@@ -869,6 +869,32 @@ void main() {
       expect(result.separateDayRehitCount7d, 1);
     });
 
+    test('high-intensity days count the last seven calendar dates', () {
+      // asOf is Wednesday noon. Last Wednesday evening is under 7x24 hours
+      // ago but on the eighth date back, so a weekly Mon/Wed/Fri rhythm is
+      // due again on the same weekday.
+      SessionLog rehitAt(DateTime completedAt) => cardioLog(
+            id: 'rehit-${completedAt.toIso8601String()}',
+            templateId: SessionTypeId.s7,
+            completedAt: completedAt,
+            durationMinutes: 10,
+            countsAs: const {FloorCategory.intensity},
+            cardioCompletion: completion(CardioProtocolType.rehit, 10),
+          );
+      final result = engine.buildFromSessionLogs(
+        logs: [
+          rehitAt(DateTime(2026, 7, 8, 18)),
+          rehitAt(DateTime(2026, 7, 9, 0, 1)),
+          rehitAt(DateTime(2026, 7, 15, 11)),
+          rehitAt(DateTime(2026, 7, 15, 13)),
+        ],
+        asOf: asOf,
+      );
+
+      expect(result.highIntensityDistinctDays7d, 2);
+      expect(result.highIntensityDistinctDays28d, 3);
+    });
+
     test('duration lists are immutable and thresholds are generic', () {
       final result = engine.build(
         muscleEvents: const [],

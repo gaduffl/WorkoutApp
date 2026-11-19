@@ -23,7 +23,7 @@ void main() {
     bool contraindicatingPainActive = false,
     bool painEscalationActive = false,
     bool deloadActive = false,
-    bool intensityWithinTrailingWindow = false,
+    bool intensityTooRecent = false,
     bool rehitUnavailableDueToTravel = false,
     bool highIntensityTargetDue = true,
     ScheduleSlot? scheduleSlot,
@@ -36,7 +36,7 @@ void main() {
         contraindicatingPainActive: contraindicatingPainActive,
         painEscalationActive: painEscalationActive,
         deloadActive: deloadActive,
-        intensityWithinTrailingWindow: intensityWithinTrailingWindow,
+        intensityTooRecent: intensityTooRecent,
         rehitUnavailableDueToTravel: rehitUnavailableDueToTravel,
         highIntensityTargetDue: highIntensityTargetDue,
         scheduleSlot: noSlot ? null : (scheduleSlot ?? slot),
@@ -87,8 +87,8 @@ void main() {
       RestDayRehitClosedReason.painEscalationActive:
           input(painEscalationActive: true),
       RestDayRehitClosedReason.deloadActive: input(deloadActive: true),
-      RestDayRehitClosedReason.intensityWithinTrailing48Hours:
-          input(intensityWithinTrailingWindow: true),
+      RestDayRehitClosedReason.intensityTooRecent:
+          input(intensityTooRecent: true),
       RestDayRehitClosedReason.rehitUnavailableDueToTravel:
           input(rehitUnavailableDueToTravel: true),
       RestDayRehitClosedReason.highIntensityTargetMet:
@@ -134,7 +134,7 @@ void main() {
       result.closedReasons,
       containsAll(const [
         RestDayRehitClosedReason.deloadActive,
-        RestDayRehitClosedReason.intensityWithinTrailing48Hours,
+        RestDayRehitClosedReason.intensityTooRecent,
       ]),
     );
   });

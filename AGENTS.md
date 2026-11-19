@@ -18,11 +18,16 @@ safety rules, validation, or delivery workflow changes.
   view; this preference is display-only and must never alter history aggregation or
   recommendation inputs.
 - Cardio target: three distinct high-intensity days (REHIT or Norwegian 4×4, each
-  counted once per calendar day) in the rolling 7 days. REHIT is the preferred
-  protocol and fills a due day in every 20/35/60-minute window; the 4×4 fills it only
-  while the stepped bike return has opened 4×4 but not REHIT, and is otherwise a
-  manual swap. The 60-minute Zone 2 base exposure is informational: History keeps its
-  checkbox, but it never drives a recommendation.
+  counted once per calendar day) in the last 7 calendar dates including today, so a
+  Mon/Wed/Fri rhythm is due again on the same weekday. The Norwegian 4×4 is the
+  main interval session and fills a due day on 35- and 60-minute mornings; REHIT
+  stands in only when a 4×4 does not fit (20-minute mornings) and is otherwise a
+  manual swap or a later-day add-on. Interval days need one rest day between them:
+  `IntensityRecoveryPolicy` blocks an interval session on the calendar day of the
+  last one and the day after, plus a 36-hour floor from its completion, for every
+  primary, forced, finisher, later-day and rest-day path. The 60-minute Zone 2 base
+  exposure is informational: History keeps its checkbox, but it never drives a
+  recommendation.
 - Muscle-map views render the existing stimulus ledger and current plan. Label
   recency as recency, never fatigue, recovery, or injury readiness; the visual must
   not create a second stimulus-accounting path. The Today tab may separately render

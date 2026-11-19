@@ -3,9 +3,9 @@
 enum RuleKey {
   restTimeZero,
   restDoubleRed,
-  // Now emitted only while the bike return has opened 4x4 but not REHIT.
+  // The 4x4 fills a due high-intensity day whenever the morning can hold it.
   norwegian4x4Due,
-  // REHIT is the preferred protocol; the persisted name predates that.
+  // REHIT stands in when a 4x4 does not fit (20-minute mornings).
   rehitFallbackDue,
   // Retained solely so persisted DecisionTrace history remains readable.
   baseLongDeficit,

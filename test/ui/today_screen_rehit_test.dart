@@ -811,12 +811,12 @@ void main() {
       estimatedDurationMin: 16,
     );
     final unsafe = RehitEligibilityResult(
-      closedReasons: const [RehitClosedReason.intensityWithinTrailing48Hours],
+      closedReasons: const [RehitClosedReason.intensityTooRecent],
       observedAt: now,
       suggestedNudgeTime: null,
     );
-    // simulates a logged REHIT session whose 48h recovery gate now blocks the
-    // original S7 plan -> staleHighIntensityPlan would otherwise be true.
+    // simulates a logged REHIT session whose rest-day interval gap now blocks
+    // the original S7 plan -> staleHighIntensityPlan would otherwise be true.
     final controller = _EligibilityController(
       unsafe,
       loggedToday: true,
@@ -858,7 +858,7 @@ void main() {
       estimatedDurationMin: 16,
     );
     final unsafe = RehitEligibilityResult(
-      closedReasons: const [RehitClosedReason.intensityWithinTrailing48Hours],
+      closedReasons: const [RehitClosedReason.intensityTooRecent],
       observedAt: now,
       suggestedNudgeTime: null,
     );

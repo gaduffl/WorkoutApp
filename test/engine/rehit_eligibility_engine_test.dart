@@ -262,43 +262,41 @@ void main() {
     });
   });
 
-  group('exact trailing-48-hour intensity gate', () {
-    test('one second inside the window closes eligibility', () {
+  group('rest-day interval gate', () {
+    // now is Wednesday 2026-07-15 10:00.
+    test('an interval session yesterday closes eligibility', () {
       expectClosed(
         eligibleInput(
           sessionLogsForRecovery: [
-            intensityLog(now.subtract(
-              const Duration(hours: 47, minutes: 59, seconds: 59),
-            )),
+            intensityLog(DateTime(2026, 7, 14, 6)),
           ],
         ),
-        RehitClosedReason.intensityWithinTrailing48Hours,
+        RehitClosedReason.intensityTooRecent,
       );
     });
 
-    test('exactly 48 hours ago is included', () {
-      expectClosed(
-        eligibleInput(
-          sessionLogsForRecovery: [
-            intensityLog(now.subtract(const Duration(hours: 48))),
-          ],
-        ),
-        RehitClosedReason.intensityWithinTrailing48Hours,
-      );
-    });
-
-    test('one microsecond beyond 48 hours is ignored', () {
+    test('Monday later in the day than now leaves Tuesday as the rest day',
+        () {
       final result = engine.evaluate(
         eligibleInput(
           sessionLogsForRecovery: [
-            intensityLog(now.subtract(
-              const Duration(hours: 48, microseconds: 1),
-            )),
+            intensityLog(DateTime(2026, 7, 13, 12)),
           ],
         ),
       );
 
       expect(result.eligible, isTrue);
+    });
+
+    test('a Monday-night session still needs 36 hours', () {
+      expectClosed(
+        eligibleInput(
+          sessionLogsForRecovery: [
+            intensityLog(DateTime(2026, 7, 13, 22, 30)),
+          ],
+        ),
+        RehitClosedReason.intensityTooRecent,
+      );
     });
 
     test('future timestamps are ignored instead of corrupting the gate', () {
@@ -341,7 +339,7 @@ void main() {
       expect(
         result.closedReasons,
         containsAll([
-          RehitClosedReason.intensityWithinTrailing48Hours,
+          RehitClosedReason.intensityTooRecent,
           RehitClosedReason.rehitAlreadyCompletedToday,
         ]),
       );

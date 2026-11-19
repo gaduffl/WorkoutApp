@@ -968,3 +968,52 @@ data or installing a differently signed package. Details: `docs/UPDATES.md`.
     key still loads. Side effect: on a RED day with no high-intensity day due, the
     strength technique session now wins where the base target used to pull in
     Zone 2, which stays a manual choice.
+
+## Session 2026-11-19, later (three 4×4s a week)
+
+114. **The 4×4 is the main interval session again, and REHIT stands in.** Sebastian
+    clarified the goal behind item 111: three Norwegian 4×4s a week, a REHIT only when
+    a 4×4 does not fit, and no strength given up for it. A due high-intensity day now
+    goes to the 4×4 on 35- and 60-minute mornings (`norwegian4x4Due`) and to REHIT on
+    20-minute mornings (`rehitFallbackDue`). REHIT access implies 4×4 access in the
+    stepped bike return, so the short morning is the only stand-in case. On 35/60
+    mornings REHIT stays a manual swap and its candidate carries the new
+    `fourByFourPreferredOverRehit`; item 111's `rehitPreferredOver4x4` stays only for
+    saved traces. The 60-minute base exposure stays informational (item 113).
+115. **One rest day between interval days replaces the 48-hour guard.** The shared
+    `IntensityRecoveryPolicy` gate blocked an interval session for an inclusive 48
+    hours from the end of the last one to the next check-in. Training at about the same
+    time each morning, that is every third day, so three interval days a week almost
+    never fit. `hasRecentRelevantIntensity` now blocks only on the calendar day of the
+    last interval session and the day after (the exact completion time when known, the
+    logged date otherwise), plus a 36-hour floor from its completion so an evening
+    session is not followed by an early one two days later; a legacy date-only row ages
+    from the end of its day. Mon/Wed/Fri works at any time of day. The gate still
+    covers the primary, forced, finisher, later-day and rest-day REHIT paths alike;
+    their closed reasons are renamed `intensityTooRecent` (never persisted).
+116. **Why mornings, and what it costs.** 28-day simulations with a GREEN check-in
+    every day, as strength sessions + interval days per week:
+
+    | | 60-min mornings | 35-min mornings |
+    |---|---|---|
+    | Before item 111 | 4.5 + 1 4×4 | 6 + 1 4×4 |
+    | Item 111 (REHIT first, 48 h) | 3.5 + 2.5 REHIT | 4.5 + 2.5 REHIT |
+    | 4×4 mornings, rest-day spacing | 4.25 + 2.75 4×4 | 4.25 + 2.75 4×4 |
+    | ... and calendar-date window (this change, item 117) | 4 + 3 4×4 | 4 + 3 4×4 |
+    | 4×4 at lunch after morning strength | 5.5 + 2.75 4×4 | 6.5 + 3 4×4 |
+
+    On 60-minute mornings the 4×4 mostly lands on days the muscle-recovery model rests
+    anyway. On 35-minute mornings it costs about two strength sessions a week against
+    the lunch variant, which Sebastian declined in favour of one session a morning. The
+    later-day REHIT offer after a logged strength session and the S2 60-minute REHIT
+    finisher are unchanged and remain the add-on paths.
+117. **The weekly target counts calendar dates.** Distinct high-intensity days were
+    counted over 7×24 hours back from the check-in. A session last Monday finishes
+    after this Monday's check-in time, so it still counted and the target looked met;
+    the 4×4 moved to Tuesday and the rhythm drifted a day each week (2.75 a week). The
+    ledger's `highIntensityDistinctDays7d`/`28d` now count the last 7 (28) local
+    dates including today, never later than the check-in, so Mon/Wed/Fri repeats every
+    week: 12 interval days in 28 simulated days at any window length, for about one
+    strength session a month. Muscle and per-protocol windows keep their 7×24-hour boundary.
+    Test fixtures that meant "target met" with a session exactly seven days back now
+    use six.

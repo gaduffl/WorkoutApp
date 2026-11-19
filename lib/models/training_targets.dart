@@ -57,8 +57,9 @@ class TrainingTargets {
   final int hypertrophyEvaluationWindowDays;
   final int intensityRollingWindowDays;
 
-  /// Distinct REHIT or Norwegian 4x4 days per rolling window. REHIT is the
-  /// preferred protocol; that preference lives in the decision policy.
+  /// Distinct Norwegian 4x4 or REHIT days per rolling window. The 4x4 is
+  /// the preferred protocol and REHIT stands in when a 4x4 does not fit;
+  /// that preference lives in the decision policy.
   final int highIntensityDistinctDaysTarget;
 
   /// The 60-minute base exposure is shown in History for information only.

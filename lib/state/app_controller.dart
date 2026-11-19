@@ -278,7 +278,7 @@ class AppController extends ChangeNotifier {
   }
 
   /// Loaded from whole local calendar days so the shared recovery policy can
-  /// apply its precision-aware trailing-48-hour filter and the rolling
+  /// apply its precision-aware rest-day interval gap and the rolling
   /// seven-day high-intensity target.
   List<SessionLog> _recentLogs = [];
 
