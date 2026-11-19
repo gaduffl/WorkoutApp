@@ -28,7 +28,9 @@ class MuscleTrainingStatus {
 
 enum AerobicTargetKind {
   highIntensityDistinctDays,
-  norwegian4x4Preference,
+
+  /// Informational only: History shows whether a 60-minute Zone 2 exposure
+  /// happened, but it is not a requirement and never drives a recommendation.
   longBaseExposure,
 }
 

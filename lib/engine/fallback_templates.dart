@@ -17,12 +17,12 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Two RED days in a row - full rest (or a light 20-30 min walk) recommended.';
     case RuleKey.norwegian4x4Due:
       return lang == AppLanguage.de
-          ? 'Im rollierenden 7-Tage-Fenster fehlt der bevorzugte 4x4-Reiz, daher hat er heute Vorrang.'
-          : 'A high-intensity day is due and the preferred 4x4 is still missing from the rolling 7-day window, so it takes priority today.';
+          ? 'Ein Hochintensitätstag ist fällig und die Bike-Rückkehr hat REHIT noch nicht freigegeben, daher füllt ihn heute der 4x4.'
+          : 'A high-intensity day is due and the bike return has not opened REHIT yet, so the 4x4 fills it today.';
     case RuleKey.rehitFallbackDue:
       return lang == AppLanguage.de
-          ? 'Das vom CAROL-Bike geführte Preset CAROL REHIT Intense füllt heute einen noch offenen, separaten Hochintensitätstag.'
-          : 'The bike-guided CAROL REHIT Intense preset fills one still-due distinct high-intensity day today.';
+          ? 'Ein Hochintensitätstag ist fällig; das vom CAROL-Bike geführte Preset CAROL REHIT Intense ist der bevorzugte Weg, ihn zu füllen.'
+          : 'A high-intensity day is due, and the bike-guided CAROL REHIT Intense preset is the preferred way to fill it.';
     case RuleKey.baseLongDeficit:
       return lang == AppLanguage.de
           ? 'Die lange 60-Minuten-Grundlageneinheit fehlt im rollierenden 7-Tage-Fenster.'

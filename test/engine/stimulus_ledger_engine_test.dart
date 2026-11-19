@@ -759,10 +759,6 @@ void main() {
         target(AerobicTargetKind.highIntensityDistinctDays).distinctDayDeficit,
         3,
       );
-      expect(
-        target(AerobicTargetKind.norwegian4x4Preference).exposureDeficit,
-        1,
-      );
       expect(target(AerobicTargetKind.longBaseExposure).exposureDeficit, 1);
 
       final qualifyingLedger = engine.buildFromSessionLogs(
@@ -787,10 +783,10 @@ void main() {
         qualifyingStatus.aerobic
             .firstWhere(
               (entry) =>
-                  entry.target == AerobicTargetKind.norwegian4x4Preference,
+                  entry.target == AerobicTargetKind.highIntensityDistinctDays,
             )
-            .exposureDeficit,
-        0,
+            .distinctDayDeficit,
+        2,
       );
     });
 

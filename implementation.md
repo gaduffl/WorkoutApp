@@ -941,3 +941,30 @@ data or installing a differently signed package. Details: `docs/UPDATES.md`.
     primer is inserted after HOV and the Big 3 only if the whole plan still fits, before
     the couch stretches get the same check at the end. In practice that is mostly
     60-minute HOV days.
+
+## Session 2026-11-19 (REHIT-first cardio target)
+
+111. **REHIT replaces the 4×4 as the preferred high-intensity session, in every
+    window.** The requirement stays three distinct high-intensity days in the rolling
+    7 days, any mix of REHIT and 4×4. A due day now goes to REHIT at 20, 35 and 60
+    minutes; before, REHIT was limited to 20-minute windows and one 35/60 slot a week
+    was held for a preferred 4×4. The 4×4 fills a due day only while the stepped bike
+    return has opened 4×4 but not REHIT, because a creditable 4×4 is what opens REHIT.
+    Otherwise it stays a manual swap, and its candidate carries
+    `rehitPreferredOver4x4` so the swap list says why. The persisted names
+    `norwegian4x4Due` and `rehitFallbackDue` stay for saved traces.
+112. **What it costs.** A 28-day simulation with daily GREEN check-ins gives about
+    one REHIT every third day (the inclusive 48-hour guard), up from one 4×4 a week
+    when every window is 35 or 60 minutes. Those weeks lose about one strength session
+    a week to the short REHIT days; the retired 60-minute Zone 2 gives part of it back.
+    With 20-minute mornings in the mix, strength is unchanged. The extended S2
+    finisher is now reserved mainly when S2 is chosen by swap, and swapping a REHIT
+    day to strength still offers the later-day REHIT.
+113. **The 60-minute base exposure is informational.** `baseLongDeficit` is no
+    longer scored or emitted (kept for saved traces). TrainingStatus still computes
+    the long exposure so History keeps its checkbox, now labelled optional. The
+    `norwegian4x4Preference` status and `preferredNorwegian4x4Exposures` target are
+    removed; neither was persisted outside tests, and legacy target JSON carrying the
+    key still loads. Side effect: on a RED day with no high-intensity day due, the
+    strength technique session now wins where the base target used to pull in
+    Zone 2, which stays a manual choice.

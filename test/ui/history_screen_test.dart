@@ -486,10 +486,20 @@ void main() {
     expect(find.text('Below'), findsNWidgets(18));
     expect(find.text('Cardio targets'), findsOneWidget);
     expect(find.text('High-intensity days'), findsOneWidget);
-    expect(find.text('Norwegian 4×4 preference'), findsOneWidget);
     expect(
-      find.text('60m base exposure (secondary to strength deficits)'),
+      find.textContaining('3 distinct high-intensity days remaining · REHIT preferred'),
       findsOneWidget,
+    );
+    expect(find.textContaining('4×4 preference'), findsNothing);
+    // The 60-minute base exposure stays as an unticked, informational row.
+    expect(find.text('60m base exposure (optional)'), findsOneWidget);
+    expect(
+      find.textContaining('Not required · shown for information'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithIcon(ListTile, Icons.radio_button_unchecked),
+      findsNWidgets(2),
     );
 
     // The obsolete weekly-floor card is replaced; the useful history views
@@ -588,7 +598,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('4x4 meets the preference while frequency remains visible',
+  testWidgets('a 4x4 counts as a high-intensity day with REHIT still preferred',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -611,16 +621,21 @@ void main() {
     await tester.pumpWidget(app(loader: (_) async => data));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Preference met'), findsOneWidget);
     expect(
       find.textContaining('1/3 DISTINCT DAYS'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        '2 distinct high-intensity days remaining · REHIT preferred',
+      ),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'three distinct-day REHIT sessions show replacement guidance instead of a fourth day',
+      'three distinct-day REHIT sessions meet the weekly high-intensity target',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -659,10 +674,11 @@ void main() {
     );
     expect(
       find.textContaining(
-        'Replace a REHIT day with 4×4 when a 35/60 min slot is available; do not add a fourth high-intensity day.',
+        'Met — REHIT and Norwegian 4×4 each count once per calendar day',
       ),
       findsOneWidget,
     );
+    expect(find.textContaining('Replace a REHIT day'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -333,18 +333,8 @@ class DecisionEngine {
       trainingStatus,
       AerobicTargetKind.highIntensityDistinctDays,
     );
-    final fourByFourPreference = _aerobicStatus(
-      trainingStatus,
-      AerobicTargetKind.norwegian4x4Preference,
-    );
-    final longBase = _aerobicStatus(
-      trainingStatus,
-      AerobicTargetKind.longBaseExposure,
-    );
     final naturalHighIntensityTargetDue =
         highIntensityDays.distinctDayDeficit > 0;
-    final fourByFourPreferenceUnmet =
-        fourByFourPreference.exposureDeficit > 0;
     final highIntensitySafety =
         intensityRecoveryPolicy.evaluateHighIntensitySafety(
       logs: input.sessionLogs,
@@ -354,8 +344,15 @@ class DecisionEngine {
       automaticGlobalDeload: automaticGlobalDeload,
       travelMode: input.settings.travelMode,
     );
+    // REHIT is the preferred way to fill a due high-intensity day, in every
+    // window. The 4x4 fills it only while the stepped bike return has opened
+    // 4x4 but not yet REHIT, because a creditable 4x4 is what opens REHIT.
+    final canAdvanceRehit = naturalHighIntensityTargetDue &&
+        cyclingAccess.rehit &&
+        !highIntensitySafety.blocked;
     final canAdvanceFourByFour = naturalHighIntensityTargetDue &&
-        fourByFourPreferenceUnmet &&
+        cyclingAccess.fourByFour &&
+        !cyclingAccess.rehit &&
         checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
         !highIntensitySafety.blocked;
     final strengthStimulusMultiplier = automaticGlobalDeload
@@ -390,37 +387,33 @@ class DecisionEngine {
       }
 
       if (id == SessionTypeId.s3 && canAdvanceFourByFour) {
-        // The preferred VO2-max anchor is always the first target in any
-        // slot that can actually hold it.
         terms['norwegian4x4Due'] = 20000;
       }
 
-      final canAdvanceRehit = naturalHighIntensityTargetDue &&
-          checkin.timeMinutes == 20 &&
-          !highIntensitySafety.blocked;
+      // The score-term and rule names predate REHIT becoming the preferred
+      // protocol; they stay because saved traces persist them.
       if (id == SessionTypeId.s7 && canAdvanceRehit) {
         terms['rehitFallbackDue'] = 20000;
       }
+      final fourByFourDeferredToRehit = id == SessionTypeId.s3 &&
+          checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
+          canAdvanceRehit;
       final surplusOrRecoveryBlockedFourByFour =
           id == SessionTypeId.s3 && !canAdvanceFourByFour;
       final surplusRehit = id == SessionTypeId.s7 && !canAdvanceRehit;
       final unadvanceableConceptualS3 = id == SessionTypeId.s3 &&
           checkin.timeMinutes == 20 &&
           !canAdvanceRehit;
-      if (surplusOrRecoveryBlockedFourByFour ||
+      if (fourByFourDeferredToRehit) {
+        // The due day goes to REHIT; a 4x4 stays a manual swap.
+        terms['rehitPreferredOver4x4'] = -100000;
+      } else if (surplusOrRecoveryBlockedFourByFour ||
           surplusRehit ||
           unadvanceableConceptualS3) {
         // Natural recommendations never add surplus high intensity. A forced
         // surplus selection remains an explicit personal override only when
         // every hard recovery/safety gate below passes.
         terms['surplusIntensitySuppressed'] = -100000;
-      }
-
-      if (id == SessionTypeId.s6) {
-        if (checkin.timeMinutes >= targets.baseLongExposureMinutes &&
-            longBase.exposureDeficit > 0) {
-          terms['baseLongDeficit'] = 15000;
-        }
       }
 
       if (def.countsAs.contains(FloorCategory.strength)) {
@@ -462,27 +455,6 @@ class DecisionEngine {
 
       final score = terms.values.fold(0, (a, b) => a + b);
       scored.add(_Scored(id, tier, score, terms, def));
-    }
-
-    // A 60-minute base exposure is useful, but it must never consume a slot
-    // while a pain-safe strength candidate can still close a positive target
-    // deficit. When strength is unavailable or its deficits are filled, the
-    // missing continuous base exposure regains its normal priority.
-    final hasFeasibleStrengthDeficit = scored.any(
-      (candidate) =>
-          candidate.def.countsAs.contains(FloorCategory.strength) &&
-          !candidate.terms.containsKey(painNoSafeWorkScoreTerm) &&
-          !candidate.terms.containsKey('muscleRecoveryDemotion') &&
-          !candidate.terms.containsKey('muscleOverMaxDemotion') &&
-          (candidate.terms.containsKey('muscleWeeklyDeficit') ||
-              candidate.terms.containsKey('muscle28dMinimumDeficit') ||
-              candidate.terms.containsKey('muscle28dCenterDeficit')),
-    );
-    if (hasFeasibleStrengthDeficit) {
-      for (final candidate in scored) {
-        final removed = candidate.terms.remove('baseLongDeficit');
-        if (removed != null) candidate.score -= removed;
-      }
     }
 
     // --- Step 5: selection ---
@@ -742,11 +714,6 @@ class DecisionEngine {
       fired.add(const FiredRule(RuleKey.rehitFallbackDue));
     }
     if (effectiveSessionId == SessionTypeId.s6 &&
-        chosen.terms.containsKey('baseLongDeficit')) {
-      fired.add(const FiredRule(RuleKey.baseLongDeficit));
-    }
-    if (effectiveSessionId == SessionTypeId.s6 &&
-        !chosen.terms.containsKey('baseLongDeficit') &&
         !fired.any(
           (rule) =>
               rule.key == RuleKey.recoverySwapEasyCardio ||

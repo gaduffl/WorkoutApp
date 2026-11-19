@@ -110,10 +110,13 @@ String candidateReason(ScoredCandidate candidate) {
     return 'Unavailable - no pain-safe work remains';
   }
   if (terms.containsKey('norwegian4x4Due')) {
-    return 'Prioritizes the preferred 4×4 while a high-intensity day is due';
+    return 'Fills a due high-intensity day until the bike return opens REHIT';
   }
   if (terms.containsKey('rehitFallbackDue')) {
-    return 'Fills a due rolling high-intensity day with REHIT';
+    return 'Fills a due high-intensity day with REHIT, the preferred protocol';
+  }
+  if (terms.containsKey('rehitPreferredOver4x4')) {
+    return 'REHIT is preferred for the due high-intensity day';
   }
   if (terms.containsKey('baseLongDeficit')) {
     return 'Fills the long base-aerobic exposure';

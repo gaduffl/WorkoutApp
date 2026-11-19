@@ -80,16 +80,15 @@ void main() {
       3,
     );
     expect(
-      model
-          .cardioTarget(AerobicTargetKind.norwegian4x4Preference)
-          .exposureDeficit,
-      1,
+      model.cardio.map((row) => row.target),
+      [
+        AerobicTargetKind.highIntensityDistinctDays,
+        AerobicTargetKind.longBaseExposure,
+      ],
     );
     expect(
-      model
-          .cardioTarget(AerobicTargetKind.norwegian4x4Preference)
-          .applicable,
-      isTrue,
+      model.cardioTarget(AerobicTargetKind.longBaseExposure).label,
+      '60m base exposure (optional)',
     );
   });
 
@@ -235,10 +234,6 @@ void main() {
     );
 
     expect(
-      model.cardioTarget(AerobicTargetKind.norwegian4x4Preference).met,
-      isTrue,
-    );
-    expect(
       model
           .cardioTarget(AerobicTargetKind.highIntensityDistinctDays)
           .distinctDayDeficit,
@@ -275,20 +270,15 @@ void main() {
     final intensity = model.cardioTarget(
       AerobicTargetKind.highIntensityDistinctDays,
     );
-    final fourByFour = model.cardioTarget(
-      AerobicTargetKind.norwegian4x4Preference,
-    );
 
-    expect(fourByFour.exposureDeficit, 1);
-    expect(fourByFour.applicable, isTrue);
-    expect(fourByFour.hasActiveDeficit, isTrue);
-    expect(fourByFour.state, CardioTargetState.deficit);
+    expect(intensity.hasActiveDeficit, isTrue);
+    expect(intensity.state, CardioTargetState.deficit);
     expect(intensity.completedDistinctDays, 1);
     expect(intensity.distinctDayDeficit, 2);
     expect(intensity.met, isFalse);
   });
 
-  test('two distinct-day REHITs leave one high-intensity day and the 4x4 preference due', () {
+  test('two distinct-day REHITs leave one high-intensity day due', () {
     final logs = [
       session(
         id: 'rehit-day-one',
@@ -309,18 +299,10 @@ void main() {
       logs: logs,
       asOf: asOf,
     );
-    final fourByFour = covered.cardioTarget(
-      AerobicTargetKind.norwegian4x4Preference,
-    );
     final intensity = covered.cardioTarget(
       AerobicTargetKind.highIntensityDistinctDays,
     );
 
-    expect(fourByFour.completedExposures, 0);
-    expect(fourByFour.targetExposures, 1);
-    expect(fourByFour.exposureDeficit, 1);
-    expect(fourByFour.met, isFalse);
-    expect(fourByFour.applicable, isTrue);
     expect(intensity.completedDistinctDays, 2);
     expect(intensity.distinctDayDeficit, 1);
 
@@ -421,7 +403,7 @@ void main() {
     expect(historySessionDoseSummary(strength), '1/1 sets');
   });
 
-  test('one legacy 60m base exposure fills the continuous base target', () {
+  test('one legacy 60m base exposure ticks the informational base checkbox', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(
@@ -441,7 +423,7 @@ void main() {
     );
   });
 
-  test('legacy 60m plus 35m base exposures retain the continuous base target', () {
+  test('legacy 60m plus 35m base exposures keep the base checkbox ticked', () {
     final model = HistoryFeedbackViewModel.fromLogs(
       logs: [
         session(

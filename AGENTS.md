@@ -17,6 +17,12 @@ safety rules, validation, or delivery workflow changes.
   `Classic heatmap` setting restores the compact 12-week strength/cardio category
   view; this preference is display-only and must never alter history aggregation or
   recommendation inputs.
+- Cardio target: three distinct high-intensity days (REHIT or Norwegian 4×4, each
+  counted once per calendar day) in the rolling 7 days. REHIT is the preferred
+  protocol and fills a due day in every 20/35/60-minute window; the 4×4 fills it only
+  while the stepped bike return has opened 4×4 but not REHIT, and is otherwise a
+  manual swap. The 60-minute Zone 2 base exposure is informational: History keeps its
+  checkbox, but it never drives a recommendation.
 - Muscle-map views render the existing stimulus ledger and current plan. Label
   recency as recency, never fatigue, recovery, or injury readiness; the visual must
   not create a second stimulus-accounting path. The Today tab may separately render

@@ -95,7 +95,7 @@ final Map<SessionTypeId, SessionTypeDef> sessionTypes = {
     name: 'Zone 2',
     fullDurationMin: 60,
     // Short continuous work remains a valid recovery/ledger event. Only a
-    // 60-minute continuous exposure satisfies the app's weekly base target.
+    // 60-minute continuous exposure ticks History's optional base checkbox.
     minDurationMin: 30,
     legHeavy: false,
     countsAs: {FloorCategory.aerobic},

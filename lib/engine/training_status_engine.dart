@@ -26,9 +26,6 @@ class TrainingStatusEngine {
     ];
 
     final intensityWindow = targets.intensityRollingWindowDays;
-    final fourByFour =
-        ledger.protocol(CardioProtocolType.norwegian4x4);
-    final fourByFourCompleted = fourByFour.sessionsForWindow(intensityWindow);
     final highIntensityDistinctDays = intensityWindow == 7
         ? ledger.highIntensityDistinctDays7d
         : intensityWindow == 28
@@ -63,18 +60,6 @@ class TrainingStatusEngine {
           distinctDayDeficit: _deficit(
             targets.highIntensityDistinctDaysTarget,
             highIntensityDistinctDays,
-          ),
-          completedDistinctDays: highIntensityDistinctDays,
-          targetDistinctDays: targets.highIntensityDistinctDaysTarget,
-        ),
-        AerobicTrainingStatus(
-          target: AerobicTargetKind.norwegian4x4Preference,
-          rollingWindowDays: intensityWindow,
-          completedExposures: fourByFourCompleted,
-          targetExposures: targets.preferredNorwegian4x4Exposures,
-          exposureDeficit: _deficit(
-            targets.preferredNorwegian4x4Exposures,
-            fourByFourCompleted,
           ),
           completedDistinctDays: highIntensityDistinctDays,
           targetDistinctDays: targets.highIntensityDistinctDaysTarget,

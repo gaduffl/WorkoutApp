@@ -891,8 +891,6 @@ Map<String, dynamic> trainingTargetsToJson(TrainingTargets targets) => {
           targets.hypertrophyEvaluationWindowDays,
       'intensityRollingWindowDays': targets.intensityRollingWindowDays,
       'highIntensityDistinctDaysTarget': targets.highIntensityDistinctDaysTarget,
-      'preferredNorwegian4x4Exposures':
-          targets.preferredNorwegian4x4Exposures,
       'baseAerobicRollingWindowDays':
           targets.baseAerobicRollingWindowDays,
       'baseLongExposureCount': targets.baseLongExposureCount,
@@ -929,9 +927,6 @@ TrainingTargets trainingTargetsFromJson(Map<String, dynamic> j) {
     highIntensityDistinctDaysTarget:
         j['highIntensityDistinctDaysTarget'] as int? ??
             defaults.highIntensityDistinctDaysTarget,
-    preferredNorwegian4x4Exposures:
-        j['preferredNorwegian4x4Exposures'] as int? ??
-            defaults.preferredNorwegian4x4Exposures,
     baseAerobicRollingWindowDays:
         j['baseAerobicRollingWindowDays'] as int? ??
             defaults.baseAerobicRollingWindowDays,

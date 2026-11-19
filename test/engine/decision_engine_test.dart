@@ -1245,7 +1245,8 @@ void main() {
     );
     final output = decisionEngine.decide(input);
 
-    expect(output.trace.plan!.sessionId, SessionTypeId.s3);
+    // The due high-intensity day goes to the preferred REHIT.
+    expect(output.trace.plan!.sessionId, SessionTypeId.s7);
     expect(
       output.trace.firedRuleCodes.where((code) => code.startsWith('FLOOR_')),
       isEmpty,
@@ -3079,13 +3080,15 @@ void main() {
     expect(s6.scoreTerms, isNot(contains('weekendPriority')));
   });
 
-  test('a RED weekend S6 winner remains Zone 2 and never becomes a technique session', () {
+  test('a RED weekend Zone 2 choice remains Zone 2 and never becomes a technique session', () {
     final saturday = DateTime(2026, 1, 24);
     final weekendLogs = [
       buildLog(SessionTypeId.s1, saturday.subtract(const Duration(days: 1)), {FloorCategory.strength}),
       buildLog(SessionTypeId.s4, saturday.subtract(const Duration(days: 3)), {FloorCategory.strength}),
       buildLog(SessionTypeId.s3, saturday.subtract(const Duration(days: 2)), {FloorCategory.intensity}),
     ];
+    // Without the retired 60-minute base target, Zone 2 no longer wins a
+    // RED day by itself; the user can still choose it.
     final output = decisionEngine.decide(buildInput(
       time: 60,
       subjective: 1,
@@ -3093,6 +3096,7 @@ void main() {
       exerciseStates: const {},
       sessionLogs: weekendLogs,
       forceQueuePointer: false,
+      forcedSessionId: SessionTypeId.s6,
     ));
 
     expect(output.trace.recovery.bucket, ReadinessBucket.red);

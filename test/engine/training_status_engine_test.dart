@@ -71,13 +71,33 @@ void main() {
     expect(back.deficitToMinimumEffectiveSets, 0);
   });
 
-  test('default targets expose three distinct high-intensity days and one 4x4 preference', () {
+  test('default targets expose three distinct high-intensity days and no protocol quota', () {
     final result = status(const []);
     expect(target(result, AerobicTargetKind.highIntensityDistinctDays).targetDistinctDays, 3);
     expect(target(result, AerobicTargetKind.highIntensityDistinctDays).distinctDayDeficit, 3);
-    expect(target(result, AerobicTargetKind.norwegian4x4Preference).exposureDeficit, 1);
     expect(target(result, AerobicTargetKind.longBaseExposure).exposureDeficit, 1);
-    expect(result.aerobic, hasLength(3));
+    expect(
+      result.aerobic.map((value) => value.target),
+      [
+        AerobicTargetKind.highIntensityDistinctDays,
+        AerobicTargetKind.longBaseExposure,
+      ],
+    );
+  });
+
+  test('three REHIT days alone satisfy the high-intensity target', () {
+    final result = status([
+      for (var day = 0; day < 3; day++)
+        AerobicStimulusEvent(
+          sourceId: 'rehit-$day',
+          protocol: CardioProtocolType.rehit,
+          performedAt: asOf.subtract(Duration(days: day * 2)),
+          durationMinutes: 10,
+        ),
+    ]);
+    final intensity = target(result, AerobicTargetKind.highIntensityDistinctDays);
+    expect(intensity.completedDistinctDays, 3);
+    expect(intensity.distinctDayDeficit, 0);
   });
 
   test('4x4 plus two REHIT days satisfies the union frequency target', () {
@@ -89,7 +109,6 @@ void main() {
     final intensity = target(result, AerobicTargetKind.highIntensityDistinctDays);
     expect(intensity.completedDistinctDays, 3);
     expect(intensity.distinctDayDeficit, 0);
-    expect(target(result, AerobicTargetKind.norwegian4x4Preference).exposureDeficit, 0);
   });
 
   test('same-day high-intensity protocols count once and 4x4 plus REHIT leaves one day due', () {
@@ -103,7 +122,7 @@ void main() {
     expect(intensity.distinctDayDeficit, 1);
   });
 
-  test('only a 60-minute session fills the sole continuous base target', () {
+  test('only a 60-minute session ticks the informational base exposure', () {
     TrainingStatus withBase(int minutes) => status([
           AerobicStimulusEvent(
             sourceId: 'base-$minutes',
