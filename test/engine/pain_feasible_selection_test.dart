@@ -41,7 +41,7 @@ void main() {
         cardio('4x4', SessionTypeId.s3, 3, 35),
         cardio('long-base', SessionTypeId.s6, 2, 60),
         cardio('rehit-five', SessionTypeId.s7, 5, 10),
-        cardio('rehit-seven', SessionTypeId.s7, 7, 10),
+        cardio('rehit-six', SessionTypeId.s7, 6, 10),
       ];
 
   TrainingTargets lowerPriorityTargets() {

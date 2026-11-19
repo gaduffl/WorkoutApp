@@ -17,12 +17,12 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : 'Two RED days in a row - full rest (or a light 20-30 min walk) recommended.';
     case RuleKey.norwegian4x4Due:
       return lang == AppLanguage.de
-          ? 'Ein Hochintensitätstag ist fällig und die Bike-Rückkehr hat REHIT noch nicht freigegeben, daher füllt ihn heute der 4x4.'
-          : 'A high-intensity day is due and the bike return has not opened REHIT yet, so the 4x4 fills it today.';
+          ? 'Ein Hochintensitätstag ist fällig, daher füllt ihn heute der Norwegian 4x4, deine Hauptintervalleinheit.'
+          : 'A high-intensity day is due, so the Norwegian 4x4, your main interval session, fills it today.';
     case RuleKey.rehitFallbackDue:
       return lang == AppLanguage.de
-          ? 'Ein Hochintensitätstag ist fällig; das vom CAROL-Bike geführte Preset CAROL REHIT Intense ist der bevorzugte Weg, ihn zu füllen.'
-          : 'A high-intensity day is due, and the bike-guided CAROL REHIT Intense preset is the preferred way to fill it.';
+          ? 'Ein Hochintensitätstag ist fällig, aber ein 4x4 passt heute nicht, daher springt das vom CAROL-Bike geführte Preset CAROL REHIT Intense ein.'
+          : 'A high-intensity day is due but a 4x4 does not fit today, so the bike-guided CAROL REHIT Intense preset stands in.';
     case RuleKey.baseLongDeficit:
       return lang == AppLanguage.de
           ? 'Die lange 60-Minuten-Grundlageneinheit fehlt im rollierenden 7-Tage-Fenster.'
@@ -91,8 +91,8 @@ String fallbackText(FiredRule rule, AppLanguage lang) {
           : '4x4 was swapped for the bike-guided CAROL REHIT Intense preset due to time.';
     case RuleKey.s7SecondSessionOffer:
       return lang == AppLanguage.de
-          ? 'Seit 48h keine Intensitätseinheit - optional das vom CAROL-Bike geführte Preset CAROL REHIT Intense als zweite Einheit heute.'
-          : 'No intensity in the last 48h - optionally add the bike-guided CAROL REHIT Intense preset as a second session today.';
+          ? 'Gestern und heute keine Intervalleinheit - optional das vom CAROL-Bike geführte Preset CAROL REHIT Intense als zweite Einheit heute.'
+          : 'No interval session yesterday or today - optionally add the bike-guided CAROL REHIT Intense preset as a second session today.';
     case RuleKey.yellowVolumeCut:
       return lang == AppLanguage.de
           ? 'Erholung ist mittelmäßig, daher ist das Trainingsvolumen heute reduziert.'

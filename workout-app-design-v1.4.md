@@ -36,7 +36,7 @@ A single-user (later multi-user) app that removes all morning decision-making ab
 - If the engine selects a cycle type *other than* the pointer's (e.g., floor pressure pulls S3 forward), that type is marked `served` for the current cycle and the pointer subsequently skips served types. When all five are served, a new cycle begins.
 - Readiness swaps (§5 Step 6 RED) and time substitutions (S3→S7) do **not** mark the original type served — the original stays pending.
 - **S6 selection rule:** S6 sits outside the cycle. It becomes top-ranked candidate iff ALL hold: local weekday ∈ {Sat, Sun}; no S6 completed in trailing 7 days; available time ≥ 30 min; no floor category at hard pressure (§5 Step 3). Declining S6 has no queue effect.
-- **S7 rules:** outside the cycle; the preferred primary session in any slot while a high-intensity day is due (§2.2), or a same-day second session if no intensity session completed in the trailing 48 h. **Leg-heavy exemption:** although S7 is cycling, it is exempt from leg-heavy spacing (8 min is below the fatigue threshold). S3 is NOT exempt. (This resolves the apparent contradiction with the table above.)
+- **S7 rules:** outside the cycle; the primary session when a high-intensity day is due but a 4×4 does not fit (20-minute slot, §2.2), or a same-day second session if no interval session was done yesterday or today (rest-day interval gap, §2.2). **Leg-heavy exemption:** although S7 is cycling, it is exempt from leg-heavy spacing (8 min is below the fatigue threshold). S3 is NOT exempt. (This resolves the apparent contradiction with the table above.)
 - **Intensity credit for S2** counts only if the REHIT finisher was actually completed; otherwise S2 logs as strength only.
 
 ### 2.2 Weekly Floor (configurable)
@@ -47,7 +47,7 @@ A single-user (later multi-user) app that removes all morning decision-making ab
 
 The floor is evaluated on a rolling 7-day window, not calendar weeks.
 
-**Cardio target [2026-11]:** three distinct high-intensity days (REHIT or Norwegian 4×4, each counted once per calendar day) in the rolling 7 days. REHIT is preferred and fills a due day in every time window; the 4×4 fills one only while the stepped bike return has opened 4×4 but not REHIT, and is otherwise a manual swap. The 60-minute Zone 2 base exposure is optional: History shows its checkbox for information, and it never drives a recommendation.
+**Cardio target [2026-11]:** three distinct high-intensity days (REHIT or Norwegian 4×4, each counted once per calendar day) in the last 7 calendar dates including today, so a weekly rhythm such as Mon/Wed/Fri is due again on the same weekday. The Norwegian 4×4 is the main interval session and fills a due day in 35- and 60-minute slots; REHIT stands in when a 4×4 does not fit (20-minute slots) and is otherwise a manual swap or a later-day add-on. Interval days need one rest day between them: no interval session on the calendar day of the last one or the day after, and at least 36 h after its completion (Mon/Wed/Fri works at any time of day). The 60-minute Zone 2 base exposure is optional: History shows its checkbox for information, and it never drives a recommendation.
 
 ### 2.3 Movement Patterns & Difficulty Ladders
 
@@ -528,7 +528,7 @@ no planner-duration estimate for accuracy comparisons.
 ## 12. Edge Cases
 
 - **No check-in by cutoff (e.g., 10:00):** push "No plan yet — tap for a 20-min default"; engine assumes YELLOW + 20 min.
-- **Two slots in one day** (home office): after a completed morning session, the Today screen exposes "add lunch REHIT" if no intensity session in 48 h.
+- **Two slots in one day** (home office): after a completed morning session, the Today screen exposes "add lunch REHIT" if no interval session was done yesterday or today (rest-day interval gap, §2.2).
 - **Travel / no equipment:** one switch on Home, Today or in Settings (each applies at once and refreshes an unlocked plan) → every strength slot resolves to a bodyweight or self-resisted step (push-up, split squat, SL-RDL bodyweight, pike push-up, prone pulls, plank/hollow hold, chair dip); a slot whose exercise has no such step is dropped, never prescribed with dumbbells. Zone 2 becomes a brisk walk wherever you are, with the same dose and aerobic credit (outdoors and uphill where possible; stairs or any treadmill work too); CAROL 4×4/REHIT, finishers and nudges stay closed. A plan or unfinished draft made before travel mode was switched on cannot be started while it is on. Load progression pauses; completed work still counts for recency and stimulus, and the logger's "last time" compares travel work only with earlier travel work.
 - **Long illness gap:** first check-in after ≥ 10 idle days routes through detraining adjustment globally and forces week 1 = all-YELLOW modulation.
 - **Conflicting signals** (subjective 5, HRV z −2): trend rule + upward-override block resolves to YELLOW; AI text explains the "engine vs. feel" mismatch transparently.

@@ -487,7 +487,7 @@ void main() {
     expect(find.text('Cardio targets'), findsOneWidget);
     expect(find.text('High-intensity days'), findsOneWidget);
     expect(
-      find.textContaining('3 distinct high-intensity days remaining · REHIT preferred'),
+      find.textContaining('3 distinct high-intensity days remaining · 4×4 preferred'),
       findsOneWidget,
     );
     expect(find.textContaining('4×4 preference'), findsNothing);
@@ -598,7 +598,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a 4x4 counts as a high-intensity day with REHIT still preferred',
+  testWidgets('a 4x4 counts as a high-intensity day and stays preferred',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
@@ -627,7 +627,7 @@ void main() {
     );
     expect(
       find.textContaining(
-        '2 distinct high-intensity days remaining · REHIT preferred',
+        '2 distinct high-intensity days remaining · 4×4 preferred',
       ),
       findsOneWidget,
     );

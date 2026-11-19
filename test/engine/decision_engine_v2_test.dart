@@ -182,21 +182,27 @@ void main() {
         cardio(SessionTypeId.s6, date.subtract(const Duration(days: 5)), 60),
       ];
 
-  test('GREEN 35+ fills a due high-intensity day with REHIT, not 4x4', () {
+  test('GREEN 35+ fills a due high-intensity day with the 4x4', () {
     for (final time in const [35, 60]) {
       final output = engine.decide(input(time: time));
 
-      expect(output.trace.plan!.sessionId, SessionTypeId.s7, reason: '$time');
-      expect(output.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+      expect(output.trace.plan!.sessionId, SessionTypeId.s3, reason: '$time');
+      expect(output.trace.firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
       expect(
         output.trace.firedRuleCodes,
-        isNot(contains('NORWEGIAN_4X4_DUE')),
+        isNot(contains('REHIT_FALLBACK_DUE')),
       );
-      final fourByFour = output.trace.candidates
-          .firstWhere((value) => value.sessionId == SessionTypeId.s3);
-      expect(fourByFour.scoreTerms, contains('rehitPreferredOver4x4'));
-      expect(fourByFour.scoreTerms, isNot(contains('norwegian4x4Due')));
+      final rehit = output.trace.candidates
+          .firstWhere((value) => value.sessionId == SessionTypeId.s7);
+      expect(rehit.scoreTerms, contains('fourByFourPreferredOverRehit'));
+      expect(rehit.scoreTerms, isNot(contains('rehitFallbackDue')));
     }
+
+    // A 20-minute morning cannot hold the 4x4, so REHIT stands in.
+    final twenty = engine.decide(input(time: 20));
+    expect(twenty.trace.plan!.sessionId, SessionTypeId.s7);
+    expect(twenty.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+    expect(twenty.trace.firedRuleCodes, isNot(contains('NORWEGIAN_4X4_DUE')));
   });
 
   test('the bike return keeps the 4x4 for a due day until REHIT opens', () {
@@ -261,23 +267,18 @@ void main() {
     );
   });
 
-  test('partial intensity blocks a due REHIT through the inclusive 48h guard',
+  test('partial intensity blocks the next interval day until a rest day passes',
       () {
+    // today is Friday 09:00.
     final blocked = engine.decide(input(
       time: 35,
-      logs: [
-        partialStructuredRehit(
-          today.subtract(const Duration(hours: 48)),
-        ),
-      ],
+      logs: [partialStructuredRehit(DateTime(2026, 5, 28, 21))],
     ));
+    // Wednesday later in the morning than now is under 48 hours, but
+    // Thursday was a rest day.
     final allowed = engine.decide(input(
       time: 35,
-      logs: [
-        partialStructuredRehit(
-          today.subtract(const Duration(hours: 48, seconds: 1)),
-        ),
-      ],
+      logs: [partialStructuredRehit(DateTime(2026, 5, 27, 9, 45))],
     ));
 
     expect(blocked.trace.plan!.sessionId, isNot(SessionTypeId.s7));
@@ -290,12 +291,11 @@ void main() {
         contains('surplusIntensitySuppressed'),
       );
     }
-    expect(allowed.trace.plan!.sessionId, SessionTypeId.s7);
-    expect(allowed.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+    expect(allowed.trace.plan!.sessionId, SessionTypeId.s3);
+    expect(allowed.trace.firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
   });
 
-  test('forced intensity cannot bypass the inclusive 48h safety boundary',
-      () {
+  test('forced intensity cannot bypass the rest-day interval gap', () {
     final atBoundary = engine.decide(input(
       time: 35,
       forced: SessionTypeId.s3,
@@ -305,7 +305,7 @@ void main() {
           today.subtract(const Duration(days: 4)),
           35,
         ),
-        partialStructuredRehit(today.subtract(const Duration(hours: 48))),
+        partialStructuredRehit(DateTime(2026, 5, 28, 6)),
       ],
     ));
     final outsideBoundary = engine.decide(input(
@@ -317,9 +317,7 @@ void main() {
           today.subtract(const Duration(days: 4)),
           35,
         ),
-        partialStructuredRehit(
-          today.subtract(const Duration(hours: 48, microseconds: 1)),
-        ),
+        partialStructuredRehit(DateTime(2026, 5, 27, 9, 45)),
       ],
     ));
 
@@ -341,13 +339,12 @@ void main() {
       isNot(contains('REHIT_FALLBACK_DUE')),
     );
 
-    // The 4x4 target is already satisfied by the four-day-old qualifying
-    // row, but an explicit surplus override remains possible once the newer
-    // partial attempt has aged outside the hard 48-hour recovery gate.
+    // Once Thursday has passed as a rest day after the partial attempt, the
+    // swap goes through, and the 4x4 fills a still-due day.
     expect(outsideBoundary.trace.plan!.sessionId, SessionTypeId.s3);
     expect(
       outsideBoundary.trace.firedRuleCodes,
-      isNot(contains('NORWEGIAN_4X4_DUE')),
+      contains('NORWEGIAN_4X4_DUE'),
     );
   });
 
@@ -484,46 +481,32 @@ void main() {
     expect(output.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
   });
 
-  test('REHIT uses an inclusive exact 48-hour recovery guard', () {
-    final blockedAt475959 = engine.decide(input(
-      time: 20,
-      logs: [
-        cardio(
-          SessionTypeId.s7,
-          today.subtract(
-            const Duration(hours: 47, minutes: 59, seconds: 59),
-          ),
-          10,
-        ),
-      ],
-    ));
-    final blockedAt48 = engine.decide(input(
-      time: 20,
-      logs: [
-        cardio(
-          SessionTypeId.s7,
-          today.subtract(const Duration(hours: 48)),
-          10,
-        ),
-      ],
-    ));
-    final allowedAfter48 = engine.decide(input(
-      time: 20,
-      logs: [
-        cardio(
-          SessionTypeId.s7,
-          today.subtract(const Duration(hours: 48, seconds: 1)),
-          10,
-        ),
-      ],
-    ));
+  test('REHIT needs a rest day after the last interval day', () {
+    // today is Friday 09:00.
+    DecisionEngineOutput after(DateTime last) => engine.decide(input(
+          time: 20,
+          logs: [cardio(SessionTypeId.s7, last, 10)],
+        ));
 
-    expect(blockedAt475959.trace.plan!.sessionId, isNot(SessionTypeId.s7));
-    expect(blockedAt48.trace.plan!.sessionId, isNot(SessionTypeId.s7));
-    expect(allowedAfter48.trace.plan!.sessionId, SessionTypeId.s7);
+    // Yesterday morning blocks.
+    expect(
+      after(DateTime(2026, 5, 28, 6)).trace.plan!.sessionId,
+      isNot(SessionTypeId.s7),
+    );
+    // Wednesday night is under the 36-hour floor.
+    expect(
+      after(DateTime(2026, 5, 27, 22)).trace.plan!.sessionId,
+      isNot(SessionTypeId.s7),
+    );
+    // Wednesday later in the morning than now is under 48 hours, but
+    // Thursday was a rest day.
+    expect(
+      after(DateTime(2026, 5, 27, 9, 45)).trace.plan!.sessionId,
+      SessionTypeId.s7,
+    );
   });
 
-  test('multi-day fallback never schedules intensity within 48 hours', () {
+  test('multi-day fallback keeps a rest day between interval days', () {
     final logs = <SessionLog>[];
     final intensityTimes = <DateTime>[];
     for (var day = 0; day < 8; day++) {
@@ -538,11 +521,14 @@ void main() {
       logs.add(cardio(SessionTypeId.s7, at, 10));
     }
 
-    expect(intensityTimes, hasLength(3));
-    expect(
-      intensityTimes[1].difference(intensityTimes[0]),
-      greaterThan(const Duration(hours: 48)),
-    );
+    // Every other day until the target is full, then the same weekday again
+    // once the first day leaves the last seven calendar dates.
+    expect(intensityTimes, [
+      today,
+      today.add(const Duration(days: 2)),
+      today.add(const Duration(days: 4)),
+      today.add(const Duration(days: 7)),
+    ]);
   });
 
   test('20-minute slot can select a third REHIT while the three-day target is due', () {
@@ -581,7 +567,7 @@ void main() {
     expect(output.trace.plan!.sessionId, isNot(SessionTypeId.s7));
   });
 
-  test('two REHIT days keep REHIT for the third day at 35 and 60 minutes',
+  test('two REHIT days prioritize 4x4 at 35 and 60 minutes',
       () {
     final completedFallback = [
       cardio(
@@ -601,22 +587,22 @@ void main() {
         time: time,
         logs: completedFallback,
       ));
-      final rehitCandidate = output.trace.candidates.firstWhere(
-        (candidate) => candidate.sessionId == SessionTypeId.s7,
+      final fourByFourCandidate = output.trace.candidates.firstWhere(
+        (candidate) => candidate.sessionId == SessionTypeId.s3,
       );
 
       expect(
         output.trace.plan!.sessionId,
-        SessionTypeId.s7,
+        SessionTypeId.s3,
         reason: '$time-minute natural recommendation',
       );
       expect(
-        rehitCandidate.scoreTerms,
-        contains('rehitFallbackDue'),
+        fourByFourCandidate.scoreTerms,
+        contains('norwegian4x4Due'),
       );
       expect(
         output.trace.firedRuleCodes,
-        contains('REHIT_FALLBACK_DUE'),
+        contains('NORWEGIAN_4X4_DUE'),
       );
     }
   });
@@ -625,7 +611,7 @@ void main() {
     final logs = [
       cardio(SessionTypeId.s7, today.subtract(const Duration(days: 3)), 10),
       cardio(SessionTypeId.s7, today.subtract(const Duration(days: 5)), 10),
-      cardio(SessionTypeId.s7, today.subtract(const Duration(days: 7)), 10),
+      cardio(SessionTypeId.s7, today.subtract(const Duration(days: 6)), 10),
     ];
     final output = engine.decide(input(time: 20, logs: logs));
     final rehit = output.trace.candidates.firstWhere(
@@ -636,22 +622,25 @@ void main() {
     expect(rehit.scoreTerms, contains('surplusIntensitySuppressed'));
   });
 
-  test('a recent 4x4 does not stop REHIT filling the remaining due day in any window', () {
+  test('a still-due day goes to the 4x4 at 35 and 60 and to REHIT at 20', () {
     final logs = [
-      cardio(SessionTypeId.s3, today.subtract(const Duration(days: 7)), 35),
+      cardio(SessionTypeId.s3, today.subtract(const Duration(days: 6)), 35),
       cardio(SessionTypeId.s7, today.subtract(const Duration(days: 4)), 10),
     ];
 
-    for (final time in const [20, 35, 60]) {
+    for (final time in const [35, 60]) {
       final output = engine.decide(input(time: time, logs: logs));
-      expect(output.trace.plan!.sessionId, SessionTypeId.s7, reason: '$time');
-      expect(output.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+      expect(output.trace.plan!.sessionId, SessionTypeId.s3, reason: '$time');
+      expect(output.trace.firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
     }
+    final twenty = engine.decide(input(time: 20, logs: logs));
+    expect(twenty.trace.plan!.sessionId, SessionTypeId.s7);
+    expect(twenty.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
   });
 
   test('extended S2 reserves its optional REHIT finisher only while a distinct day is due', () {
     final twoDistinctDays = [
-      cardio(SessionTypeId.s3, today.subtract(const Duration(days: 7)), 35),
+      cardio(SessionTypeId.s3, today.subtract(const Duration(days: 6)), 35),
       cardio(SessionTypeId.s7, today.subtract(const Duration(days: 4)), 10),
     ];
     final due = engine.decide(input(
@@ -676,7 +665,7 @@ void main() {
     expect(complete.trace.plan!.optionalRehitFinisherReserved, isFalse);
   });
 
-  test('an incomplete high-intensity frequency target keeps REHIT preferred', () {
+  test('an incomplete high-intensity frequency target keeps a feasible 4x4 preferred', () {
     final output = engine.decide(input(
       time: 35,
       logs: [
@@ -688,8 +677,8 @@ void main() {
       ],
     ));
 
-    expect(output.trace.plan!.sessionId, SessionTypeId.s7);
-    expect(output.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+    expect(output.trace.plan!.sessionId, SessionTypeId.s3);
+    expect(output.trace.firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
   });
 
   test('manual 4x4 remains available after two REHIT days',
@@ -713,15 +702,13 @@ void main() {
 
     expect(output.trace.plan!.sessionId, SessionTypeId.s3);
     expect(output.trace.firedRuleCodes, contains('MANUAL_SESSION_OVERRIDE'));
-    // A manual 4x4 still fills the due day; the app just no longer asks
-    // for one.
     expect(
       output.trace.firedRuleCodes,
-      isNot(contains('NORWEGIAN_4X4_DUE')),
+      contains('NORWEGIAN_4X4_DUE'),
     );
   });
 
-  test('REHIT remains preferred while a two-REHIT history is still short of three days',
+  test('4x4 remains preferred while a two-REHIT history is still short of three days',
       () {
     final fallbackLogs = [
       cardio(
@@ -742,8 +729,8 @@ void main() {
       logs: fallbackLogs,
     ));
 
-    expect(output.trace.plan!.sessionId, SessionTypeId.s7);
-    expect(output.trace.firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
+    expect(output.trace.plan!.sessionId, SessionTypeId.s3);
+    expect(output.trace.firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
   });
 
   test('a missing 60m base exposure never earns a 60-minute slot', () {
@@ -977,7 +964,7 @@ void main() {
     final output = engine.decide(input(
       time: 60,
       logs: [
-        cardio(SessionTypeId.s3, today.subtract(const Duration(days: 7)), 35),
+        cardio(SessionTypeId.s3, today.subtract(const Duration(days: 6)), 35),
         cardio(SessionTypeId.s7, today.subtract(const Duration(days: 4)), 10),
         cardio(SessionTypeId.s7, today.subtract(const Duration(days: 2)), 10),
         recoveryDemotedStrength,
@@ -1382,25 +1369,25 @@ void main() {
       first.days.every((value) => value.duration <= value.window),
       isTrue,
     );
-    // Every high-intensity day is a REHIT, in 35/60-minute windows too.
+    // The 4x4 fills due days in 35/60-minute windows; REHIT only stands in
+    // on 20-minute ones.
     for (final half in [first.days.take(14), first.days.skip(14)]) {
       expect(
-        half.any(
-          (value) => value.sessionId == SessionTypeId.s7 && value.window > 20,
-        ),
+        half.any((value) => value.sessionId == SessionTypeId.s3),
         isTrue,
       );
     }
     expect(
-      first.days.any((value) => value.sessionId == SessionTypeId.s3),
+      first.days.any(
+        (value) => value.sessionId == SessionTypeId.s7 && value.window > 20,
+      ),
       isFalse,
     );
 
     final firedRuleCodes = first.days
         .expand((value) => value.firedRuleCodes)
         .toSet();
-    expect(firedRuleCodes, contains('REHIT_FALLBACK_DUE'));
-    expect(firedRuleCodes, isNot(contains('NORWEGIAN_4X4_DUE')));
+    expect(firedRuleCodes, contains('NORWEGIAN_4X4_DUE'));
     expect(firedRuleCodes, isNot(contains('BASE_LONG_DEFICIT')));
 
     final intensityTimes = first.logs
@@ -1412,10 +1399,11 @@ void main() {
         .map((log) => log.completedAt)
         .toList()
       ..sort();
+    // A rest day always separates interval days.
     for (var index = 1; index < intensityTimes.length; index++) {
       expect(
         intensityTimes[index].difference(intensityTimes[index - 1]),
-        greaterThan(const Duration(hours: 48)),
+        greaterThanOrEqualTo(const Duration(days: 2)),
       );
     }
 

@@ -136,46 +136,66 @@ void main() {
     expect(policy.isRecoveryRelevant(uncategorized), isFalse);
   });
 
-  test('window is exact, inclusive at 48h, and ignores future logs', () {
-    SessionLog at(Duration age) => log(
+  test('interval days need a rest day in between, at any time of day', () {
+    // asOf is Friday 09:00.
+    SessionLog on(DateTime completedAt) => log(
           id: SessionTypeId.s7,
-          completedAt: asOf.subtract(age),
+          completedAt: completedAt,
           durationMinutes: 10,
           countsAs: const {FloorCategory.intensity},
         );
 
+    // Yesterday blocks, even 47 hours earlier by the clock.
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
-        [at(const Duration(hours: 47, minutes: 59, seconds: 59))],
+      policy.hasRecentRelevantIntensity(
+        [on(DateTime(2026, 5, 28, 0, 1))],
+        asOf: DateTime(2026, 5, 29, 23),
+      ),
+      isTrue,
+    );
+    // Earlier today blocks.
+    expect(
+      policy.hasRecentRelevantIntensity(
+        [on(DateTime(2026, 5, 29, 6))],
         asOf: asOf,
       ),
       isTrue,
     );
+    // Wednesday later in the morning than now is under 48 hours, but
+    // Thursday was a rest day, so Monday/Wednesday/Friday works.
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
-        [at(const Duration(hours: 48))],
-        asOf: asOf,
-      ),
-      isTrue,
-    );
-    expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
-        [at(const Duration(hours: 48, microseconds: 1))],
+      policy.hasRecentRelevantIntensity(
+        [on(DateTime(2026, 5, 27, 9, 45))],
         asOf: asOf,
       ),
       isFalse,
     );
+    // A future log never blocks.
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
-        [
-          log(
-            id: SessionTypeId.s7,
-            completedAt: asOf.add(const Duration(seconds: 1)),
-            durationMinutes: 10,
-            countsAs: const {FloorCategory.intensity},
-          ),
-        ],
+      policy.hasRecentRelevantIntensity(
+        [on(asOf.add(const Duration(seconds: 1)))],
         asOf: asOf,
+      ),
+      isFalse,
+    );
+  });
+
+  test('a late session still needs 36 hours before an early one', () {
+    final wednesdayLate = log(
+      id: SessionTypeId.s7,
+      completedAt: DateTime(2026, 5, 27, 22),
+      durationMinutes: 10,
+      countsAs: const {FloorCategory.intensity},
+    );
+
+    expect(
+      policy.hasRecentRelevantIntensity([wednesdayLate], asOf: asOf),
+      isTrue,
+    );
+    expect(
+      policy.hasRecentRelevantIntensity(
+        [wednesdayLate],
+        asOf: DateTime(2026, 5, 29, 10),
       ),
       isFalse,
     );
@@ -201,19 +221,26 @@ void main() {
       CompletionTimePrecision.dateOnlyInferred,
     );
     expect(policy.recoveryWindowCompletedAt(legacy), dayEnd);
+    // The next day is blocked by the rest-day rule.
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
+      policy.hasRecentRelevantIntensity(
         [legacy],
-        asOf: dayEnd.add(const Duration(hours: 48)),
+        asOf: DateTime(2026, 5, 30, 23),
+      ),
+      isTrue,
+    );
+    // Two days later the unknown time still ages from the day end.
+    expect(
+      policy.hasRecentRelevantIntensity(
+        [legacy],
+        asOf: dayEnd.add(const Duration(hours: 35, minutes: 59)),
       ),
       isTrue,
     );
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
+      policy.hasRecentRelevantIntensity(
         [legacy],
-        asOf: dayEnd.add(
-          const Duration(hours: 48, microseconds: 1),
-        ),
+        asOf: dayEnd.add(const Duration(hours: 36)),
       ),
       isFalse,
     );
@@ -234,14 +261,14 @@ void main() {
         );
 
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
+      policy.hasRecentRelevantIntensity(
         [legacyOn(DateTime(2026, 5, 29))],
         asOf: DateTime(2026, 5, 29, 9),
       ),
       isTrue,
     );
     expect(
-      policy.hasRelevantIntensityInInclusiveWindow(
+      policy.hasRecentRelevantIntensity(
         [legacyOn(DateTime(2026, 5, 30))],
         asOf: DateTime(2026, 5, 29, 23, 59),
       ),

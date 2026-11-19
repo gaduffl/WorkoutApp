@@ -97,7 +97,7 @@ class IntensityRecoveryPolicy {
         );
 
     return HighIntensitySafetyStatus(
-      intensityRecoveryActive: hasRelevantIntensityInInclusiveWindow(
+      intensityRecoveryActive: hasRecentRelevantIntensity(
         logs,
         asOf: asOf,
       ),
@@ -163,29 +163,42 @@ class IntensityRecoveryPolicy {
     };
   }
 
-  bool hasRelevantIntensityInInclusiveWindow(
+  /// Interval days need a rest day between them. A recovery-relevant
+  /// high-intensity session on today's or yesterday's local date blocks
+  /// another, so Monday/Wednesday/Friday works at any time of day. A session
+  /// completed less than [minimumIntervalGap] ago also blocks, which only
+  /// matters for an evening session followed by an early one two days later.
+  static const minimumIntervalGap = Duration(hours: 36);
+
+  bool hasRecentRelevantIntensity(
     Iterable<SessionLog> logs, {
     required DateTime asOf,
-    Duration window = const Duration(hours: 48),
   }) {
     for (final log in logs) {
       if (!isRecoveryRelevant(log) || !_couldHaveOccurredBy(log, asOf)) {
         continue;
       }
-      if (log.completedAtPrecision ==
-              CompletionTimePrecision.dateOnlyInferred &&
-          _isSameLocalDate(log.date, asOf)) {
-        // The persisted row proves the workout happened sometime today even
-        // though its conservative end-of-day recovery timestamp is later
-        // than the current clock observation.
+      final sessionDay = log.completedAtPrecision ==
+              CompletionTimePrecision.exact
+          ? log.completedAt
+          : log.date;
+      if (_daysBetween(sessionDay, asOf) <= 1) return true;
+      // A date-only legacy row ages from the end of its day, which keeps the
+      // gap conservative when the actual time is unknown.
+      final recoveryAt = recoveryWindowCompletedAt(log);
+      if (!recoveryAt.isAfter(asOf) &&
+          asOf.difference(recoveryAt) < minimumIntervalGap) {
         return true;
       }
-      final recoveryAt = recoveryWindowCompletedAt(log);
-      if (recoveryAt.isAfter(asOf)) continue;
-      if (asOf.difference(recoveryAt) <= window) return true;
     }
     return false;
   }
+
+  /// Whole local calendar days from [from] to [to], immune to DST shifts.
+  int _daysBetween(DateTime from, DateTime to) =>
+      DateTime.utc(to.year, to.month, to.day)
+          .difference(DateTime.utc(from.year, from.month, from.day))
+          .inDays;
 
   bool _couldHaveOccurredBy(SessionLog log, DateTime asOf) {
     if (log.completedAtPrecision == CompletionTimePrecision.exact) {
@@ -197,8 +210,6 @@ class IntensityRecoveryPolicy {
   int _localDateKey(DateTime value) =>
       value.year * 10000 + value.month * 100 + value.day;
 
-  bool _isSameLocalDate(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 
   bool _isEscalatedPain({
     required PainSeverity? severity,

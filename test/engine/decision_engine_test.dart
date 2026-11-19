@@ -75,7 +75,7 @@ void main() {
         buildLog(SessionTypeId.s3, today.subtract(const Duration(days: 3)), {FloorCategory.intensity}),
         buildLog(SessionTypeId.s6, today.subtract(const Duration(days: 2)), {FloorCategory.aerobic}),
         buildLog(SessionTypeId.s7, today.subtract(const Duration(days: 5)), {FloorCategory.intensity}),
-        buildLog(SessionTypeId.s7, today.subtract(const Duration(days: 7)), {FloorCategory.intensity}),
+        buildLog(SessionTypeId.s7, today.subtract(const Duration(days: 6)), {FloorCategory.intensity}),
       ];
 
   DecisionEngineInput buildInput({
@@ -1245,8 +1245,8 @@ void main() {
     );
     final output = decisionEngine.decide(input);
 
-    // The due high-intensity day goes to the preferred REHIT.
-    expect(output.trace.plan!.sessionId, SessionTypeId.s7);
+    // The due high-intensity day goes to the 4x4, which fits 35 minutes.
+    expect(output.trace.plan!.sessionId, SessionTypeId.s3);
     expect(
       output.trace.firedRuleCodes.where((code) => code.startsWith('FLOOR_')),
       isEmpty,

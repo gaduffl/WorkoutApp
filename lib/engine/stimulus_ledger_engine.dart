@@ -682,13 +682,17 @@ class StimulusLedgerEngine {
       );
     }
 
+    // Distinct days are calendar dates, so they are counted over the last
+    // [days] dates ending today. A 7x24-hour window would still hold last
+    // week's session from the same weekday at today's check-in, which pushes
+    // a weekly Monday/Wednesday/Friday rhythm back by a day every week.
     int highIntensityDistinctDays(int days) => _distinctDays(
           eligibleAerobicEvents
               .where(
                 (event) =>
                     (event.protocol == CardioProtocolType.norwegian4x4 ||
                         event.protocol == CardioProtocolType.rehit) &&
-                    _inRollingWindow(event.performedAt, asOf, days),
+                    _inCalendarDateWindow(event.performedAt, asOf, days),
               )
               .map((event) => event.performedAt),
         );
@@ -735,5 +739,15 @@ class StimulusLedgerEngine {
   bool _inRollingWindow(DateTime value, DateTime asOf, int days) {
     final start = asOf.subtract(Duration(days: days));
     return !value.isBefore(start) && !value.isAfter(asOf);
+  }
+
+  /// Whether [value] falls on one of the [days] local dates ending on
+  /// [asOf]'s date, and no later than [asOf] itself. Immune to DST shifts.
+  bool _inCalendarDateWindow(DateTime value, DateTime asOf, int days) {
+    if (value.isAfter(asOf)) return false;
+    final elapsedDates = DateTime.utc(asOf.year, asOf.month, asOf.day)
+        .difference(DateTime.utc(value.year, value.month, value.day))
+        .inDays;
+    return elapsedDates < days;
   }
 }

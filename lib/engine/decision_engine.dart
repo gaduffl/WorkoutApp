@@ -344,16 +344,16 @@ class DecisionEngine {
       automaticGlobalDeload: automaticGlobalDeload,
       travelMode: input.settings.travelMode,
     );
-    // REHIT is the preferred way to fill a due high-intensity day, in every
-    // window. The 4x4 fills it only while the stepped bike return has opened
-    // 4x4 but not yet REHIT, because a creditable 4x4 is what opens REHIT.
-    final canAdvanceRehit = naturalHighIntensityTargetDue &&
-        cyclingAccess.rehit &&
-        !highIntensitySafety.blocked;
+    // The Norwegian 4x4 fills a due high-intensity day whenever the morning
+    // can hold it. REHIT stands in only when it cannot, which in practice is
+    // a 20-minute morning: the stepped bike return opens REHIT after the 4x4.
     final canAdvanceFourByFour = naturalHighIntensityTargetDue &&
         cyclingAccess.fourByFour &&
-        !cyclingAccess.rehit &&
         checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
+        !highIntensitySafety.blocked;
+    final canAdvanceRehit = naturalHighIntensityTargetDue &&
+        cyclingAccess.rehit &&
+        !canAdvanceFourByFour &&
         !highIntensitySafety.blocked;
     final strengthStimulusMultiplier = automaticGlobalDeload
         ? 0.0
@@ -390,23 +390,20 @@ class DecisionEngine {
         terms['norwegian4x4Due'] = 20000;
       }
 
-      // The score-term and rule names predate REHIT becoming the preferred
-      // protocol; they stay because saved traces persist them.
       if (id == SessionTypeId.s7 && canAdvanceRehit) {
         terms['rehitFallbackDue'] = 20000;
       }
-      final fourByFourDeferredToRehit = id == SessionTypeId.s3 &&
-          checkin.timeMinutes >= _fourByFourAvailabilityWindowMin &&
-          canAdvanceRehit;
+      final rehitDeferredToFourByFour =
+          id == SessionTypeId.s7 && canAdvanceFourByFour;
       final surplusOrRecoveryBlockedFourByFour =
           id == SessionTypeId.s3 && !canAdvanceFourByFour;
       final surplusRehit = id == SessionTypeId.s7 && !canAdvanceRehit;
       final unadvanceableConceptualS3 = id == SessionTypeId.s3 &&
           checkin.timeMinutes == 20 &&
           !canAdvanceRehit;
-      if (fourByFourDeferredToRehit) {
-        // The due day goes to REHIT; a 4x4 stays a manual swap.
-        terms['rehitPreferredOver4x4'] = -100000;
+      if (rehitDeferredToFourByFour) {
+        // The due day goes to the 4x4; REHIT stays a manual swap.
+        terms['fourByFourPreferredOverRehit'] = -100000;
       } else if (surplusOrRecoveryBlockedFourByFour ||
           surplusRehit ||
           unadvanceableConceptualS3) {
